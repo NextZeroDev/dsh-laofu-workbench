@@ -1,5 +1,7 @@
 # 24 写稿模块 UI 重设计分析（对齐选题页：账号 Tab + 选题选择器抽屉 + 任务卡 + 稿件工作台）
 
+> 历史设计/验收记录，包含当时的方案与限制，不作为当前使用指南。当前入口见[文档索引](README.md)和[快速开始](quickstart.md)。
+
 > 状态：2026-09-06 分析设计完成 → 同日按推荐决策点（A1/B1/C1/D1/F1；E 按修正版落地，见 §7.1）实施完毕，`npm run test` **129/129 全绿**（127→+2），详见 §7 实施记录。浏览器实机验收待用户执行（工作台需重启并重新「加载」能力包）。
 > 依据：`lwb/packs/spoken-video/client.js` 现状代码（TopicsPage 1007-1304 / ScriptPage 1316-1497 / sv-tp-* CSS 311-398）、`gateway.mjs`、`spoken-video-content-store.mjs`、`spoken-video-store.mjs`、`spoken-video-script.mjs`、本地真实数据（`.lwb/spoken-video/`）、[19 写稿模块分析](./19-script-module-analysis.md)、[23 选题模块重设计](./23-topic-module-account-tabs-analysis.md)。
 >

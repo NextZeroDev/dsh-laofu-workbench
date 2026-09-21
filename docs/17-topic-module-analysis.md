@@ -1,5 +1,7 @@
 # 17 选题模块梳理分析（账号定位 + 渠道最新批次 · DSH 统一执行）
 
+> 历史设计/验收记录，包含当时的方案与限制，不作为当前使用指南。当前入口见[文档索引](README.md)和[快速开始](quickstart.md)。
+
 > 状态：2026-09-02 实施完成，`npm test` 68 项全绿。结论基于对 `spoken-video` 能力包现状（`client.js` TopicsPage、`gateway.mjs`、`docs/14` 路线）与参考实现 `/Users/alanfu/Documents/projects/agent-teams/my-agent/repo`（`agent_ops_cli.js` 选题管线、`agent.profile.example.json`、`PROFILE_MANAGEMENT.md`）的实际核查。
 >
 > 修订记录：

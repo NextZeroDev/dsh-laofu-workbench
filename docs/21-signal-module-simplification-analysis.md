@@ -1,5 +1,7 @@
 # 21 信号模块简化分析：去掉信号卡工程动作、来源设置与手动导入入口
 
+> 历史设计/验收记录，包含当时的方案与限制，不作为当前使用指南。当前入口见[文档索引](README.md)和[快速开始](quickstart.md)。
+
 > 状态：2026-09-05 分析完成，方案待用户拍板（未动代码）。依据：`lwb/packs/spoken-video/client.js`、`spoken-video-content-store.mjs`、`spoken-video-signal-adapters.mjs`、`gateway.mjs`、测试与本地真实数据 `.lwb/spoken-video/signals.json`。
 > 关联：[13 信号板设计](./13-signal-board.md)、[18 双链路分治方案](./18-signal-module-restructure-plan.md)、[20 信号页视觉美化](./20-signal-page-visual-polish-plan.md)。
 

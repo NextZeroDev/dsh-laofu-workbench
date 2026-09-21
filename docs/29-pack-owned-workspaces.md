@@ -71,9 +71,9 @@ Host 声明 `lwbPackServices` 依赖，通过 `getLwbPackScope(ctx, manifest)` �
 
 口播信号采集与内容安排只访问专属目录，不扫描旧普通工作区索引。新加载时启用的公开信号源可能自动采集，所以清空后的信号池可能再次出现新数据，这是新采集，不是旧数据恢复。
 
-## 验证与集成
+## 历史验证与集成记录
 
-原专属工作区功能在独立 worktree `/Users/alanfu/Documents/projects/dsh-laofu-workbench-pack-workspaces` 开发，使用独立 vendor/依赖、DSH Home 与端口 14380，之后已合入 main。本次默认模型修复在主目录完成。vendor 精确版本为 `0a15e36e7f82b6ed45af6fa9759f29b40dcd965d`（0.1.6-alpha.1）。
+以下是功能实现时的验收记录；其中的测试数量和一次性测试夹具不作为当前操作要求。专属工作区功能在独立 worktree 中开发，使用独立 vendor/依赖、DSH Home，之后合入 main。验收所用 vendor 精确版本为 `0a15e36e7f82b6ed45af6fa9759f29b40dcd965d`（0.1.6-alpha.1）。
 
 回归入口：`npm test`。覆盖归属恢复、包隔离、业务凭据命名、无 Agent 数据 RPC、DSH 默认模型继承与更新、后台尾部写入、停止超时、Loader 释放及清空/解除注册分离。模型回归明确要求：未配置包级模型/凭据仍能创建内部 Agent，旧包级路由不影响 DSH 默认选择，原生认证错误完整传递。
 

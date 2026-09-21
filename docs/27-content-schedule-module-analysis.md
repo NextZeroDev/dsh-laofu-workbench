@@ -1,5 +1,7 @@
 # 27 内容安排模块重设计分析（定时全自动流水线）
 
+> 历史设计/验收记录，包含当时的方案与限制，不作为当前使用指南。当前入口见[文档索引](README.md)和[快速开始](quickstart.md)。
+
 > 状态：**已实施并完成回归**（2026-09-15）。本文主体保留实施前分析与决策依据；实际落地见 §13。
 > 前置依赖：**[26 发布模块简化](./26-publish-module-simplification.md)（状态机 10→8，删 approval/queue）已于同日由并行会话落地**（`npm run test` 202 全绿），本模块的实施前提已就绪——见 §10。
 > 依据：`spoken-video-content-store.mjs`（现有 schedule 实现）、`spoken-video-media-host.mjs` / `spoken-video-publish-host.mjs`（各阶段 host 入口）、`spoken-video-store.mjs`（**8 阶段**状态机与闸门）、DSH `packages/core/agent`、`packages/subagent`、`packages/webhook`（无人值守建 agent 的官方先例）。

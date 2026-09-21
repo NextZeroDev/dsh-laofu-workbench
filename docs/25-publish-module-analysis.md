@@ -1,5 +1,7 @@
 # 25 发布 / 入队模块设计与实施记录（发布包装 Agent + 封面生图 + 单一生命线抽屉）
 
+> 历史设计/验收记录，包含当时的方案与限制，不作为当前使用指南。当前入口见[文档索引](README.md)和[快速开始](quickstart.md)。
+
 > **⚠️ 已被 [26 发布模块简化](./26-publish-module-simplification.md) 大幅取代（2026-09-11）**：本文档记录的 `approval` / `queue` 两个阶段、人工批准闸门、投递目标入队、ZIP 发布包导出（`exportPublishPackage` / `readExport`）、`queuePackage`、`listPublishTasks` 与右栏「发布包装任务」面板均已连根删除；菜单由「发布 / 入队」改为「发布」。仍有效的部分：`packaging` 工件 schema 与校验、发布包装 Agent 与 `buildPublishPrompt`、封面生图链路（百炼异步轮询 / SciTiger、`inspectPublishImage`、冻结到 `media/publish-covers/`）、`uploadCover` / `readAsset` / `updatePackaging`、封面生图连接配置与凭据边界、DSH 轨迹落盘、重启恢复置 failed。阅读本文档时请以 26 号为现状基准。
 >
 > 状态：2026-09-10 实施完成，`npm run test` **201/201 全绿**（基线 181，含修复 2 项既有红测试 + 新增 20 项 publish 专属测试）。浏览器实机验收待用户执行（需重启工作台并重新「加载」能力包）。

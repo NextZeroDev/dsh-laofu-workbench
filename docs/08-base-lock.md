@@ -38,7 +38,7 @@ CI=true corepack pnpm run build
 ```bash
 npm run check
 npm run profile:check
-npm run file:test
+npm run unit:test
 npm run dsh:dump
 npm run test
 ```
@@ -50,14 +50,10 @@ npm run test
 3. 重新执行构建与 LWB 回归，并人工验证普通对话、工作区、归档和文件附件。
 4. 若未来确实需要上游改动，应先尝试 LWB 插件接缝，再以单独、可上游化的补丁提出。
 
-## 0.1.6 升级记录
+## 当前附件与数据边界
 
-本次从 `dsh-v0.1.2-alpha.1` 升级至 `dsh-v0.1.6-alpha.1`。设置注册改用 `ctx.settings.installSection()` 和字符串 namespace；归档恢复改用公开的 `workspaceRegistry.unarchiveSession()`。能力包首次加载保留市场源码可用标志，避免新用户第一次加载失败。
+普通对话附件完全使用 DSH 原生上传和存储。旧 LWB 附件接管代码已删除，当前版本不提供旧 `.lwb/uploads/` 的读写回退。原生附件保存在 `DSH_HOME/attachments/`，能力包数据保存在各自专属工作区的 `data/` 下，详见[运行数据目录](31-runtime-data-layout.md)。
 
-对话新上传默认使用 DSH 原生流式文件入口（`fileIntake.mode: native`），停用 LWB 上传按钮与发送拦截。LWB 的旧 `lwb-file-attachments` 历史消息展示及旧文件仍保留；不要删除工作区 `.lwb/uploads/`。旧上传适配器代码尚未物理删除，供历史兼容评估和显式部署使用，不代表它与新版混合附件组合已完成全部验证。
+更新前应停止服务并备份完整 `lwb/local/`，以及通过环境变量指定的其他状态目录。回滚必须恢复相匹配的代码、上游构建和数据副本；只回退 Git commit 不会回退运行数据格式。
 
-DSH 普通文件原样保存到 `DSH_HOME/attachments/`，原生接口不限制文件类型/大小，也不自动清理文件；旧 LWB 的 20 MiB 限制仅属于旧适配器。上传成功不等于模型能解析任意格式，PDF/Office 等仍取决于文件工具和相应解析能力。
-
-验收使用隔离的 DSH Home，未迁移现有用户数据。新版使用 Session v3 格式；切换现有数据前先停止服务并备份完整 DSH Home、能力包登记表和工作区 `.lwb/`。回滚需恢复匹配的旧代码、旧上游构建及升级前数据副本，不能只回退 Git commit 后继续写新版数据。
-
-验证证据与限制见 [28-dsh-016-upgrade.md](28-dsh-016-upgrade.md)。
+从 DSH 0.1.2 升级时的过程与验收证据保存在[历史升级记录](28-dsh-016-upgrade.md)，其中过渡期适配器和旧目录描述不代表当前实现。首次安装请使用[快速开始](quickstart.md)。

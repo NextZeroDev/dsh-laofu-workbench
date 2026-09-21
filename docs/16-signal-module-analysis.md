@@ -1,5 +1,7 @@
 # 16 信号模块梳理分析（人工与导入 / AI 内容日报 / 平台情报）
 
+> 历史设计/验收记录，包含当时的方案与限制，不作为当前使用指南。当前入口见[文档索引](README.md)和[快速开始](quickstart.md)。
+
 > 状态：2026-09-02 分析完成；**当日已按 [18 调整方案](18-signal-module-restructure-plan.md) 实施**（零兼容版）。结论基于对 `spoken-video` 能力包代码、本地 `.lwb/spoken-video/signals.json` 真实数据，以及远程 `https://scitiger.cn/reports/daily.json` 实际内容的核查。
 
 ## 0. 模块定位

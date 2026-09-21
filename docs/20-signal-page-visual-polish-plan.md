@@ -1,5 +1,7 @@
 # 20 信号页视觉美化分析与方案（命令条 + 信号卡片重塑）
 
+> 历史设计/验收记录，包含当时的方案与限制，不作为当前使用指南。当前入口见[文档索引](README.md)和[快速开始](quickstart.md)。
+
 > 状态：2026-09-03 分析完成，方案待用户拍板（未落代码）。依据：`lwb/packs/spoken-video/client.js` 现状、真实页面验收截图（`.workbuddy/ui-shots/`）、用户三个问题。
 > 关联：[15 信号板视觉设计](./15-signal-board-visual.md)、[18 信号模块调整方案](./18-signal-module-restructure-plan.md)。
 

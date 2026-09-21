@@ -1,5 +1,7 @@
 # 23 选题模块重设计分析（账号 Tab 化 + 表单简化 + 任务卡/抽屉交互）
 
+> 历史设计/验收记录，包含当时的方案与限制，不作为当前使用指南。当前入口见[文档索引](README.md)和[快速开始](quickstart.md)。
+
 > 状态：2026-09-05 分析完成 → 按推荐方案落代码实施（`npm run test` 125/125 全绿，详见第 6 节实施记录）；同日交付 Ardot 视觉稿《选题模块重设计 · 账号Tab与任务抽屉》（决策点 F），含主页面（通用 Tab 态）+ 执行摘要抽屉 + 候选抽屉（推荐选中态）+ 信号抽屉（本次参与勾选态）四画面。视觉基准取自工作台真实变量（`--lwb-page/surface/line/ink/muted`，选题 accent = `--lwb-warm` #B97016，字体 Noto Sans SC）。决策点 G/H 已按推荐落稿（prompt 排序 + 推荐徽章；AI 日报拆 5 平台卡）。依据：`lwb/packs/spoken-video/` 现状代码、本地真实数据（`.lwb/spoken-video/`）、[17 选题模块分析](./17-topic-module-analysis.md)、[20 信号页视觉美化](./20-signal-page-visual-polish-plan.md)、[21 信号模块简化](./21-signal-module-simplification-analysis.md)、[22 账号模块分析](./22-account-module-analysis.md)。
 >
 > 用户设想：选题页按账号分 Tab（含「通用(无账号定位)」Tab）；通用 Tab 表单简化为「选题角度（非必填）+ 信号源卡片（默认全选）」；点来源卡弹抽屉（复用信号模块抽屉）可忽略具体信号；执行摘要不单独占右栏，改为任务卡上的按钮 + 抽屉查看；任务完成后候选列表也用抽屉展示，默认选中「最适合」而非第一个；左栏 = 新建任务配置，右栏 = 选题任务列表；整体美化、层次分明。
