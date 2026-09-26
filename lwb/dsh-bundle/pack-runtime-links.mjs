@@ -1,31 +1,11 @@
-import { existsSync } from 'node:fs'
 import { cp, lstat, mkdir, readFile, readlink, rm, symlink, unlink } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { LWB_RUNTIME, lwbProfilePath } from './runtime-config.mjs'
+import { dshPackageDirectory } from './dsh-adapter/package-paths.mjs'
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const REQUIRE = createRequire(import.meta.url)
-const DSH_DIR = resolve(process.env.LWB_DSH_RUNTIME_DIR || join(ROOT_DIR, 'vendor', 'deepseek-harness'))
 const PROFILE_NODE_MODULES = join(lwbProfilePath(), 'node_modules')
-const PACK_SDK_DIR = join(ROOT_DIR, 'lwb', 'pack-sdk')
-
-function packageDir(name, fallback) {
-  try { return dirname(REQUIRE.resolve(`${name}/package.json`)) } catch (_) { return fallback }
-}
-
-const PACK_RUNTIME_PEERS = new Map([
-  ['@deepseek-ai/cordis', packageDir('@deepseek-ai/cordis', join(DSH_DIR, 'vendor', 'cordis'))],
-  ['@deepseek-ai/dsh-typert-protocol', packageDir('@deepseek-ai/dsh-typert-protocol', join(DSH_DIR, 'packages', 'typert', 'protocol'))],
-  ['@deepseek-ai/dsh-tools', packageDir('@deepseek-ai/dsh-tools', join(DSH_DIR, 'packages', 'core', 'tools'))],
-  ['@deepseek-ai/dsh-credentials', packageDir('@deepseek-ai/dsh-credentials', join(DSH_DIR, 'packages', 'credentials', 'credentials'))],
-  ['@deepseek-ai/dsh-llm', packageDir('@deepseek-ai/dsh-llm', join(DSH_DIR, 'packages', 'llm', 'llm'))],
-  ['@deepseek-ai/dsh-settings', packageDir('@deepseek-ai/dsh-settings', join(DSH_DIR, 'packages', 'settings', 'settings'))],
-  ['@deepseek-ai/dsh-storage-domain', packageDir('@deepseek-ai/dsh-storage-domain', join(DSH_DIR, 'packages', 'storage', 'storage-domain'))],
-  ['@deepseek-ai/schemastery', packageDir('@deepseek-ai/schemastery', join(DSH_DIR, 'vendor', 'schemastery'))],
-  ['@scitiger-ai/lwb-pack-sdk', packageDir('@scitiger-ai/lwb-pack-sdk', PACK_SDK_DIR)],
-])
 
 function packagePath(nodeModules, packageName) {
   const segments = packageName.split('/')
@@ -34,8 +14,8 @@ function packagePath(nodeModules, packageName) {
 
 export async function ensureLwbRuntimeSymlink(linkPath, target) {
   await mkdir(dirname(linkPath), { recursive: true })
-  if (existsSync(linkPath)) {
-    const stats = await lstat(linkPath)
+  const stats = await lstat(linkPath).catch(error => { if (error.code !== 'ENOENT') throw error })
+  if (stats) {
     if (!stats.isSymbolicLink()) throw new Error(`LWB profile path is not a symlink: ${linkPath}`)
     if (resolve(dirname(linkPath), await readlink(linkPath)) === resolve(target)) return
     await unlink(linkPath)
@@ -81,9 +61,10 @@ export async function linkLwbPackForRuntime(pack) {
   const packageJson = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'))
   const declared = Object.assign({}, packageJson.dependencies, packageJson.peerDependencies)
   const packageNodeModules = join(source, 'node_modules')
-  for (const [name, target] of PACK_RUNTIME_PEERS) {
-    if (typeof declared[name] === 'string') {
-      await ensureLwbRuntimeSymlink(packagePath(packageNodeModules, name), target)
-    }
+  for (const name of Object.keys(declared)) {
+    const target = name === '@scitiger-ai/lwb-pack-sdk'
+      ? join(ROOT_DIR, 'lwb', 'pack-sdk')
+      : name.startsWith('@deepseek-ai/') ? dshPackageDirectory(name) : undefined
+    if (target) await ensureLwbRuntimeSymlink(packagePath(packageNodeModules, name), target)
   }
 }

@@ -1,39 +1,63 @@
-/** Package the product through the official DSH Desktop release pipeline. */
-
+/** Package LWB around the unmodified official shell and verified runtime. */
 import { spawn } from 'node:child_process'
-import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { join, relative, sep } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { parseArgs } from 'node:util'
+import { assertUpstream, DSH_ROOT, UPSTREAM } from '../upstream.mjs'
+import { LWB_RUNTIME } from '../dsh-bundle/runtime-config.mjs'
 import { desktopPnpmInvocation } from './toolchain.mjs'
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)))
-const DSH = join(ROOT, 'vendor', 'deepseek-harness')
-
-function run(command, args, cwd, environment) {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd, env: environment, stdio: 'inherit' })
-    child.once('error', reject)
-    child.once('exit', (code, signal) => {
-      if (code === 0) resolvePromise()
-      else reject(new Error(`LWB Desktop package failed: ${args.join(' ')} (${String(code ?? signal)})`))
-    })
+assertUpstream()
+const { values } = parseArgs({ options: { dir: { type: 'boolean' }, check: { type: 'boolean' } } })
+if (!['darwin', 'win32'].includes(process.platform)) throw new Error('Official Desktop packaging supports macOS and Windows build hosts.')
+const appRoot = join(DSH_ROOT, 'apps/desktop')
+const { loadDesktopPackageEnvironment, validateDesktopPackageEnvironment } = await import(pathToFileURL(join(appRoot, 'scripts/desktop-package-environment.mjs')))
+const env = loadDesktopPackageEnvironment(process.platform)
+// Never distribute an LWB app which an official DSH update can replace.
+if (!env.DSH_DESKTOP_APP_ID || env.DSH_DESKTOP_APP_ID.startsWith('com.deepseek.')) throw new Error('Configure an LWB-owned DSH_DESKTOP_APP_ID in the official local packaging environment.')
+if (env.DSH_DESKTOP_AUTO_UPDATE_ENV !== 'test' || !env.DOWNLOAD_TEST_ORIGIN) throw new Error('LWB packaging requires its own test update origin; official production feeds are not allowed.')
+for (const key of ['DOWNLOAD_TEST_ORIGIN', 'DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN']) {
+  if (env[key] && /(^|\.)deepseek\.com$/u.test(new URL(env[key]).hostname)) throw new Error(`LWB requires a product-owned ${key}`)
+}
+const arch = process.platform === 'win32' ? 'x64' : process.arch
+Object.assign(env, { DSH_DESKTOP_TARGET_PLATFORM: process.platform, DSH_DESKTOP_TARGET_ARCH: arch })
+validateDesktopPackageEnvironment(env, { platform: process.platform, arch })
+if (values.check) { console.log('LWB packaging environment passed.'); process.exit(0) }
+const run = (command, args, cwd, environment = env) => new Promise((resolve, reject) => {
+  const child = spawn(command, args, { cwd, env: environment, stdio: 'inherit' })
+  child.once('error', reject)
+  child.once('exit', code => code === 0 ? resolve() : reject(new Error(`Packaging step failed (${code})`)))
+})
+const pnpm = async (args) => { const invocation = desktopPnpmInvocation(appRoot, args); await run(invocation.command, invocation.args, appRoot) }
+// Upstream owns release packing, runtime preparation, dependency and native checks.
+await pnpm(['run', 'prepare:package'])
+await mkdir(join(LWB_RUNTIME.projectRoot, '.tooling'), { recursive: true })
+const stage = await mkdtemp(join(LWB_RUNTIME.projectRoot, '.tooling/lwb-package-'))
+const payload = join(stage, 'product')
+await mkdir(payload)
+const digest = createHash('sha256').update(UPSTREAM.commit)
+for (const path of ['dsh-bundle', 'pack-sdk', 'packs', 'profile-setup.mjs']) {
+  await cp(join(LWB_RUNTIME.projectRoot, 'lwb', path), join(payload, 'lwb', path), {
+    recursive: true,
+    filter: async source => {
+      const parts = relative(join(LWB_RUNTIME.projectRoot, 'lwb'), source).split(sep)
+      if (parts.includes('node_modules') || parts.includes('test')) return false
+      const { stat } = await import('node:fs/promises')
+      if ((await stat(source)).isFile()) digest.update(relative(LWB_RUNTIME.projectRoot, source)).update(await readFile(source))
+      return true
+    },
   })
 }
-
-const environment = {
-  ...process.env,
-  DSH_DESKTOP_EXTRA_PROFILE_BUNDLES: JSON.stringify(['@scitiger-ai/lwb-dsh-bundle']),
-  DSH_DESKTOP_EXTRA_PROFILE_DEPENDENCIES: JSON.stringify({
-    '@scitiger-ai/lwb-dsh-bundle': '0.1.0',
-    '@scitiger-ai/lwb-pack-sdk': '0.1.0',
-  }),
-  LWB_DESKTOP_BUNDLE_DIR: join(ROOT, 'lwb', 'dsh-bundle'),
-  LWB_DESKTOP_PACK_SDK_DIR: join(ROOT, 'lwb', 'pack-sdk'),
-}
-
-await run(process.execPath, [join(ROOT, 'lwb', 'desktop', 'patch-upstream.mjs')], ROOT, environment)
-const forwarded = process.argv.slice(2)
-const invocation = desktopPnpmInvocation(join(DSH, 'apps', 'desktop'), [
-  '--filter', '@deepseek-ai/dsh-desktop', 'run', 'package',
-  ...forwarded,
-])
-await run(invocation.command, invocation.args, DSH, environment)
+for (const path of ['package.json', 'package-lock.json']) await cp(join(LWB_RUNTIME.projectRoot, path), join(payload, path))
+// Install only the product's declared production dependencies; never package
+// checkout node_modules, credentials, local state, or upstream source backups.
+await run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['ci', '--omit=dev', '--no-audit', '--no-fund'], payload)
+digest.update(await readFile(join(payload, 'package-lock.json')))
+await writeFile(join(payload, 'build.json'), JSON.stringify({ id: digest.digest('hex').slice(0, 24), upstream: UPSTREAM }))
+const config = join(stage, 'electron-builder.config.mjs')
+await writeFile(config, `export default await (await import(${JSON.stringify(new URL('./package-config.mjs', import.meta.url).href)})).createLwbPackageConfig(${JSON.stringify(payload)})\n`)
+await pnpm(['exec', 'electron-builder', '--config', config, '--publish', 'never', ...(values.dir ? ['--dir'] : [])])
+assertUpstream()
+console.log('LWB Desktop package created through the official builder; no artifacts were published.')

@@ -15,7 +15,7 @@ function decorateRemote(prototype, method, exportName) {
 
 /** Browser-safe projection of the packs mounted in the current DSH Profile. */
 export class LwbPackGateway extends TypertRemoteService {
-  static inject = ['lwbPackRegistry', 'lwbPackRuntime', 'lwbPackWorkspaces', 'lwbPackServices']
+  static inject = ['lwbPackRegistry', 'lwbPackRuntime', 'lwbPackWorkspaces', 'lwbPackServices', 'clientModules']
 
   constructor(ctx) {
     super(ctx, 'lwbPacks')
@@ -25,6 +25,11 @@ export class LwbPackGateway extends TypertRemoteService {
   async list() {
     await this.ctx.lwbPackRuntime.ready()
     return { schemaVersion: 1, packs: this.ctx.lwbPackRegistry.list() }
+  }
+
+  async clientGraph() {
+    await this.ctx.lwbPackRuntime.ready()
+    return this.ctx.clientModules.graph()
   }
 
   async market() {
@@ -55,7 +60,7 @@ decorateRemote(LwbPackGateway.prototype, 'list', 'list')
 decorateRemote(LwbPackGateway.prototype, 'market', 'market')
 decorateRemote(LwbPackGateway.prototype, 'load', 'load')
 decorateRemote(LwbPackGateway.prototype, 'unload', 'unload')
-for (const method of ['visibility', 'clearData', 'unregisterWorkspace', 'executionStatus']) {
+for (const method of ['clientGraph', 'visibility', 'clearData', 'unregisterWorkspace', 'executionStatus']) {
   decorateRemote(LwbPackGateway.prototype, method, method)
 }
 

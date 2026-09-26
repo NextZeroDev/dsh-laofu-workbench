@@ -56,7 +56,10 @@ test('data access needs no Agent; directories, credentials and settings are isol
   assert.equal((await second.credentials.describe('BAILIAN_API_KEY')).configured, false)
   assert.equal((await first.credentials.resolve('BAILIAN_API_KEY')).value, 'first-secret')
   assert.equal(keys.get('BAILIAN_API_KEY'), 'ordinary-secret')
-  assert.notEqual(first.settingsNamespace('media'), second.settingsNamespace('media'))
+  const firstSettings = await first.settings('media', input => ({ voice: '', ...input }))
+  const secondSettings = await second.settings('media', input => ({ voice: '', ...input }))
+  await firstSettings.update({ voice: 'first' })
+  assert.equal(secondSettings.get().voice, '')
   await assert.rejects(first.assertAgent({ session: { header: { cwd: (await second.context()).workspacePath } } }), /此工具/)
 })
 
@@ -141,4 +144,16 @@ test('stopping a pack cancels its HTTP and explicit-signal AI operations only', 
   assert.throws(() => first.fetch('http://127.0.0.1:1'), /停止/)
   await assert.rejects(first.withAgent(() => {}, new AbortController().signal), /停止/)
   assert.equal(second.signal.aborted, false)
+})
+
+
+test('settings share one writer per scope and cannot write after unload', async t => {
+  const { first, services } = await setup(t)
+  const validate = input => ({ left: 0, right: 0, ...input })
+  const [a, b] = await Promise.all([first.settings('media', validate), first.settings('media', validate)])
+  await Promise.all([a.update({ left: 1 }), b.update({ right: 2 })])
+  assert.deepEqual(a.get(), { left: 1, right: 2 })
+  assert.deepEqual(b.get(), a.get())
+  await services.unmount(first.id)
+  await assert.rejects(a.update({ left: 3 }))
 })

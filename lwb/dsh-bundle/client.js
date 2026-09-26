@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     var module = { exports: {} };
     var exports = module.exports;
     const React = require('react');
-    const { IconSettingsOutline16, IconNewChatOutline16, IconCordisPluginOutline14, IconChevronLeftOutline14, IconArchiveOutline20, IconBranchOutline16, IconEditOutline16, IconEllipsisOutline16, IconProjectAddOutline16, IconTrashOutline16, Menu } = require('@deepseek-ai/dsh-client-ui-primitives');
+    const { IconSettingsOutlineRegular, IconNewChatOutlineRegular, IconCordisPluginOutlineRegular, IconChevronLeftOutlineRegular, IconArchiveOutlineRegular, IconBranchOutlineRegular, IconEditOutlineRegular, IconEllipsisOutlineRegular, IconProjectAddOutlineRegular, IconTrashOutlineRegular, Menu } = require('@deepseek-ai/dsh-client-ui-primitives');
     const h = React.createElement;
 
     // Browsers expose crypto.randomUUID only in secure contexts. The workbench
@@ -25,11 +25,8 @@ window.__ModuleLoader__.load({
     installLanCryptoCompatibility();
 
     const STORAGE_KEY = 'lwb.workbench.v3';
-    const SETTINGS_NAMESPACE = 'lwb-workbench';
     const BASE_CONTRACT_VERSION = 9;
     let services;
-    let runtimeApi;
-    let remoteSettingsCompatibilityWarning = false;
 
     const defaultState = {
       baseContractVersion: BASE_CONTRACT_VERSION,
@@ -70,14 +67,6 @@ window.__ModuleLoader__.load({
     function persist(state) {
       const snapshot = persistedSnapshot(state);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch (_) {}
-      if (runtimeApi?.settings?.mutate) {
-        const commit = runtimeApi.settings.mutate({
-          ns: SETTINGS_NAMESPACE,
-          ops: [{ op: 'set', path: ['state'], value: snapshot }],
-        });
-        void commit.catch(() => {});
-        return commit;
-      }
       return Promise.resolve();
     }
     function notify(listeners) {
@@ -383,111 +372,20 @@ window.__ModuleLoader__.load({
       return lwbPackClient;
     }
 
-    function packageId(value) {
-      return typeof value === 'string' && /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u.test(value) ? value : null;
-    }
-    function runtimeBundle(value, expectedId) {
-      if (!value || typeof value !== 'object') throw new Error('能力包未返回浏览器模块信息。');
-      const id = packageId(value.id);
-      if (!id || id !== expectedId || id !== packageId(expectedId)) throw new Error('能力包返回了无效的浏览器模块标识。');
-      if (typeof value.rev !== 'string' || !value.rev) throw new Error('能力包返回了无效的浏览器模块版本。');
-      if (typeof value.url !== 'string') throw new Error('能力包返回了无效的浏览器模块地址。');
-      const url = new URL(value.url, window.location.origin);
-      if (url.origin !== window.location.origin || !url.pathname.startsWith('/plugins/') || !url.searchParams.get('rev')) {
-        throw new Error('能力包浏览器模块地址不受信任。');
-      }
-      const list = (field) => {
-        if (value[field] === undefined) return [];
-        if (!Array.isArray(value[field]) || value[field].some((item) => !packageId(item))) throw new Error(`能力包返回了无效的 ${field} 依赖。`);
-        return value[field];
-      };
-      return { id, rev: value.rev, url: url.href, inject: list('inject'), external: list('external') };
-    }
-    function moduleName(value) { return typeof value === 'string' && value.endsWith('/client') ? value.slice(0, -7) : value; }
-    function loadBundleScript(url) {
-      return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.async = true;
-        script.src = url;
-        script.addEventListener('load', () => { script.remove(); resolve(); }, { once: true });
-        script.addEventListener('error', () => { script.remove(); reject(new Error('能力包浏览器模块加载失败。')); }, { once: true });
-        document.head.append(script);
-      });
-    }
-    function removeOwnedStyles(id) {
-      for (const style of document.querySelectorAll('style[data-plugin]')) {
-        if (style.getAttribute('data-plugin') === id) style.remove();
-      }
-    }
+    // DSH owns browser entry reconciliation; LWB owns business registration.
+    // Use the same serial controller as the official graph event stream.
     class LwbPackClientRuntime {
-      constructor(loader, modules) {
-        this.loader = loader;
-        this.modules = modules;
-        this.tail = Promise.resolve();
-        this.bundles = new Map();
-      }
-      serial(operation) {
-        const result = this.tail.then(operation);
-        this.tail = result.catch(() => {});
-        return result;
-      }
-      entryFor(packageName) {
-        return [...this.loader.entries()].find((entry) => entry.options.name === packageName);
-      }
-      async removeEntry(entry) {
-        this.loader.remove(entry.id);
-        while (entry.fiber?.inertia) await entry.fiber.inertia;
-      }
-      dependenciesReady(bundle) {
-        const boot = new Set(this.modules.manifest?.modules?.map((row) => row.id) || []);
-        for (const dependency of [...bundle.inject, ...bundle.external].map(moduleName)) {
-          if (dependency === bundle.id || boot.has(dependency) || this.entryFor(dependency)) continue;
-          throw new Error(`能力包依赖的浏览器模块 ${JSON.stringify(dependency)} 尚未在当前页面加载。`);
+      constructor(modules) { this.modules = modules; }
+      async sync(pack, loaded) {
+        const response = await services.connection.rpc.call('/api', 'lwbPacks/clientGraph', { args: {} });
+        if (!response?.ok) throw new Error(response?.error?.message || '无法同步能力包页面。');
+        await this.modules.entries.sync(response.value);
+        const failures = this.modules.entries.state.getSnapshot().failures;
+        const failure = failures.find(row => row.id === pack.packageName);
+        if (failure) throw new Error(failure.message);
+        if (loaded && pack.menus.some(menu => !lwbPackClient.page(pack.id, menu.id))) {
+          throw new Error('能力包浏览器页面尚未完成注册。');
         }
-      }
-      bootBundleFor(packageName) {
-        const row = this.modules.manifest?.modules?.find((candidate) => candidate.id === packageName);
-        if (!row) return undefined;
-        return { id: row.id, url: row.url, rev: row.rev, inject: row.inject, external: row.external };
-      }
-      bundleFor(pack) {
-        const packageName = packageId(pack?.packageName);
-        return packageName && (this.bundles.get(packageName) || this.bootBundleFor(packageName));
-      }
-      async load(pack, value = this.bundleFor(pack)) {
-        const bundle = runtimeBundle(value, pack.packageName);
-        return this.serial(async () => {
-          if (this.entryFor(bundle.id)) return;
-          this.dependenciesReady(bundle);
-          let entryId;
-          try {
-            this.modules.invalidate(bundle.id);
-            await loadBundleScript(bundle.url);
-            entryId = await this.loader.create({ name: bundle.id });
-            const fiber = this.loader.resolve(entryId).fiber;
-            if (!fiber) throw new Error('能力包浏览器模块未能创建运行实例。');
-            await fiber.await();
-            this.bundles.set(bundle.id, bundle);
-          } catch (error) {
-            if (entryId) {
-              try { await this.removeEntry(this.loader.resolve(entryId)); } catch (_) {}
-            }
-            this.modules.invalidate(bundle.id);
-            removeOwnedStyles(bundle.id);
-            throw error;
-          }
-        });
-      }
-      async unload(pack) {
-        const packageName = packageId(pack?.packageName);
-        if (!packageName) throw new Error('能力包缺少浏览器模块标识。');
-        return this.serial(async () => {
-          const entries = [...this.loader.entries()].filter((entry) => entry.options.name === packageName);
-          for (const entry of entries) await this.removeEntry(entry);
-          this.modules.invalidate(packageName);
-          removeOwnedStyles(packageName);
-          this.bundles.delete(packageName);
-        });
       }
     }
     async function archiveRemote(method, request) {
@@ -504,103 +402,6 @@ window.__ModuleLoader__.load({
       if (sessionId) services?.sessions?.open?.(sessionId);
       updateProduct({ page: 'conversation', capabilityPage: null, mobileNavOpen: false, conversationPanelOpen: false }, false);
     }
-    async function refreshRuntime() {
-      try {
-        if (runtimeApi?.settings?.describe) {
-          const settingsResult = await runtimeApi.settings.describe({});
-          if (settingsResult?.result?.ok) {
-            const namespaces = settingsResult.result.value.namespaces || [];
-            const workbench = namespaces.find((item) => item.ns === SETTINGS_NAMESPACE)?.value?.state;
-            if (workbench && typeof workbench === 'object') {
-              const localUpdatedAt = Number(productState.stateUpdatedAt || 0);
-              const remoteUpdatedAt = Number(workbench.stateUpdatedAt || 0);
-              if (remoteUpdatedAt >= localUpdatedAt) {
-                productState = normalizeState(Object.assign({}, productState, workbench));
-                notify(productListeners);
-              }
-              if (workbench.baseContractVersion !== BASE_CONTRACT_VERSION || localUpdatedAt > remoteUpdatedAt) persist(productState);
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
-    function warnRemoteSettingsCompatibility(message) {
-      if (remoteSettingsCompatibilityWarning) return;
-      remoteSettingsCompatibilityWarning = true;
-      console.warn(`[LWB] remote settings compatibility disabled: ${message}`);
-    }
-
-    function settingsViewUsable(snapshot) {
-      return Boolean(snapshot?.view && Array.isArray(snapshot.view.namespaces));
-    }
-
-    function validSettingsView(view) {
-      return Boolean(view && Array.isArray(view.namespaces)
-        && typeof view.writable === 'boolean' && typeof view.hasDocument === 'boolean');
-    }
-
-    async function remoteSettingsPolicy() {
-      const rpc = services?.connection?.rpc?.call;
-      if (typeof rpc !== 'function') return undefined;
-      const response = await rpc('/api', 'lwbRemoteSettings/policy', { args: {} });
-      if (!response?.ok) throw new Error(response?.error?.message || '无法读取远程设置兼容策略。');
-      const mode = response.value?.mode;
-      return { mode: ['auto', 'compat', 'disabled'].includes(mode) ? mode : 'auto' };
-    }
-
-    /**
-     * Keep the upstream settings mirror authoritative. The fallback is only a
-     * browser-side bridge for the current non-loopback memory-mode mirror and
-     * can disappear once DSH serves settings there itself.
-     */
-    async function refreshRemoteSettingsCompatibility() {
-      if (services?.remote?.$host?.isLoopback === true) return;
-      let policy;
-      try {
-        policy = await remoteSettingsPolicy();
-      } catch (error) {
-        warnRemoteSettingsCompatibility(error?.message || String(error));
-        return;
-      }
-      if (!policy || policy.mode === 'disabled') return;
-      const mirror = services?.settingsScope?.describe?.();
-      if (!mirror?.getSnapshot) {
-        warnRemoteSettingsCompatibility('DSH settings mirror is unavailable.');
-        return;
-      }
-      try { await mirror.ensure?.(); } catch (_) {}
-      let snapshot = mirror.getSnapshot();
-      if (settingsViewUsable(snapshot)) return;
-      // auto waits for an official answer instead of taking over a transient
-      // loading/idle state; compat is the explicit emergency bridge.
-      if (policy.mode === 'auto' && snapshot.status !== 'unavailable') return;
-      let result;
-      if (runtimeApi?.settings?.describe) {
-        result = await runtimeApi.settings.describe({});
-      } else if (services?.connection?.rpc?.call) {
-        // Current DSH exposes the same authenticated operation through the
-        // generic Connection RPC even when the legacy connection.api facade is
-        // absent. Keep this fallback local so upstream can remove it cleanly.
-        result = await services.connection.rpc.call('/api', 'settings/describe', { args: {} });
-      } else {
-        warnRemoteSettingsCompatibility('DSH settings RPC is unavailable.');
-        return;
-      }
-      const response = result?.result || result;
-      if (!response?.ok || !validSettingsView(response.value)) {
-        warnRemoteSettingsCompatibility(response?.error?.message || 'settings.describe returned an invalid view.');
-        return;
-      }
-      snapshot = mirror.getSnapshot();
-      if (settingsViewUsable(snapshot) || (policy.mode === 'auto' && snapshot.status !== 'unavailable')) return;
-      if (typeof mirror.store?.set !== 'function') {
-        warnRemoteSettingsCompatibility('DSH settings mirror cannot accept a compatibility view.');
-        return;
-      }
-      mirror.store.set({ status: 'ready', view: response.value, error: null });
-    }
-
     const css = `
       :root { --lwb-text-xs:12px; --lwb-text-sm:13px; --lwb-text-base:14px; --lwb-text-md:15px; --lwb-text-lg:16px; --lwb-text-section:18px; --lwb-text-heading:20px; --lwb-text-title:24px; --lwb-sidebar-width:248px; --lwb-ink:#1d2733; --lwb-muted:#5f6f80; --lwb-line:#e5e9ee; --lwb-page:#f7f9fb; --lwb-surface:#fff; --lwb-blue:#2869d8; --lwb-blue-soft:#edf4ff; --lwb-green:#16865f; --lwb-green-soft:#eaf8f1; --lwb-warm:#b97016; --lwb-warm-soft:#fff5e7; }
       body[data-ds-dark-theme] { --lwb-ink:var(--dsw-alias-label-primary,#edf3f8); --lwb-muted:var(--dsw-alias-label-secondary,#a9b7c5); --lwb-line:var(--dsw-alias-border-l1,#334352); --lwb-page:var(--dsw-alias-bg-base,#131c25); --lwb-surface:var(--dsw-alias-bg-layer-1,#1c2733); --lwb-blue:#78adff; --lwb-blue-soft:#203f64; --lwb-green:#5bd0a0; --lwb-green-soft:#173f34; --lwb-warm:#f0b45b; --lwb-warm-soft:#49351c; }
@@ -774,7 +575,7 @@ window.__ModuleLoader__.load({
       return () => { observer.disconnect(); titleObserver.disconnect(); document.title = previousTitle; };
     }
     function glyph(value) {
-      const Icon = { '◌': IconNewChatOutline16, '▦': IconCordisPluginOutline14, '⚙': IconSettingsOutline16 }[value];
+      const Icon = { '◌': IconNewChatOutlineRegular, '▦': IconCordisPluginOutlineRegular, '⚙': IconSettingsOutlineRegular }[value];
       return h('span', { className: 'lwb-nav-icon', 'aria-hidden': 'true' }, Icon ? h(Icon, { size: 18 }) : value);
     }
     function button(className, label, onClick, props = {}) {
@@ -1003,7 +804,7 @@ window.__ModuleLoader__.load({
             event.stopPropagation();
             setOpenMenuId((current) => current === menuId ? null : menuId);
           },
-        }, h(IconEllipsisOutline16, { size: 16 })),
+        }, h(IconEllipsisOutlineRegular, { size: 16 })),
       }));
       const sessionRow = (id, workspaceTitle, options = {}) => {
         const item = sessions.byId[id] || {};
@@ -1013,12 +814,12 @@ window.__ModuleLoader__.load({
           ? undefined
           : workspaceGroups.find((workspace) => item.cwd && workspace.path === item.cwd);
         const menuItems = archived
-          ? [{ id: 'restore', label: workspaceTitle ? copy.restoreToWorkspace(workspaceTitle) : copy.restoreSession, icon: h(IconProjectAddOutline16, { size: 16 }) }]
+          ? [{ id: 'restore', label: workspaceTitle ? copy.restoreToWorkspace(workspaceTitle) : copy.restoreSession, icon: h(IconProjectAddOutlineRegular, { size: 16 }) }]
           : [
-            { id: 'rename', label: copy.rename, icon: h(IconEditOutline16, { size: 16 }) },
-            { id: 'fork', label: copy.forkConversation, icon: h(IconBranchOutline16, { size: 16 }) },
-            ...(repairWorkspace ? [{ id: 'assign-workspace', label: copy.assignWorkspace(repairWorkspace.title || repairWorkspace.path), icon: h(IconProjectAddOutline16, { size: 16 }) }] : []),
-            { id: 'archive', label: copy.archiveConversation, icon: h(IconArchiveOutline20, { size: 16 }) },
+            { id: 'rename', label: copy.rename, icon: h(IconEditOutlineRegular, { size: 16 }) },
+            { id: 'fork', label: copy.forkConversation, icon: h(IconBranchOutlineRegular, { size: 16 }) },
+            ...(repairWorkspace ? [{ id: 'assign-workspace', label: copy.assignWorkspace(repairWorkspace.title || repairWorkspace.path), icon: h(IconProjectAddOutlineRegular, { size: 16 }) }] : []),
+            { id: 'archive', label: copy.archiveConversation, icon: h(IconArchiveOutlineRegular, { size: 16 }) },
           ];
         return h('div', { key: id, className: 'lwb-session-item' },
           h('button', {
@@ -1049,8 +850,8 @@ window.__ModuleLoader__.load({
             h('button', { type: 'button', className: 'lwb-workspace-row', title: workspace.path || title, 'data-expanded': expanded ? 'true' : 'false', 'aria-expanded': expanded ? 'true' : 'false', onClick: () => toggleWorkspace(workspace.workspaceId) }, h('span', { className: 'lwb-workspace-chevron', 'aria-hidden': 'true' }, '>'), h('span', { className: 'lwb-workspace-title' }, title), h('span', { className: 'lwb-workspace-count' }, `${workspace.sessionIds.length}`)),
             h('button', { type: 'button', className: 'lwb-workspace-create', title: workspaceReady ? copy.newConversationInWorkspace(title) : copy.readingWorkspaces, 'aria-label': copy.newConversationInWorkspace(title), disabled: !workspaceReady, onClick: () => createConversation(workspace.workspaceId) }, '+'),
             rowMenu(`workspace:${workspace.workspaceId}`, copy.workspaceAction(title), [
-              { id: 'rename', label: copy.rename, icon: h(IconEditOutline16, { size: 16 }) },
-              { id: 'delete', label: copy.deleteWorkspace, icon: h(IconTrashOutline16, { size: 16 }), danger: true },
+              { id: 'rename', label: copy.rename, icon: h(IconEditOutlineRegular, { size: 16 }) },
+              { id: 'delete', label: copy.deleteWorkspace, icon: h(IconTrashOutlineRegular, { size: 16 }), danger: true },
             ], (action) => {
               if (action === 'rename') openDialog({ kind: 'rename-workspace', workspaceId: workspace.workspaceId, title });
               if (action === 'delete') openDialog({ kind: 'delete-workspace', workspaceId: workspace.workspaceId, title });
@@ -1074,7 +875,7 @@ window.__ModuleLoader__.load({
             normalizedQuery
               ? h('section', { className: 'lwb-conversation-section' }, h('div', { className: 'lwb-conversation-label' }, h('span', null, copy.searchResults), h('span', null, copy.count(searchSessionIds.length))), searchSessionIds.length ? searchSessionIds.map((id) => sessionRow(id, workspaceBySessionId.get(id) || copy.unassignedSessions)) : h('div', { className: 'lwb-empty-sessions' }, copy.noMatchingSessions))
               : h(React.Fragment, null,
-                h('section', { className: 'lwb-conversation-section' }, h('div', { className: 'lwb-conversation-label' }, h('span', null, copy.workspaces), h('button', { type: 'button', className: 'lwb-add-workspace', title: workspaceReady ? copy.addWorkspace : copy.readingWorkspaces, 'aria-label': copy.addWorkspace, disabled: !workspaceReady, onClick: addWorkspace }, h(IconProjectAddOutline16, { size: 16 }))), workspaceRows.length ? workspaceRows : h('div', { className: 'lwb-empty-sessions' }, sessions.phase === 'pending' ? copy.loadingWorkspaces : copy.noWorkspaces)),
+                h('section', { className: 'lwb-conversation-section' }, h('div', { className: 'lwb-conversation-label' }, h('span', null, copy.workspaces), h('button', { type: 'button', className: 'lwb-add-workspace', title: workspaceReady ? copy.addWorkspace : copy.readingWorkspaces, 'aria-label': copy.addWorkspace, disabled: !workspaceReady, onClick: addWorkspace }, h(IconProjectAddOutlineRegular, { size: 16 }))), workspaceRows.length ? workspaceRows : h('div', { className: 'lwb-empty-sessions' }, sessions.phase === 'pending' ? copy.loadingWorkspaces : copy.noWorkspaces)),
                 ungroupedSessionIds.length > 0 && h('section', { className: 'lwb-conversation-section' }, h('div', { className: 'lwb-conversation-label' }, h('span', null, copy.unassignedSessions), h('span', null, copy.count(ungroupedSessionIds.length))), ungroupedSessionIds.map((id) => sessionRow(id))),
                 h('section', { className: 'lwb-conversation-section' },
                   h('button', { type: 'button', className: 'lwb-conversation-section-toggle', 'aria-expanded': archivesExpanded ? 'true' : 'false', onClick: () => setArchivesExpanded((current) => !current) }, h('span', { className: 'lwb-conversation-section-toggle-copy' }, h('i', { 'aria-hidden': 'true' }, '>'), h('span', null, copy.archivedSessions)), h('span', null, copy.count(archivedSessionIds.length))),
@@ -1109,9 +910,9 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function LwbRuntimeSettingsTrigger() {
+    function LwbRuntimeSettingsTrigger({ openSettings }) {
       const copy = useLwbCopy();
-      return h('span', { className: 'lwb-dsh-settings-trigger' }, h(IconSettingsOutline16, { size: 18, 'aria-hidden': true }), h('span', null, copy.openRuntimeSettings));
+      return h('button', { type: 'button', className: 'lwb-dsh-settings-trigger', 'aria-haspopup': 'dialog', onClick: openSettings }, h(IconSettingsOutlineRegular, { size: 18, 'aria-hidden': true }), h('span', null, copy.openRuntimeSettings));
     }
 
     function LwbSidebar({ collapsed, width }) {
@@ -1180,7 +981,7 @@ window.__ModuleLoader__.load({
             'aria-label': wide ? (expanded ? copy.collapsePack(pack.name) : copy.expandPack(pack.name)) : pack.name,
             'aria-expanded': wide ? expanded : undefined, 'aria-controls': wide ? menuId : undefined,
             onClick: () => togglePack(pack),
-          }, h('span', { className: 'lwb-cap-mark', 'aria-hidden': 'true' }, pack.name.slice(0, 1)), wide && h('span', { className: 'lwb-nav-label' }, pack.name), wide && h('span', { className: 'lwb-cap-chevron', 'aria-hidden': 'true' }, h(IconChevronLeftOutline14, { size: 14 }))),
+          }, h('span', { className: 'lwb-cap-mark', 'aria-hidden': 'true' }, pack.name.slice(0, 1)), wide && h('span', { className: 'lwb-nav-label' }, pack.name), wide && h('span', { className: 'lwb-cap-chevron', 'aria-hidden': 'true' }, h(IconChevronLeftOutlineRegular, { size: 14 }))),
           wide && expanded && h('div', { id: menuId, className: 'lwb-cap-menu' }, pack.menus.map((item) => h('button', {
             key: capabilityRoute(pack.id, item.id), type: 'button', className: 'lwb-nav-item', title: item.label,
             'data-tone': item.tone || 'blue', 'aria-label': item.label,
@@ -1197,7 +998,7 @@ window.__ModuleLoader__.load({
             h('span', { className: 'lwb-brand-mark' }, '老'),
             wide && h('span', { className: 'lwb-brand-copy' }, h('strong', null, '老傅工作台'), h('small', null, 'Laofu Workbench')),
           ),
-          wide && button('lwb-collapse', h(IconChevronLeftOutline14, { size: 18 }), () => services?.layout?.toggleSidebar?.(), { 'aria-label': copy.collapseSidebar, title: copy.collapseSidebar }),
+          wide && button('lwb-collapse', h(IconChevronLeftOutlineRegular, { size: 18 }), () => services?.layout?.toggleSidebar?.(), { 'aria-label': copy.collapseSidebar, title: copy.collapseSidebar }),
         ),
         h('nav', { className: 'lwb-nav-group', 'aria-label': copy.workbenchFeatures },
           wide && h('div', { className: 'lwb-nav-caption' }, copy.workbench),
@@ -1357,24 +1158,16 @@ window.__ModuleLoader__.load({
         try {
           if (!services?.connection?.rpc?.call) throw new Error('DSH 连接尚未就绪。');
           if (!lwbPackClientRuntime) throw new Error('能力包浏览器运行时尚未就绪。');
-          if (method === 'unload') {
-            const previousBundle = lwbPackClientRuntime.bundleFor(pack);
-            await lwbPackClientRuntime.unload(pack);
-            const response = await services.connection.rpc.call('/api', 'lwbPacks/unload', { args: { request: { id: pack.id } } });
-            if (!response?.ok) {
-              await lwbPackClientRuntime.load(pack, previousBundle).catch(() => {});
-              throw new Error(response?.error?.message || '能力包操作未完成。');
-            }
-          } else {
-            const response = await services.connection.rpc.call('/api', 'lwbPacks/load', { args: { request: { id: pack.id } } });
-            if (!response?.ok) throw new Error(response?.error?.message || '能力包操作未完成。');
-            try {
-              await lwbPackClientRuntime.load(pack, response.value?.client);
-            } catch (error) {
-              await lwbPackClientRuntime.unload(pack).catch(() => {});
+          const response = await services.connection.rpc.call('/api', `lwbPacks/${method}`, { args: { request: { id: pack.id } } });
+          if (!response?.ok) throw new Error(response?.error?.message || '能力包操作未完成。');
+          try {
+            await lwbPackClientRuntime.sync(pack, method === 'load');
+          } catch (error) {
+            if (method === 'load') {
               await services.connection.rpc.call('/api', 'lwbPacks/unload', { args: { request: { id: pack.id } } }).catch(() => {});
-              throw error;
+              await lwbPackClientRuntime.sync(pack, false).catch(() => {});
             }
+            throw error;
           }
           await refreshPackCatalog({ retain: true });
           setNotice({ kind: 'success', text: method === 'load' ? copy.packLoaded : copy.packUnloaded });
@@ -1517,22 +1310,18 @@ window.__ModuleLoader__.load({
     }
 
     function apply(ctx) {
-      runtimeApi = ctx.get('connection')?.api;
       lwbPackClient = new LwbPackClientRegistry();
       ctx.provide('lwbPackClient', lwbPackClient);
-      lwbPackClientRuntime = new LwbPackClientRuntime(ctx.get('loader'), ctx.get('modules'));
+      lwbPackClientRuntime = new LwbPackClientRuntime(ctx.get('modules'));
       services = {
-        slots: ctx.get('slots'), connection: ctx.get('connection'), remote: ctx.get('remote'), settingsScope: ctx.get('settingsScope'), sessions: ctx.get('sessions'), workspaces: ctx.get('workspaces'), uiWorkspace: ctx.get('uiWorkspace'), layout: ctx.get('layout'), locale: ctx.get('locale'),
+        slots: ctx.get('slots'), connection: ctx.get('connection'), sessions: ctx.get('sessions'), workspaces: ctx.get('workspaces'), uiWorkspace: ctx.get('uiWorkspace'), layout: ctx.get('layout'), locale: ctx.get('locale'),
       };
       installStyle();
       const disposeProductMetadata = installProductMetadata();
-      void refreshRuntime();
-      void refreshRemoteSettingsCompatibility();
       void refreshPackCatalog();
       const disposePackCatalogReset = ctx.on('connection/reset', () => {
         void refreshPackCatalog();
-        void refreshRemoteSettingsCompatibility();
-      });
+        });
       ctx.effect(() => {
         let disposeSidebar;
         const enableSidebar = () => {
@@ -1546,8 +1335,8 @@ window.__ModuleLoader__.load({
           disposeSidebar = undefined;
         };
         enableSidebar();
-        const disposeRuntimeSettingsTrigger = ctx.slots.inject('settings.trigger', () => ctx.slots.register({
-          name: 'settings.trigger', priority: -10, registrant: 'lwb-workbench',
+        const disposeRuntimeSettingsTrigger = ctx.slots.inject('settings.launcher', () => ctx.slots.register({
+          name: 'settings.launcher', priority: -10, registrant: 'lwb-workbench',
         }, LwbRuntimeSettingsTrigger));
         const disposeOverlay = ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay', id: 'lwb-workbench-management', order: 10, registrant: 'lwb-workbench',
@@ -1572,7 +1361,7 @@ window.__ModuleLoader__.load({
       }, 'lwb: unified workbench shell');
     }
 
-    exports.inject = ['slots', 'connection', 'remote', 'settingsScope', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'locale', 'loader', 'modules'];
+    exports.inject = ['slots', 'connection', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'locale', 'loader', 'modules'];
     exports.apply = apply;
     return module.exports;
   },

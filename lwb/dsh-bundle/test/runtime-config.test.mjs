@@ -22,14 +22,14 @@ function readRuntime(environment = {}) {
   return runtimeScript(environment, 'process.stdout.write(JSON.stringify(LWB_RUNTIME))')
 }
 
-test('runtime config preserves the Web defaults', () => {
+test('runtime config uses one carrier-independent product data root', () => {
   const runtime = readRuntime()
   assert.equal(runtime.profileId, 'lwb')
-  assert.equal(runtime.dshHome, resolve('lwb/local/dsh-home'))
-  assert.equal(runtime.profileHome, resolve('lwb/local/dsh-home/profiles/lwb'))
-  assert.equal(runtime.packStateDir, resolve('lwb/local/dsh-home/profiles/lwb/pack-state'))
-  assert.equal(runtime.productHome, resolve('lwb/local'))
-  assert.equal(runtime.registryPath, resolve('lwb/local/packs.json'))
+  assert.equal(runtime.dshHome, resolve('lwb/local/current/dsh-home'))
+  assert.equal(runtime.profileHome, resolve('lwb/local/current/dsh-home/profiles/lwb'))
+  assert.equal(runtime.packStateDir, resolve('lwb/local/current/pack-state'))
+  assert.equal(runtime.productHome, resolve('lwb/local/current'))
+  assert.equal(runtime.registryPath, resolve('lwb/local/current/packs.json'))
   assert.equal(runtime.sourcePacksDir, resolve('lwb/packs'))
 })
 
@@ -38,9 +38,9 @@ test('runtime config selects the Desktop profile and user product home', () => {
   const runtime = readRuntime({ DSH_HOME: dshHome, ELECTRON_RUN_AS_NODE: '1' })
   assert.equal(runtime.profileId, 'desktop')
   assert.equal(runtime.profileHome, join(dshHome, 'profiles', 'desktop'))
-  assert.equal(runtime.productHome, join(dshHome, 'lwb'))
-  assert.equal(runtime.registryPath, join(dshHome, 'lwb', 'packs.json'))
-  assert.equal(runtime.packRuntimeDir, join(dshHome, 'lwb', 'pack-runtime'))
+  assert.equal(runtime.productHome, resolve('lwb/local/current'))
+  assert.equal(runtime.registryPath, resolve('lwb/local/current/packs.json'))
+  assert.equal(runtime.packRuntimeDir, undefined)
 })
 
 test('explicit product paths take precedence over transport defaults', () => {

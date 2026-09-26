@@ -7,6 +7,10 @@
   "main": "index.mjs",
   "exports": {
     ".": "./index.mjs",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./execution": "./dsh-execution.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": "0.1.7-rc.2"
   }
 }

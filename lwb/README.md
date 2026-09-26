@@ -17,7 +17,7 @@
 | `UPSTREAM.lock.json` | 精确的上游 tag / commit 锁定 |
 | `profile/` | 受跟踪的 DSH Profile manifest |
 | `dsh-bundle/archive-gateway.mjs` | DSH 公开归档模型未覆盖的窄恢复接缝 |
-| `dsh-bundle/remote-settings-gateway.mjs` | 非回环内网浏览器的模型设置兼容策略 |
+| `dsh-bundle/dsh-adapter/` | 当前 DSH 版本的 Loader 和包解析边界 |
 | `dsh-bundle/client.js` | 对话、场景能力包和设置的浏览器壳 |
 | `pack-sdk/` | 第三方场景能力包的 manifest 与 host 注册契约 |
 | `pack-manager.mjs` | 本机能力包目录、安装状态与命令 |
@@ -26,7 +26,7 @@
 
 ## 场景能力包
 
-基础 Profile 不直接装配具体领域包。仓库随附的口播包会自动出现在市场，首次需手动加载。使用 `npm run pack:install -- <包目录>` 将一个符合契约的外部包源登记到被忽略的 `lwb/local/packs.json`，使其出现在市场中；登记默认不启用。工作台市场加载包后会把它记为启用，使其在后续启动时自动恢复；卸载会取消该状态。加载和卸载均会在当前页面更新浏览器模块与菜单。`npm run pack:remove -- <包 id>` 只删除登记，不会删除包源码或工作区数据。
+基础 Profile 不直接装配具体领域包。仓库随附的口播包会自动出现在市场，首次需手动加载。使用 `npm run pack:install -- <包目录>` 将一个符合契约的外部包源登记到被忽略的 `lwb/local/current/packs.json`，使其出现在市场中；登记默认不启用。工作台市场加载包后会把它记为启用，使其在后续启动时自动恢复；卸载会取消该状态。加载和卸载均会在当前页面更新浏览器模块与菜单。`npm run pack:remove -- <包 id>` 只删除登记，不会删除包源码或工作区数据。
 
 当前仓库仅提供 `packs/spoken-video/`，包含口播视频内容创作的账号定位、信号、选题、写稿、配音/字幕、视频/预览、发布资料和内容安排页面。新增业务可以继续以独立包接入；开发步骤见[能力包开发入门](../docs/develop-a-pack.md)，详细契约见[场景能力包文档](../docs/12-capability-packs.md)。
 
@@ -34,7 +34,7 @@
 
 ## 运行数据
 
-默认所有持久化运行数据统一位于 `lwb/local/`：原生附件在 `dsh-home/attachments/`，口播数据在 `dsh-home/profiles/lwb/pack-state/workspaces/spoken-video/data/`。不再创建 `.lwb/` 或普通工作区上传目录；信号采集和内容安排只读取专属工作区，不维护跨工作区索引。测试夹具使用可清理的独立临时目录。详见[目录契约](../docs/31-runtime-data-layout.md)。
+默认所有持久化运行数据统一位于 `lwb/local/current/`：原生附件在 `dsh-home/attachments/`，口播数据在 `pack-state/workspaces/spoken-video/data/`。不再创建 `.lwb/` 或普通工作区上传目录；信号采集和内容安排只读取专属工作区，不维护跨工作区索引。测试夹具使用可清理的独立临时目录。详见[目录契约](../docs/31-runtime-data-layout.md)。
 
 ## 更新策略
 
@@ -42,8 +42,6 @@
 
 升级 DSH 时，在独立分支中选定精确 commit，在干净临时 checkout 安装和构建，更新 lock，适配 LWB 接缝，并执行 `npm run test` 和浏览器验收。详见[升级说明](upgrade/README.md)与[基座文档](../docs/08-base-lock.md)。
 
-### 内网设置兼容策略
+### 单一版本约束
 
-Profile 默认使用 `remoteSettings.mode: auto`。在非回环地址访问时，LWB 仅在 DSH 官方设置镜像明确返回 `unavailable` 且没有视图时，使用已认证的 `settings.describe` 读取补齐模型设置镜像；如果未来 DSH 官方支持非回环设置，官方视图会自动优先，兼容读取不会重复执行。可在 Profile 配置中临时选择 `compat`（强制兼容桥接）或 `disabled`（完全交给 DSH）。
-
-这段代码不修改 DSH vendor、不伪造 `isLoopback`，也不开放远程文件/文档能力。升级 DSH 后如果官方镜像已覆盖非回环场景，验收通过后可将模式切换为 `disabled`，确认无兼容调用后删除 `remote-settings-gateway.mjs` 及客户端对应控制器。
+当前只支持锁定的 DSH 0.1.7-rc.2。旧设置兼容桥、旧 API 与数据路径回退均已删除。新版本不自动读取旧数据；旧文件保留。原生设置访问遵循 DSH 当前策略。架构边界与验收门禁见 [扩展边界](../docs/38-dsh-extension-boundary.md)。

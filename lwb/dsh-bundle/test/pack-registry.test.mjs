@@ -37,7 +37,7 @@ test('projects only a revisioned DSH-served browser bundle for a mounted pack', 
   const bundle = projectClientBundle({
     entries: [{
       id: '@example/pack',
-      url: '/plugins/??@example/pack/client.js&rev=opaque-revision',
+      url: 'plugins/??@example/pack/client.js&rev=opaque-revision',
       rev: 'opaque-revision',
       inject: ['@scitiger-ai/lwb-dsh-bundle'],
       external: [],
@@ -46,25 +46,25 @@ test('projects only a revisioned DSH-served browser bundle for a mounted pack', 
 
   assert.deepEqual(bundle, {
     id: '@example/pack',
-    url: '/plugins/??@example/pack/client.js&rev=opaque-revision',
+    url: 'plugins/??@example/pack/client.js&rev=opaque-revision',
     rev: 'opaque-revision',
     inject: ['@scitiger-ai/lwb-dsh-bundle'],
     external: [],
   })
   assert.equal(projectClientBundle({ entries: [] }, '@example/pack'), undefined)
   assert.throws(() => projectClientBundle({ entries: [{ id: '@example/pack', url: '/unsafe.js', rev: 'r' }] }, '@example/pack'), /受控浏览器 bundle/u)
-  assert.throws(() => projectClientBundle({ entries: [{ id: '@example/pack', url: '/plugins/??@example/pack/client.js&rev=r', rev: 'r', inject: 'not-an-array' }] }, '@example/pack'), /模块图 inject 无效/u)
+  assert.throws(() => projectClientBundle({ entries: [{ id: '@example/pack', url: 'plugins/??@example/pack/client.js&rev=r', rev: 'r', inject: 'not-an-array' }] }, '@example/pack'), /模块图 inject 无效/u)
 })
 
 test('declares the host services required for dynamic browser bundle projection', async () => {
   const source = await readFile(new URL('../index.mjs', import.meta.url), 'utf8')
-  assert.match(source, /export const inject = \['loader', 'clientModules', 'settings', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel'\]/u)
+  assert.match(source, /export const inject = \['loader', 'clientModules', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel'\]/u)
 })
 
 test('restores enabled packs after the LWB host activates inside its loader subtree', async () => {
-  const source = await readFile(new URL('../index.mjs', import.meta.url), 'utf8')
+  const source = await readFile(new URL('../dsh-adapter/loader.mjs', import.meta.url), 'utf8')
   const start = source.indexOf('function restoreEnabledPacks(')
-  const end = source.indexOf('\nasync function createPackGroup(', start)
+  const end = source.indexOf('\nexport async function createPackGroup(', start)
   const restoreEnabledPacks = runInNewContext(`${source.slice(start, end)}; restoreEnabledPacks`, { FIBER_ACTIVE: 2 })
   let notify, effect, startup, finish, calls = 0
   const pending = new Promise(resolve => { finish = resolve })
@@ -90,5 +90,4 @@ test('restores enabled packs after the LWB host activates inside its loader subt
   finish()
   assert.equal(await startup, undefined, 'Cordis must not receive the restore report as a disposal effect')
   assert.match(source, /const fiber = ctx\.plugin\(Group, \[\]\)[\s\S]*?const group = ctx\.fiber\.entry\?\.subgroup/u)
-  assert.match(source, /new LwbPackRuntime\(ctx, \{ group: packGroup \}\)/u)
 })

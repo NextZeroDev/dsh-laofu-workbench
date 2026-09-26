@@ -49,7 +49,7 @@ Host 声明 `lwbPackServices` 依赖，通过 `getLwbPackScope(ctx, manifest)` �
 | `withAgent(operation, signal?)` | 按需创建、使用、释放包内 DSH Agent |
 | `assertAgent(agent)` | 工具调用只能来自该包目录 |
 | `credentials` | 把包自身业务接口的凭据操作限制到包命名空间；DSH 模型认证由原生适配器处理 |
-| `settingsNamespace(name)` | 分配包级设置名称；通过包自身的 `ctx.settings.register()` 注册，确保卸载释放 schema |
+| `settings(name, schema)` | 返回包工作区内的独立 JSON 设置；串行原子写入，卸载屏障等待正在进行的写入 |
 
 核心只向浏览器业务页传 `packId`、公开 pack/menu 和导航回调。数据 RPC 不接收用于选址的 `agentId`/`cwd`。业务 host 保留真实 Agent 入参兼容以供测试和内部工具复用，生产浏览器入口统一使用宿主上下文。
 

@@ -18,23 +18,21 @@ function profileId() {
   return process.env.ELECTRON_RUN_AS_NODE === '1' ? 'desktop' : 'lwb'
 }
 
-const dshHome = resolve(text(process.env.LWB_DSH_HOME) || text(process.env.DSH_HOME) || join(PROJECT_ROOT, 'lwb', 'local', 'dsh-home'))
-const desktop = profileId() === 'desktop'
-const productHome = resolve(text(process.env.LWB_PRODUCT_HOME) || (desktop ? join(dshHome, 'lwb') : join(PROJECT_ROOT, 'lwb', 'local')))
-const packRuntimeDir = text(process.env.LWB_PACK_RUNTIME_DIR)
-  || (desktop ? join(productHome, 'pack-runtime') : undefined)
+// One product data root, independent of carrier, profile and installed DSH version.
+const productHome = resolve(text(process.env.LWB_PRODUCT_HOME) || join(PROJECT_ROOT, 'lwb', 'local', 'current'))
+const dshHome = resolve(text(process.env.LWB_DSH_HOME) || text(process.env.DSH_HOME) || join(productHome, 'dsh-home'))
 
 export const LWB_RUNTIME = Object.freeze({
   projectRoot: PROJECT_ROOT,
+  dshRuntimeDir: resolve(text(process.env.LWB_DSH_RUNTIME_DIR) || join(PROJECT_ROOT, 'vendor', 'deepseek-harness')),
   dshHome,
   profileId: profileId(),
   profileHome: resolve(text(process.env.LWB_PROFILE_DIR) || join(dshHome, 'profiles', profileId())),
-  // Business data keeps its historical location when the carrier changes.
-  packStateDir: resolve(text(process.env.LWB_PACK_STATE_DIR) || join(dshHome, 'profiles', 'lwb', 'pack-state')),
+  packStateDir: resolve(text(process.env.LWB_PACK_STATE_DIR) || join(productHome, 'pack-state')),
   productHome,
   registryPath: resolve(text(process.env.LWB_PACK_REGISTRY) || join(productHome, 'packs.json')),
   sourcePacksDir: resolve(text(process.env.LWB_PACKS_DIR) || join(PROJECT_ROOT, 'lwb', 'packs')),
-  packRuntimeDir: packRuntimeDir === undefined ? undefined : resolve(packRuntimeDir),
+  packRuntimeDir: text(process.env.LWB_PACK_RUNTIME_DIR) ? resolve(process.env.LWB_PACK_RUNTIME_DIR) : undefined,
 })
 
 export function lwbProfilePath(...segments) {

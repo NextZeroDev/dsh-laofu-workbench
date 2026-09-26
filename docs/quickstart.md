@@ -101,3 +101,7 @@ npm run dev -- --port 4173
 更新前停止服务并备份这个目录；自行指定过 `LWB_DSH_HOME` 或 `LWB_PACK_REGISTRY` 时，还应备份对应位置。源码更新后，在项目根目录执行 `npm ci`、`npm run setup`、`npm test`，确认依赖和上游版本匹配后再启动。不要在任务执行中更新运行时代码。
 
 不要把包含凭据、会话内容或媒体素材的运行目录上传到 Issue 或公共仓库。卸载能力包、清空业务数据、删除包源登记分别有不同含义，操作前阅读[生命周期说明](12-capability-packs.md)。
+
+## 当前版本的数据边界
+
+当前锁定 DSH `dsh-v0.1.7-rc.2`。默认从全新 `lwb/local/current` 启动，不读取或迁移旧目录；旧文件保留。桌面启动方式见 [Desktop 与 Web](37-desktop-parity.md)，升级检查见 [扩展边界](38-dsh-extension-boundary.md)。

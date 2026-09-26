@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { packCredentialRef } from './pack-workspaces.mjs'
 import { PackTaskScope } from './pack-task-scope.mjs'
+import { openPackSettings } from './pack-settings.mjs'
 
 /** Scoped services issued by the host to one actually mounted package. */
 export class LwbPackServices {
@@ -11,6 +12,7 @@ export class LwbPackServices {
     if (this.scopes.has(manifest.id)) return this.scopes.get(manifest.id)
     const { id } = manifest
     const tasks = new PackTaskScope()
+    const settings = new Map()
     const credentialRef = (purpose) => packCredentialRef(id, purpose)
     const credentials = Object.fromEntries(['resolve', 'describe', 'set', 'unset'].map((method) => [method, (ref, ...args) => {
       if (typeof ref !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(ref)) throw new Error('能力包凭据引用无效。')
@@ -19,13 +21,14 @@ export class LwbPackServices {
     const facade = Object.freeze({
       id, credentialRef, credentials, signal: tasks.signal,
       context: () => this.workspaces.context(id),
+      settings: (name, validate) => this.workspaces.run(id, async (context) => {
+        if (!settings.has(name)) settings.set(name, openPackSettings(context.workspacePath, name, validate).catch(error => { settings.delete(name); throw error }))
+        const store = await settings.get(name)
+        return Object.freeze({ get: store.get, update: patch => this.workspaces.run(id, () => store.update(patch)) })
+      }),
       request: (operation) => this.workspaces.run(id, operation),
       background: (promise) => tasks.track(promise),
       onStop: (dispose) => tasks.addDisposer(dispose),
-      settingsNamespace: (name) => {
-        if (!/^[a-z][a-z0-9-]*$/u.test(name)) throw new Error('能力包设置名称无效。')
-        return `lwb-pack-${id.length}-${id}-${name}`
-      },
       fetch: (url, options = {}) => {
         tasks.signal.throwIfAborted()
         return globalThis.fetch(url, { ...options, signal: options.signal ? AbortSignal.any([options.signal, tasks.signal]) : tasks.signal })

@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     var module = { exports: {} };
     var exports = module.exports;
     const React = require('react');
-    const { IconSettingsOutline16, MarkdownText } = require('@deepseek-ai/dsh-client-ui-primitives');
+    const { IconSettingsOutlineRegular, MarkdownText } = require('@deepseek-ai/dsh-client-ui-primitives');
     const h = React.createElement;
     let connection; let executionRemote; let executionStreams;
     let audioCaptionsHandoff = null;
@@ -3937,7 +3937,7 @@ window.__ModuleLoader__.load({
       const sourceDrawerNode = sourceDrawer && h(React.Fragment, null, h('button', { type: 'button', className: 'sv-drawer-backdrop', 'aria-label': '关闭稿件内容', onClick: () => setSourceDrawer(null) }), h('aside', { className: 'sv-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': '稿件内容' }, h('div', { className: 'sv-drawer-head' }, h('div', null, h('h3', { style: { margin: 0, fontSize: 'var(--lwb-text-section,18px)' } }, sourceDrawer.source?.title || '稿件内容'), h('p', { className: 'sv-meta' }, sourceDrawer.source?.kind === 'manual-text' ? '手动输入文稿快照' : '任务创建时冻结的稿件快照')), h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => setSourceDrawer(null) }, '关闭')), h('div', { className: 'sv-drawer-scroll' }, h('article', { className: 'sv-sc-manuscript' }, sourceDrawer.source?.text || ''))));
       const subtitleDrawerNode = subtitleDrawer && h(React.Fragment, null, h('button', { type: 'button', className: 'sv-drawer-backdrop', 'aria-label': '关闭字幕内容', onClick: () => setSubtitleDrawer(null) }), h('aside', { className: 'sv-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': '编辑字幕' }, h('div', { className: 'sv-drawer-head' }, h('div', null, h('h3', { style: { margin: 0, fontSize: 'var(--lwb-text-section,18px)' } }, `字幕 · ${subtitleDrawer.task.source?.title || '手动文稿'}`), h('p', { className: 'sv-meta' }, `${subtitleDrawer.cues.length} 条字幕，可直接校对错别字并保存。`)), h('button', { type: 'button', className: 'lwb-plain-button', disabled: subtitleDrawer.saving, onClick: () => setSubtitleDrawer(null) }, '关闭')), h('div', { className: 'sv-drawer-scroll sv-audio-subtitle-editor' }, h('div', { className: 'sv-subtitle-cues' }, subtitleDrawer.cues.map((cue, index) => h('article', { key: cue.id, className: 'sv-subtitle-cue' }, h('time', null, cue.time), h('textarea', { className: 'sv-textarea sv-subtitle-text', value: cue.text, readOnly: subtitleDrawer.task.current === false, maxLength: 30000, 'aria-label': `第 ${index + 1} 条字幕文本`, onChange: (event) => setSubtitleDrawer((current) => ({ ...current, cues: current.cues.map((currentCue, currentIndex) => currentIndex === index ? { ...currentCue, text: event.target.value } : currentCue) })) }))))), h('div', { className: 'sv-media-drawer-foot' }, h('span', { className: 'sv-meta' }, subtitleDrawer.task.current === false ? '历史版本字幕，仅供查看。' : '保存校对会更新项目字幕，已有视频和发布资料需重新制作。'), h('button', { type: 'button', className: 'lwb-primary-button', disabled: subtitleDrawer.task.current === false || subtitleDrawer.saving || !subtitleDrawer.cues.length || subtitleDrawer.cues.some((cue) => !cue.text.trim()), onClick: () => ask({ title: '保存字幕', copy: `将保存这 ${subtitleDrawer.cues.length} 条字幕的文本修改，时间码保持不变。`, confirm: '确认保存', onConfirm: () => { void saveSubtitles(); } }) }, subtitleDrawer.saving ? '正在保存…' : '保存字幕'))));
       const accountTabs = h(AccountTabs, { accountLibrary, activeTab, onChange: setActiveTab, label: '按账号查看配音任务' });
-      return h(PackFrame, { packId, openConversation, title: '配音 / 字幕', accent: 'pink', copy: '按账号选择稿件并生成配音；默认同时生成字幕，也可取消；字幕失败不影响已完成的配音。每条任务保留执行记录并同步项目产物。', hero, introActions: h('button', { type: 'button', className: 'sv-media-config-trigger', 'data-attention': service && !providerEntries.length ? 'true' : 'false', onClick: () => setConnectionOpen(true) }, h(React.Fragment, null, h(IconSettingsOutline16, { size: 16, 'aria-hidden': true }), '连接配置', h('span', { className: 'sv-config-state' }, !service ? '读取中' : providerEntries.length ? '已连接' : '待配置'))) }, h(Notice, { error }), accountTabs, h('section', { className: 'sv-split sv-audio-workbench' }, newTaskPanel, taskPanel), scriptPickerDrawer, connectionDrawer, sourceDrawerNode, subtitleDrawerNode, confirmNode);
+      return h(PackFrame, { packId, openConversation, title: '配音 / 字幕', accent: 'pink', copy: '按账号选择稿件并生成配音；默认同时生成字幕，也可取消；字幕失败不影响已完成的配音。每条任务保留执行记录并同步项目产物。', hero, introActions: h('button', { type: 'button', className: 'sv-media-config-trigger', 'data-attention': service && !providerEntries.length ? 'true' : 'false', onClick: () => setConnectionOpen(true) }, h(React.Fragment, null, h(IconSettingsOutlineRegular, { size: 16, 'aria-hidden': true }), '连接配置', h('span', { className: 'sv-config-state' }, !service ? '读取中' : providerEntries.length ? '已连接' : '待配置'))) }, h(Notice, { error }), accountTabs, h('section', { className: 'sv-split sv-audio-workbench' }, newTaskPanel, taskPanel), scriptPickerDrawer, connectionDrawer, sourceDrawerNode, subtitleDrawerNode, confirmNode);
     }
     function VideoPreviewPageV2({ packId, openConversation }) {
       const { projects, refresh, error, setError } = useProjects(packId);
@@ -4576,7 +4576,7 @@ window.__ModuleLoader__.load({
         { label: '封面生图', value: service?.configured ? (service.provider === 'bailian' ? '百炼' : 'SciTiger') : '待配置', tone: service?.configured ? 'green' : undefined },
       ] });
 
-      return h(PackFrame, { packId, openConversation, title: '发布', accent: 'red', copy: '这里直接陈列上一模块生成的成片，可点开播放。点「发布」查看或生成发布资料：标题、文案、描述、标签与横竖封面。资料齐备即视为可发布，复制到平台即可；封面可按提示词重生，也可自行上传。本模块不会向任何平台直发。', hero, introActions: h('button', { type: 'button', className: 'sv-media-config-trigger', 'data-attention': service && !service.configured ? 'true' : 'false', onClick: () => setConnectionOpen(true) }, h(React.Fragment, null, h(IconSettingsOutline16, { size: 16, 'aria-hidden': true }), '封面生图', h('span', { className: 'sv-config-state' }, !service ? '读取中' : service.configured ? '已连接' : '待配置'))) },
+      return h(PackFrame, { packId, openConversation, title: '发布', accent: 'red', copy: '这里直接陈列上一模块生成的成片，可点开播放。点「发布」查看或生成发布资料：标题、文案、描述、标签与横竖封面。资料齐备即视为可发布，复制到平台即可；封面可按提示词重生，也可自行上传。本模块不会向任何平台直发。', hero, introActions: h('button', { type: 'button', className: 'sv-media-config-trigger', 'data-attention': service && !service.configured ? 'true' : 'false', onClick: () => setConnectionOpen(true) }, h(React.Fragment, null, h(IconSettingsOutlineRegular, { size: 16, 'aria-hidden': true }), '封面生图', h('span', { className: 'sv-config-state' }, !service ? '读取中' : service.configured ? '已连接' : '待配置'))) },
         h(Notice, { error: error || detailError }),
         shelf,
         lifecycleDrawer,
@@ -4585,15 +4585,18 @@ window.__ModuleLoader__.load({
       );
     }
     async function apply(ctx) {
+      try {
       connection = ctx.get('connection'); executionStreams = ctx.get('remote');
       // Mount the pack's dynamic contract on the same native mux used by ordinary conversations.
       await executionStreams.$mount({ package: '@scitiger-ai/lwb-spoken-video', descriptors: [{
         id: '@scitiger-ai/lwb-spoken-video#spokenVideo/followExecution', service: 'spokenVideo', namespace: 'spokenVideo', method: 'followExecution', mode: 'stream', invocation: { kind: 'direct' },
-        parameters: [{ name: 'request', wire: 'request', source: 'json', codec: { mode: 'strict', typeSymbol: '@scitiger-ai/lwb-spoken-video#ExecutionRequest', schema: { parse(value) { if (!value || typeof value.id !== 'string' || typeof value.kind !== 'string' || typeof value.role !== 'string') throw new Error('执行会话请求无效。'); return value; } } } }],
+        parameters: [{ name: 'request', wire: 'request', source: 'json', codec: { mode: 'strict', typeSymbol: '@scitiger-ai/lwb-spoken-video#ExecutionRequest', create: () => ({ parse(value) { if (!value || typeof value.id !== 'string' || typeof value.kind !== 'string' || typeof value.role !== 'string') throw new Error('执行会话请求无效。'); return value; } }) } }],
         cancellation: { parameter: 'signal' }, result: { mode: 'src-json' },
       }] });
       await ctx.plugin({ name: 'spoken-video-execution-client', inject: ['remote.spokenVideo'], apply(scope) { executionRemote = scope.get('remote.spokenVideo'); scope.effect(() => () => { executionRemote = null; }); } });
-      installStyle(); ctx.effect(() => ctx.lwbPackClient.register({ packId: 'spoken-video', pages: { positioning: AccountPositioningPage, signals: SignalsPage, topics: TopicsPage, scripts: ScriptPage, 'audio-captions': AudioCaptionsPageV2, 'video-preview': VideoPreviewPageV2, publish: PublishPageV4, 'content-schedule': ContentSchedulePage } }), 'spoken-video: register capability pages'); }
+      installStyle(); ctx.effect(() => ctx.lwbPackClient.register({ packId: 'spoken-video', pages: { positioning: AccountPositioningPage, signals: SignalsPage, topics: TopicsPage, scripts: ScriptPage, 'audio-captions': AudioCaptionsPageV2, 'video-preview': VideoPreviewPageV2, publish: PublishPageV4, 'content-schedule': ContentSchedulePage } }), 'spoken-video: register capability pages');
+      } catch (error) { console.error('LWB capability page activation failed', error); throw error; }
+    }
     exports.inject = ['connection', 'lwbPackClient', 'remote']; exports.apply = apply; return module.exports;
   },
 });
