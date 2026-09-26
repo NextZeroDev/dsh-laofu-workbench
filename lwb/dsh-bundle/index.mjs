@@ -1,12 +1,12 @@
-const PROFILE_ID = 'lwb'
+import { LWB_RUNTIME, lwbProfilePath } from './runtime-config.mjs'
+
+const PROFILE_ID = LWB_RUNTIME.profileId
 const FIBER_ACTIVE = 2
 
 // The pack runtime projects Loader-managed browser bundles through DSH's
 // client-module graph. Declare both host services at the bundle boundary.
 export const inject = ['loader', 'clientModules', 'settings', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel']
 
-import { join, resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { LwbPackWorkspaces } from './pack-workspaces.mjs'
 import { LwbPackServices } from './pack-services.mjs'
 
@@ -67,8 +67,7 @@ export async function apply(ctx, config = {}) {
   })
   ctx.provide('lwbProfile', identity)
   ctx.provide('lwbPackRegistry', new LwbPackRegistry())
-  const dshHome = resolve(process.env.DSH_HOME || process.env.LWB_DSH_HOME || join(dirname(fileURLToPath(import.meta.url)), '..', 'local', 'dsh-home'))
-  const workspaces = new LwbPackWorkspaces({ root: join(dshHome, 'profiles', PROFILE_ID, 'pack-state') })
+  const workspaces = new LwbPackWorkspaces({ root: lwbProfilePath('pack-state') })
   ctx.provide('lwbPackWorkspaces', workspaces)
   ctx.provide('lwbPackServices', new LwbPackServices(ctx, workspaces))
   const packGroup = await createPackGroup(ctx)

@@ -2,8 +2,8 @@ import {
   loadMarketplaceLwbPack,
   marketplaceLwbPacks,
   unloadLwbPack,
-} from '../pack-manager.mjs'
-import { linkLwbPackForRuntime } from '../pack-runtime-links.mjs'
+} from './pack-manager.mjs'
+import { linkLwbPackForRuntime } from './pack-runtime-links.mjs'
 
 function requestId(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('能力包操作请求无效。')

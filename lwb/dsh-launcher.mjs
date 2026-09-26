@@ -3,6 +3,7 @@ import { lstat, mkdir, readFile, readlink, symlink, unlink, writeFile } from 'no
 import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { LWB_RUNTIME } from './dsh-bundle/runtime-config.mjs'
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DSH_DIR = join(ROOT_DIR, 'vendor', 'deepseek-harness')
@@ -11,8 +12,9 @@ const BUNDLE_DIR = join(ROOT_DIR, 'lwb', 'dsh-bundle')
 const LLM_DIR = join(DSH_DIR, 'packages', 'llm', 'llm')
 const CORDIS_DIR = join(DSH_DIR, 'vendor', 'cordis')
 const TYPERT_PROTOCOL_DIR = join(DSH_DIR, 'packages', 'typert', 'protocol')
-const DSH_HOME = resolve(process.env.LWB_DSH_HOME || join(ROOT_DIR, 'lwb', 'local', 'dsh-home'))
-const PROFILE_DIR = join(DSH_HOME, 'profiles', 'lwb')
+const PACK_SDK_DIR = join(ROOT_DIR, 'lwb', 'pack-sdk')
+const DSH_HOME = LWB_RUNTIME.dshHome
+const PROFILE_DIR = LWB_RUNTIME.profileHome
 const PROFILE_NODE_MODULES = join(PROFILE_DIR, 'node_modules')
 const BUNDLE_NODE_MODULES = join(BUNDLE_DIR, 'node_modules')
 const BUILT_CLI_ENTRY = join(DSH_DIR, 'apps', 'cli', 'lib', 'bin.js')
@@ -60,13 +62,14 @@ async function syncProfile() {
   await ensureSymlink(join(BUNDLE_NODE_MODULES, '@deepseek-ai', 'dsh-llm'), LLM_DIR)
   await ensureSymlink(join(BUNDLE_NODE_MODULES, '@deepseek-ai', 'cordis'), CORDIS_DIR)
   await ensureSymlink(join(BUNDLE_NODE_MODULES, '@deepseek-ai', 'dsh-typert-protocol'), TYPERT_PROTOCOL_DIR)
+  await ensureSymlink(join(BUNDLE_NODE_MODULES, '@scitiger-ai', 'lwb-pack-sdk'), PACK_SDK_DIR)
 }
 
 await syncProfile()
 
 const cliArgs = existsSync(BUILT_CLI_ENTRY)
-  ? [BUILT_CLI_ENTRY, '--profile', 'lwb', ...process.argv.slice(2)]
-  : ['--import', TSX_LOADER, SOURCE_CLI_ENTRY, '--profile', 'lwb', ...process.argv.slice(2)]
+  ? [BUILT_CLI_ENTRY, '--profile', LWB_RUNTIME.profileId, ...process.argv.slice(2)]
+  : ['--import', TSX_LOADER, SOURCE_CLI_ENTRY, '--profile', LWB_RUNTIME.profileId, ...process.argv.slice(2)]
 const child = spawn(process.execPath, cliArgs, {
   cwd: ROOT_DIR,
   env: { ...process.env, DSH_HOME },
