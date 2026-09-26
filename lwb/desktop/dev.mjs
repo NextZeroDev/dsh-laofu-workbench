@@ -5,8 +5,9 @@ import { createRequire } from 'node:module'
 import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { assertDesktopProfileManifest } from './profile.mjs'
+import { assertDesktopProfileManifest, desktopDevelopmentEnvironment } from './profile.mjs'
 import { desktopPnpmInvocation } from './toolchain.mjs'
+import { LWB_RUNTIME } from '../dsh-bundle/runtime-config.mjs'
 
 const PRODUCT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const DSH_ROOT = join(PRODUCT_ROOT, 'vendor', 'deepseek-harness')
@@ -96,20 +97,15 @@ async function main() {
   const require = createRequire(pathToFileURL(join(APP_ROOT, 'package.json')))
   const electron = require('electron')
   if (typeof electron !== 'string') throw new Error('LWB Desktop could not resolve the Electron executable')
-  const home = resolve(process.env.DSH_HOME || join(DEVELOPMENT_ROOT, 'home'))
   const environment = {
     ...process.env,
-    DSH_HOME: home,
+    ...desktopDevelopmentEnvironment(LWB_RUNTIME, PROJECT_DIR),
     DSH_DESKTOP_DSH_DIR: DSH_ROOT,
     DSH_DESKTOP_NODE_BINARY: process.execPath,
     DSH_DESKTOP_HOST_INSPECT_PORT: process.env.DSH_DESKTOP_HOST_INSPECT_PORT || '9230',
     DSH_DESKTOP_OPEN_DEVTOOLS: process.env.DSH_DESKTOP_OPEN_DEVTOOLS || '1',
     DSH_DESKTOP_EXPOSE_PLUGIN_MANAGER: '0',
     DSH_DESKTOP_KEEP_BACKEND_ON_WINDOW_CLOSE: '1',
-    LWB_PROFILE_ID: 'desktop',
-    LWB_PRODUCT_HOME: process.env.LWB_PRODUCT_HOME || join(home, 'lwb'),
-    LWB_PACKS_DIR: process.env.LWB_PACKS_DIR || join(PRODUCT_ROOT, 'lwb', 'packs'),
-    LWB_DSH_RUNTIME_DIR: DSH_ROOT,
   }
   delete environment.ELECTRON_RUN_AS_NODE
   await run(electron, [`--user-data-dir=${join(DEVELOPMENT_ROOT, 'electron-user-data')}`, APP_ROOT], APP_ROOT, environment)

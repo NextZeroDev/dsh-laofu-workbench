@@ -1,4 +1,4 @@
-import { LWB_RUNTIME, lwbProfilePath } from './runtime-config.mjs'
+import { LWB_RUNTIME } from './runtime-config.mjs'
 
 const PROFILE_ID = LWB_RUNTIME.profileId
 const FIBER_ACTIVE = 2
@@ -67,7 +67,7 @@ export async function apply(ctx, config = {}) {
   })
   ctx.provide('lwbProfile', identity)
   ctx.provide('lwbPackRegistry', new LwbPackRegistry())
-  const workspaces = new LwbPackWorkspaces({ root: lwbProfilePath('pack-state') })
+  const workspaces = new LwbPackWorkspaces({ root: LWB_RUNTIME.packStateDir })
   ctx.provide('lwbPackWorkspaces', workspaces)
   ctx.provide('lwbPackServices', new LwbPackServices(ctx, workspaces))
   const packGroup = await createPackGroup(ctx)
