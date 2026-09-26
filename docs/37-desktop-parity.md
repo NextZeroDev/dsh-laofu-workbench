@@ -30,6 +30,8 @@ npm run start:desktop
 
 启动器会生成官方 Desktop 的临时开发 Profile、挂载 LWB Bundle，并应用 `lwb/desktop/patch-upstream.mjs` 中的兼容补丁。补丁隐藏官方 Desktop Plugins 菜单，保留窗口关闭后的 Host 和任务生命周期，并把 Desktop Host 的运行环境映射到 LWB 的 Desktop Profile。
 
+构建入口使用官方 `apps/desktop` 自己依赖的 pnpm，由当前 Node 直接执行，不要求上游根目录存在 `node_modules/.bin/pnpm`。开发版使用 `.desktop-build/development/electron-user-data` 作为 Electron 用户目录；Host 沿用官方开发模式，默认调试端口为 9230，可用 `DSH_DESKTOP_HOST_INSPECT_PORT` 覆盖。
+
 正式构建沿用官方 Electron Runtime、签名和更新流程，并在运行时资源中加入 LWB Bundle、Pack SDK 与场景能力包：
 
 ```bash

@@ -3,10 +3,10 @@
 import { spawn } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { desktopPnpmInvocation } from './toolchain.mjs'
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const DSH = join(ROOT, 'vendor', 'deepseek-harness')
-const PNPM = join(DSH, 'node_modules', '.bin', process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
 
 function run(command, args, cwd, environment) {
   return new Promise((resolvePromise, reject) => {
@@ -32,7 +32,8 @@ const environment = {
 
 await run(process.execPath, [join(ROOT, 'lwb', 'desktop', 'patch-upstream.mjs')], ROOT, environment)
 const forwarded = process.argv.slice(2)
-await run(PNPM, [
+const invocation = desktopPnpmInvocation(join(DSH, 'apps', 'desktop'), [
   '--filter', '@deepseek-ai/dsh-desktop', 'run', 'package',
-  ...(forwarded.length === 0 ? [] : ['--', ...forwarded]),
-], DSH, environment)
+  ...forwarded,
+])
+await run(invocation.command, invocation.args, DSH, environment)

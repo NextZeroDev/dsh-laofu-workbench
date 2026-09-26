@@ -6,6 +6,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, unlinkSync
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { assertDesktopProfileManifest } from './profile.mjs'
+import { desktopPnpmInvocation } from './toolchain.mjs'
 
 const PRODUCT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const DSH_ROOT = join(PRODUCT_ROOT, 'vendor', 'deepseek-harness')
@@ -14,8 +15,6 @@ const BUILD_ROOT = join(APP_ROOT, '.desktop-build')
 const DEVELOPMENT_ROOT = join(BUILD_ROOT, 'development')
 const PROJECT_DIR = join(DEVELOPMENT_ROOT, 'project')
 const LWB_BUNDLE = join(PRODUCT_ROOT, 'lwb', 'dsh-bundle')
-const PNPM = join(DSH_ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
-const TSX_LOADER = join(DSH_ROOT, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs')
 
 function run(command, args, cwd, environment = process.env) {
   return new Promise((resolvePromise, reject) => {
@@ -87,8 +86,10 @@ async function main() {
   const skipBuild = process.argv.includes('--skip-build')
   await run(process.execPath, [join(PRODUCT_ROOT, 'lwb', 'desktop', 'patch-upstream.mjs')], PRODUCT_ROOT)
   if (!skipBuild) {
-    await run(PNPM, ['run', 'build'], DSH_ROOT)
-    await run(PNPM, ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'build'], DSH_ROOT)
+    for (const args of [['run', 'build'], ['--filter', '@deepseek-ai/dsh-desktop', 'run', 'build']]) {
+      const invocation = desktopPnpmInvocation(APP_ROOT, args)
+      await run(invocation.command, invocation.args, DSH_ROOT)
+    }
   }
   await prepareProject()
 
@@ -101,6 +102,7 @@ async function main() {
     DSH_HOME: home,
     DSH_DESKTOP_DSH_DIR: DSH_ROOT,
     DSH_DESKTOP_NODE_BINARY: process.execPath,
+    DSH_DESKTOP_HOST_INSPECT_PORT: process.env.DSH_DESKTOP_HOST_INSPECT_PORT || '9230',
     DSH_DESKTOP_OPEN_DEVTOOLS: process.env.DSH_DESKTOP_OPEN_DEVTOOLS || '1',
     DSH_DESKTOP_EXPOSE_PLUGIN_MANAGER: '0',
     DSH_DESKTOP_KEEP_BACKEND_ON_WINDOW_CLOSE: '1',
@@ -109,7 +111,8 @@ async function main() {
     LWB_PACKS_DIR: process.env.LWB_PACKS_DIR || join(PRODUCT_ROOT, 'lwb', 'packs'),
     LWB_DSH_RUNTIME_DIR: DSH_ROOT,
   }
-  await run(electron, [APP_ROOT], APP_ROOT, environment)
+  delete environment.ELECTRON_RUN_AS_NODE
+  await run(electron, [`--user-data-dir=${join(DEVELOPMENT_ROOT, 'electron-user-data')}`, APP_ROOT], APP_ROOT, environment)
 }
 
 main().catch((error) => {
