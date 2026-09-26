@@ -69,6 +69,18 @@ async function readJson(context, file) {
   catch (error) { if (error.code === 'ENOENT') return null; throw error }
 }
 
+/** Resolve the immutable artifact saved by a media run, never the current stage. */
+export async function mediaRunArtifact(context, record, projectId = record.projectId) {
+  const pointer = record.result?.artifact
+  if (pointer?.data) return pointer.data
+  if (!pointer?.file) return null
+  if (!/^[a-f0-9-]{36}$/iu.test(projectId || '') || !/^artifacts\/[A-Za-z0-9._-]+\.json$/u.test(pointer.file)) throw new Error('媒体任务产物路径无效。')
+  const artifact = await readJson(context, `projects/${projectId}/${pointer.file}`)
+  if (!artifact) return null
+  if (artifact.id !== pointer.id || artifact.stage !== record.type || artifact.projectId !== projectId) throw new Error('媒体任务产物与记录不匹配。')
+  return artifact.data
+}
+
 function descriptor(request) {
   if (!request || !ID.test(request.id || '')) throw new Error('执行任务标识无效。')
   if (request.kind === 'media') {
@@ -93,6 +105,10 @@ export async function executionDetail(context, request) {
   const data = await readJson(context, file)
   const record = data?.[key]?.find((item) => item.id === request.id)
   if (!record) throw new Error('该执行记录已不存在或未保存。')
+  if (request.kind === 'media' && record.result?.artifact) {
+    const artifact = await mediaRunArtifact(context, record, request.projectId)
+    if (artifact) record.result.artifact = { ...record.result.artifact, data: artifact }
+  }
   const title = request.kind === 'media' ? ({ voiceover: '配音生成', subtitles: '字幕生成', video: '视频制作', qc: '技术质检' })[record.type] || fallbackTitle : fallbackTitle
   const sessions = record.dsh?.sessions?.length ? record.dsh.sessions : record.dsh?.childSessionId
     ? [{ role: 'agent', label: title, childSessionId: record.dsh.childSessionId, parentSessionId: record.dsh.parentSessionId }] : []

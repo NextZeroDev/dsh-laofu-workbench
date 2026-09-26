@@ -9,6 +9,7 @@ import { buildTechnicalReport, DEFAULT_VIDEO_VISUAL_BRIEF, DEFAULT_VOICE_PROFILE
 import { SpokenVideoProjectStore, SpokenVideoStoreError } from '../spoken-video-store.mjs'
 import { SpokenVideoMediaHost } from '../spoken-video-media-host.mjs'
 import { remotionEncodingSettings, remotionRendererAvailable } from '../spoken-video-remotion.mjs'
+import { executionDetail, executionAsset } from '../spoken-video-execution.mjs'
 
 function agent(cwd) { return { session: { header: { cwd } } } }
 
@@ -299,6 +300,7 @@ test('audio task account filters apply before pagination and scope status counts
     task('orphan', 'missing-project', 'failed', 8),
   ]
   await mkdir(join(cwd, 'data'), { recursive: true })
+  for (const id of ['project-a', 'project-b', 'project-general']) await mkdir(join(cwd, 'data', 'projects', id), { recursive: true })
   await writeFile(join(cwd, 'data', 'audio-tasks.json'), JSON.stringify({ schemaVersion: 1, tasks }))
 
   const first = await host.listAudioTasks(currentAgent, { accountId: accountA, limit: 2 })
@@ -1522,4 +1524,114 @@ test('audio tasks default to automatic subtitles, isolate ASR failures, and allo
     } else if (scenario === 'opt-out') assert.equal(asrCalls, 0)
     else assert.match(finished.subtitle.error, /fixture/u)
   }
+})
+
+test('scheduled project media appears in the audio feed with playback, subtitle editing, retries and frozen history', async (t) => {
+  if (!mediaBinariesAvailable()) { t.skip('ffmpeg or ffprobe is unavailable'); return }
+  const cwd = await workspace(t)
+  const currentAgent = agent(cwd)
+  const store = new SpokenVideoProjectStore()
+  const project = await projectWithApprovedScript(currentAgent, store)
+  const audioFile = join(cwd, 'fixture.wav')
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', audioFile])
+  const audio = await readFile(audioFile)
+  const work = []
+  let failAsr = false
+  let voiceCalls = 0
+  const host = new SpokenVideoMediaHost({
+    projectsStore: store, environment: { LWB_SPOKEN_VIDEO_TTS_BASE_URL: 'https://fixture.test' },
+    background: (promise) => { work.push(promise); return promise },
+    fetch: async (url) => {
+      const path = new URL(String(url)).pathname
+      const reply = (data) => new Response(JSON.stringify({ code: 200, data }))
+      if (path === '/api/v1/tts/synthesize') { voiceCalls++; return reply({ task_id: 'voice' }) }
+      if (path === '/api/v1/tts/tasks/voice') return reply({ status: 'completed', duration: 1 })
+      if (path === '/api/v1/tts/tasks/voice/audio') return new Response(audio)
+      if (path === '/api/v1/subtitles/generate') {
+        if (failAsr) throw new Error('fixture ASR unavailable')
+        return reply({ task_id: 'subtitle' })
+      }
+      if (path === '/api/v1/subtitles/tasks/subtitle') return reply({ status: 'completed', subtitle_srt: '1\n00:00:00,000 --> 00:00:01,000\n自动字幕。' })
+      throw new Error(`Unexpected URL ${url}`)
+    },
+  })
+  const drain = async () => { for (let i = 0; i < work.length; i++) await work[i] }
+  // These are exactly the project entry points used by the schedule host.
+  const voice = await host.startVoiceover(currentAgent, { projectId: project.id, expectedRevision: project.revision, provider: 'legacy' })
+  assert.equal((await host.listAudioTasks(currentAgent, { status: 'active' })).items[0].id, voice.id)
+  await drain()
+  const voiced = await store.get(currentAgent, { projectId: project.id })
+  const captions = await host.startSubtitles(currentAgent, { projectId: project.id, expectedRevision: voiced.revision, provider: 'legacy' })
+  await drain()
+  const context = { workspacePath: cwd }
+  let task = (await host.listAudioTasks(currentAgent)).items[0]
+  assert.equal(task.id, voice.id)
+  assert.equal(task.status, 'succeeded')
+  assert.equal(task.current, true)
+  assert.equal(task.subtitle.status, 'succeeded')
+  assert.match(task.subtitle.srt, /自动字幕/u)
+  assert.equal(task.subtitleExecution.id, captions.id)
+  assert.deepEqual(Buffer.from((await host.readAudioTaskMedia(currentAgent, { taskId: voice.id })).data, 'base64'), audio)
+  assert.equal((await host.readAudioTaskMedia(currentAgent, { taskId: voice.id })).mediaType, 'audio/wav')
+  const details = await executionDetail(context, task.execution)
+  assert.equal(details.id, voice.id)
+  assert.equal((await executionDetail(context, task.subtitleExecution)).id, captions.id)
+  const originalRevision = (await store.get(currentAgent, { projectId: project.id })).revision
+  await host.syncAudioTask(currentAgent, { taskId: voice.id })
+  assert.equal((await store.get(currentAgent, { projectId: project.id })).revision, originalRevision)
+  const edited = '1\n00:00:00,000 --> 00:00:01,000\n校对后的字幕。'
+  task = await host.saveAudioTaskSubtitles(currentAgent, { taskId: voice.id, srt: edited })
+  assert.equal(task.subtitle.srt, `${edited}\n`)
+  assert.equal((await store.get(currentAgent, { projectId: project.id })).artifacts.subtitles.data.srt, `${edited}\n`)
+  const editedDetails = await executionDetail(context, task.execution)
+  const asset = editedDetails.assets.find((item) => item.label === '字幕 SRT')
+  assert.equal((await executionAsset(context, { ...task.execution, assetId: asset.id })).text, `${edited}\n`)
+  const originalCaptions = await executionDetail(context, task.subtitleExecution)
+  assert.match(originalCaptions.record.result.artifact.data.srt, /自动字幕/u, 'editing preserves the original ASR result')
+  failAsr = true
+  await host.startAudioTaskSubtitles(currentAgent, { taskId: voice.id, provider: 'legacy' })
+  await drain()
+  task = await host.audioTask(currentAgent, { taskId: voice.id })
+  assert.equal(task.status, 'succeeded')
+  assert.equal(task.subtitle.status, 'failed')
+  assert.match(task.subtitle.error, /fixture ASR/u)
+  failAsr = false
+  await host.startAudioTaskSubtitles(currentAgent, { taskId: voice.id, provider: 'legacy' })
+  await drain()
+  task = await host.audioTask(currentAgent, { taskId: voice.id })
+  assert.equal(task.subtitle.status, 'succeeded')
+  assert.match(task.subtitle.srt, /自动字幕/u)
+  const detail = await store.get(currentAgent, { projectId: project.id })
+  const second = await host.startVoiceover(currentAgent, { projectId: project.id, expectedRevision: detail.revision, provider: 'legacy' })
+  await drain()
+  const historical = await host.audioTask(currentAgent, { taskId: voice.id })
+  assert.equal(historical.current, false)
+  assert.match(historical.subtitle.srt, /自动字幕/u)
+  assert.equal((await host.audioTask(currentAgent, { taskId: second.id })).subtitle.status, 'idle', 'old subtitles never attach to the new audio')
+  assert.deepEqual(Buffer.from((await host.readAudioTaskMedia(currentAgent, { taskId: voice.id })).data, 'base64'), audio)
+  await assert.rejects(host.saveAudioTaskSubtitles(currentAgent, { taskId: voice.id, srt: edited }), /历史版本/u)
+  await assert.rejects(host.startAudioTaskSubtitles(currentAgent, { taskId: voice.id, provider: 'legacy' }), /历史版本/u)
+  assert.equal(voiceCalls, 2, 'listing and subtitle operations never regenerate voiceovers')
+  await assert.rejects(readFile(join(cwd, 'data', 'audio-tasks.json')), { code: 'ENOENT' }, 'project history is not duplicated into standalone storage')
+  const accountId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  await writeFile(join(cwd, 'data', 'audio-tasks.json'), JSON.stringify({ schemaVersion: 1, tasks: [
+    { id: 'standalone', status: 'failed', createdAt: '2099-01-01T00:00:00.000Z', source: { title: '独立配音', text: '独立文稿' } },
+  ] }))
+  const scopedHost = new SpokenVideoMediaHost({ projectsStore: {
+    list: async () => (await store.list(currentAgent)).map((item) => ({ ...item, account: { id: accountId } })),
+    get: (...args) => store.get(...args),
+  } })
+  const mixed = await scopedHost.listAudioTasks(currentAgent, { limit: 1 })
+  assert.equal(mixed.total, 3)
+  assert.equal(mixed.items[0].id, 'standalone')
+  assert.equal(mixed.counts.succeeded, 2)
+  assert.equal(mixed.counts.failed, 1)
+  assert.equal((await scopedHost.listAudioTasks(currentAgent, { general: true })).total, 1)
+  const scoped = await scopedHost.listAudioTasks(currentAgent, { accountId, limit: 1, offset: 1 })
+  assert.equal(scoped.total, 2)
+  assert.equal(scoped.items.length, 1)
+  assert.equal(scoped.counts.failed, 0)
+  assert.equal((await scopedHost.listAudioTasks(currentAgent, { accountId, query: '已确认的口播稿' })).total, 2)
+  assert.equal((await scopedHost.listAudioTasks(currentAgent, { accountId, status: 'failed' })).total, 0)
+  assert.equal((await scopedHost.listAudioTasks(currentAgent, { accountId, provider: 'legacy' })).total, 2)
 })

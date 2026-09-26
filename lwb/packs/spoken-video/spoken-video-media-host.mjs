@@ -6,7 +6,7 @@ import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { spokenVideoDataPath } from './spoken-video-paths.mjs'
-import { executionEvent, executionTransition } from './spoken-video-execution.mjs'
+import { executionEvent, executionTransition, mediaRunArtifact } from './spoken-video-execution.mjs'
 import WebSocket from 'ws'
 import {
   buildTechnicalReport,
@@ -347,6 +347,10 @@ function audioTaskSummary(task) {
   const subtitle = task.subtitle || { status: 'idle' }
   return {
     id: task.id,
+    origin: task.origin || 'audio',
+    current: task.current !== false,
+    execution: task.execution || { kind: 'audio', id: task.id },
+    subtitleExecution: task.subtitleExecution || null,
     type: 'voiceover',
     status: task.status,
     createdAt: task.createdAt,
@@ -385,6 +389,36 @@ function audioTaskSummary(task) {
       srt: subtitle.current?.srt || null,
     },
   }
+}
+
+// Project media runs remain the source of truth. Project audio is projected into
+// the same feed as standalone audio without copying records or regenerating media.
+function projectAudioTasks(detail, runs) {
+  return runs.filter((run) => run.type === 'voiceover').map((run) => {
+    const produced = run.result?.artifact?.data || {}
+    const audio = run.result?.audio ? { ...produced.audio, ...run.result.audio } : produced.audio
+    const linked = runs.filter((item) => item.type === 'subtitles' && audio?.file
+      && (item.source?.voiceover?.audio?.file || item.result?.artifact?.data?.sourceAudioFile) === audio.file)
+      .reverse().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0]
+    const captions = linked?.result?.artifact?.data || linked?.result
+    const generatedSubtitle = linked ? {
+      id: linked.id, status: linked.status, createdAt: linked.createdAt,
+      startedAt: linked.startedAt, completedAt: linked.completedAt, error: linked.error,
+      current: captions?.srt ? { id: linked.id, srt: captions.srt, file: captions.srtFile, cueCount: captions.cueCount } : null,
+    } : { status: 'idle' }
+    const subtitle = run.subtitle && run.subtitle.baseRunId === (linked?.id || null) ? run.subtitle : generatedSubtitle
+    const current = Boolean(audio?.file && detail.artifacts?.voiceover?.data?.audio?.file === audio.file
+      && detail.artifacts?.script?.revision === run.source?.script?.revision)
+    return {
+      ...run, origin: 'project-media', current,
+      execution: { kind: 'media', id: run.id, projectId: detail.id },
+      subtitleExecution: linked ? { kind: 'media', id: linked.id, projectId: detail.id } : null,
+      source: { kind: 'saved-script', projectId: detail.id, projectTitle: detail.title, title: run.source?.title || detail.title, text: run.source?.script?.body || '' },
+      result: audio ? { audio, provider: produced.provider || run.input?.provider } : null,
+      projectSync: audio ? { projectId: detail.id, voiceFile: audio.file } : null,
+      subtitle,
+    }
+  })
 }
 
 function requestId() {
@@ -1009,9 +1043,12 @@ export class SpokenVideoMediaHost {
     const status = typeof input.status === 'string' && ['all', 'active', 'terminal', 'queued', 'running', 'succeeded', 'failed'].includes(input.status) ? input.status : 'all'
     const provider = typeof input.provider === 'string' && ['all', 'bailian', 'scitiger', 'legacy'].includes(input.provider) ? input.provider : 'all'
     const recovered = await this.#recoverInterruptedAudioTasks(root, tasks)
-    const projects = accountId || generalOnly ? await this.projectsStore.list(agent) : []
+    const projects = await this.projectsStore.list(agent)
+    const projectTasks = (await Promise.all(projects.map((project) => this.#projectAudioTasks(agent, project.id)))).flatMap((entry) => entry.tasks)
+    const standaloneIds = new Set(recovered.tasks.map((task) => task.id))
+    const allTasks = [...recovered.tasks, ...projectTasks.filter((task) => !standaloneIds.has(task.id))]
     const accountsByProject = new Map(projects.map((project) => [project.id, project.account?.id || null]))
-    const scoped = recovered.tasks.filter((task) => {
+    const scoped = allTasks.filter((task) => {
       const taskAccountId = accountsByProject.get(task.source?.projectId) || null
       return (!accountId || taskAccountId === accountId) && (!generalOnly || !taskAccountId)
     })
@@ -1039,8 +1076,34 @@ export class SpokenVideoMediaHost {
     const id = text(object(request, '读取音频任务请求').taskId, '音频任务标识', 64)
     const root = await audioTasksRootFor(agent)
     const task = (await this.#recoverInterruptedAudioTasks(root)).tasks.find((item) => item.id === id)
-    if (!task) fail('SPOKEN_VIDEO_NOT_FOUND', '音频任务不存在。')
-    return audioTaskSummary(task)
+    return audioTaskSummary(task || (await this.#findProjectAudioTask(agent, id)).task)
+  }
+
+  async #projectAudioTasks(agent, id) {
+    const root = await projectRootFor(agent, id)
+    const runs = (await this.#recoverInterruptedRuns(root)).runs
+    if (!runs.some((run) => run.type === 'voiceover')) return { root, tasks: [] }
+    const context = { workspacePath: await workspaceFor(agent) }
+    for (const run of runs.filter((item) => ['voiceover', 'subtitles'].includes(item.type))) {
+      const data = await mediaRunArtifact(context, run, id)
+      if (data) run.result.artifact = { ...run.result.artifact, data }
+    }
+    const detail = await this.projectsStore.get(agent, { projectId: id })
+    return { root, detail, tasks: projectAudioTasks(detail, runs) }
+  }
+
+  async #findProjectAudioTask(agent, taskId) {
+    for (const project of await this.projectsStore.list(agent)) {
+      const entry = await this.#projectAudioTasks(agent, project.id)
+      const task = entry.tasks.find((item) => item.id === taskId)
+      if (task) return { ...entry, task }
+    }
+    fail('SPOKEN_VIDEO_NOT_FOUND', '音频任务不存在。')
+  }
+
+  #requireCurrentProjectAudio(task) {
+    if (task.status !== 'succeeded' || !task.result?.audio?.file) fail('SPOKEN_VIDEO_STAGE_BLOCKED', '请先完成配音。')
+    if (!task.current) fail('SPOKEN_VIDEO_REVISION_CONFLICT', '该配音已是历史版本，可试听和查看字幕；请在当前配音上修改或重新生成字幕。')
   }
 
   async startAudioTask(agent, request) {
@@ -1075,7 +1138,11 @@ export class SpokenVideoMediaHost {
     const id = text(object(request, '同步配音结果请求').taskId, '音频任务标识', 64)
     const root = await audioTasksRootFor(agent)
     const task = (await readAudioTasks(root)).tasks.find((item) => item.id === id)
-    if (!task) fail('SPOKEN_VIDEO_NOT_FOUND', '音频任务不存在。')
+    if (!task) {
+      const project = await this.#findProjectAudioTask(agent, id)
+      this.#requireCurrentProjectAudio(project.task)
+      return audioTaskSummary(project.task)
+    }
     if (task.status !== 'succeeded' || !task.result?.audio?.file) fail('SPOKEN_VIDEO_STAGE_BLOCKED', '请先完成配音。')
     if (['queued', 'running'].includes(task.subtitle?.status)) fail('SPOKEN_VIDEO_STAGE_BLOCKED', '字幕仍在生成，请完成后再同步。')
     const synced = await this.#syncAudioTaskProject(agent, task)
@@ -1089,7 +1156,14 @@ export class SpokenVideoMediaHost {
     const data = normalizeSubtitleRequest(input)
     const root = await audioTasksRootFor(agent)
     const current = (await this.#recoverInterruptedAudioTasks(root)).tasks.find((task) => task.id === taskId)
-    if (!current) fail('SPOKEN_VIDEO_NOT_FOUND', '音频任务不存在。')
+    if (!current) {
+      const project = await this.#findProjectAudioTask(agent, taskId)
+      this.#requireCurrentProjectAudio(project.task)
+      if (!['queued', 'running'].includes(project.task.subtitle?.status)) {
+        await this.startSubtitles(agent, { ...input, projectId: project.detail.id, expectedRevision: project.detail.revision })
+      }
+      return this.audioTask(agent, { taskId })
+    }
     if (current.status !== 'succeeded' || !current.result?.audio?.file) fail('SPOKEN_VIDEO_STAGE_BLOCKED', '请等待配音生成完成后再生成字幕。')
     if (current.subtitle?.status === 'queued' || current.subtitle?.status === 'running') return audioTaskSummary(current)
     const subtitleId = requestId()
@@ -1110,7 +1184,25 @@ export class SpokenVideoMediaHost {
     const srt = checked.srt
     const root = await audioTasksRootFor(agent)
     const current = (await this.#recoverInterruptedAudioTasks(root)).tasks.find((task) => task.id === taskId)
-    if (!current) fail('SPOKEN_VIDEO_NOT_FOUND', '音频任务不存在。')
+    if (!current) {
+      const project = await this.#findProjectAudioTask(agent, taskId)
+      this.#requireCurrentProjectAudio(project.task)
+      if (['queued', 'running'].includes(project.task.subtitle?.status)) fail('SPOKEN_VIDEO_STAGE_BLOCKED', '字幕仍在生成，请完成后再校对。')
+      const versionId = requestId()
+      const file = `media/subtitles/${taskId}-${versionId}.srt`
+      await this.#write(project.root, file, srt)
+      await this.projectsStore.commitProduced(agent, {
+        projectId: project.detail.id, expectedRevision: project.detail.revision, stage: 'subtitles',
+        idempotencyKey: `audio-edit-${versionId}`, source: 'spoken-video/subtitle-editor',
+        payload: { mode: 'manual', sourceAudioFile: project.task.result.audio.file, srtFile: file, srt, cueCount: checked.cueCount },
+      })
+      await this.#mutateRun(project.root, taskId, (run) => ({ ...run, subtitle: {
+        ...project.task.subtitle, status: 'succeeded', id: versionId, completedAt: new Date().toISOString(), error: null,
+        baseRunId: project.task.subtitleExecution?.id || null,
+        current: { id: versionId, file, srt, cueCount: checked.cueCount, mode: 'manual', createdAt: new Date().toISOString() },
+      } }))
+      return this.audioTask(agent, { taskId })
+    }
     if (!current.result?.audio?.file) fail('SPOKEN_VIDEO_STAGE_BLOCKED', '当前音频任务没有可用音频。')
     const versionId = requestId()
     const file = `audio-media/subtitles/${taskId}-${versionId}.srt`
@@ -1130,9 +1222,11 @@ export class SpokenVideoMediaHost {
     const input = object(request, '读取音频任务媒体请求')
     const taskId = text(input.taskId, '音频任务标识', 64)
     const root = await audioTasksRootFor(agent)
-    const task = (await this.#recoverInterruptedAudioTasks(root)).tasks.find((item) => item.id === taskId)
+    let task = (await this.#recoverInterruptedAudioTasks(root)).tasks.find((item) => item.id === taskId)
+    const project = task ? null : await this.#findProjectAudioTask(agent, taskId)
+    task ||= project.task
     if (!task?.result?.audio?.file || !task.result.audio.mediaType) fail('SPOKEN_VIDEO_MEDIA_FILE_INVALID', '当前音频任务没有可预览媒体。')
-    const file = await this.#audioTaskFile(root, task.result.audio.file, '音频任务媒体')
+    const file = project ? await this.#file(project.root, task.result.audio.file, '音频任务媒体') : await this.#audioTaskFile(root, task.result.audio.file, '音频任务媒体')
     const info = await stat(file)
     if (info.size > MAX_MEDIA_BYTES) fail('SPOKEN_VIDEO_MEDIA_FILE_TOO_LARGE', '媒体文件超过浏览器预览的 80 MiB 限制。')
     return { file: task.result.audio.file, mediaType: task.result.audio.mediaType, bytes: info.size, data: (await readFile(file)).toString('base64') }

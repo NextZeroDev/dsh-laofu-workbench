@@ -52,4 +52,5 @@
 - [视频工程预检与修复](33-video-preflight-repair.md)
 - [34 账号 Tab 一致性（2026-09-17）](34-account-tabs-consistency.md)
 - [口播视频：配音、发布与内容安排交互细节](35-spoken-video-workflow-details.md)
+- [配音任务与内容安排的统一查询](36-audio-task-feed-integration.md)
 - [配音、字幕与视频的衔接](audio-video-handoff.md)
