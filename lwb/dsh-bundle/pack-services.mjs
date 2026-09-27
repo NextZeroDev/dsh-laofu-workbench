@@ -5,7 +5,7 @@ import { openPackSettings } from './pack-settings.mjs'
 
 /** Scoped services issued by the host to one actually mounted package. */
 export class LwbPackServices {
-  constructor(ctx, workspaces) { this.ctx = ctx; this.workspaces = workspaces; this.scopes = new Map() }
+  constructor(ctx, workspaces, { account, taskModel } = {}) { this.ctx = ctx; this.workspaces = workspaces; this.scopes = new Map(); this.account = account; this.taskModel = taskModel }
 
   async mount(manifest) {
     await this.workspaces.activate(manifest)
@@ -20,6 +20,16 @@ export class LwbPackServices {
     }]))
     const facade = Object.freeze({
       id, credentialRef, credentials, signal: tasks.signal,
+      modelSelection: () => this.defaultSelection(),
+      account: Object.freeze({
+        status: (service) => this.account?.serviceStatus(service) || Promise.resolve({ configured: false, authenticated: false, reason: 'LWB 账号服务不可用。' }),
+        open: (service, options = {}) => {
+          tasks.signal.throwIfAborted()
+          if (!manifest.requiredServices?.includes(service)) throw new Error('能力包未声明此 LWB 服务。')
+          if (!this.account) throw new Error('LWB 账号服务不可用。')
+          return this.account.openService(service, { ...options, signal: options.signal ? AbortSignal.any([options.signal, tasks.signal]) : tasks.signal })
+        },
+      }),
       context: () => this.workspaces.context(id),
       settings: (name, validate) => this.workspaces.run(id, async (context) => {
         if (!settings.has(name)) settings.set(name, openPackSettings(context.workspacePath, name, validate).catch(error => { settings.delete(name); throw error }))
@@ -59,7 +69,7 @@ export class LwbPackServices {
   // Model routing and authentication belong to DSH. This snapshot is refreshed
   // for each new internal Session, independently of the browser's active chat.
   defaultSelection() {
-    const selected = this.ctx.agentDefaultModel.currentSelection()
+    const selected = this.taskModel ? this.taskModel.selection() : this.ctx.agentDefaultModel.currentSelection()
     if (typeof selected?.provider !== 'string' || !selected.provider.trim()
       || typeof selected?.model !== 'string' || !selected.model.trim()) return null
     return { provider: selected.provider, model: selected.model,
@@ -78,7 +88,7 @@ export class LwbPackServices {
     const scope = this.forPack(id)
     const context = await scope.context()
     const selection = this.defaultSelection()
-    if (!selection) throw new Error('DSH 尚未选择默认模型，请在“设置 → 系统设置 → 模型”中完成配置。')
+    if (!selection) throw new Error('尚未选择场景任务模型，请在“设置 → 场景任务默认模型”中完成配置。')
     const preset = await this.ctx.agentPresets.resolve('standard')
     const sessionId = `lwb-pack-${id}-${randomUUID()}`
     await this.workspaces.recordSession(id, sessionId)

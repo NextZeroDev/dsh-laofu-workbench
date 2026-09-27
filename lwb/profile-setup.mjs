@@ -23,7 +23,7 @@ export async function linkProductPeers(directory) {
   for (const name of Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies })) {
     const target = name === '@scitiger-ai/lwb-pack-sdk'
       ? join(LWB_RUNTIME.projectRoot, 'lwb', 'pack-sdk')
-      : name.startsWith('@deepseek-ai/') ? dshPackageDirectory(name) : undefined
+      : name.startsWith('@deepseek-ai/') || name === '@earendil-works/pi-ai' ? dshPackageDirectory(name) : undefined
     if (target) await ensureLink(join(directory, 'node_modules', ...name.split('/')), target)
   }
 }

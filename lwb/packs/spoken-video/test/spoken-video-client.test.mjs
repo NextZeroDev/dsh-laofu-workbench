@@ -5,6 +5,46 @@ import test from 'node:test'
 
 const clientPath = new URL('../client.js', import.meta.url)
 
+async function connectionHelpers() {
+  const source = await readFile(clientPath, 'utf8')
+  const start = source.indexOf('function availableMediaProvider(')
+  const end = source.indexOf('function ServiceConnectionDrawer(', start)
+  assert.ok(start >= 0 && end > start)
+  return vm.runInNewContext(`${source.slice(start, end)}; ({ availableMediaProvider, lwbServiceUnavailableText })`)
+}
+
+test('logged-in users see service failures instead of an instruction to log in again', async () => {
+  const { lwbServiceUnavailableText: message } = await connectionHelpers()
+  const signedIn = { phase: 'authenticated', user: { id: '7' }, serviceError: '请先更新 ATS 服务以启用 LWB 模型与场景服务。' }
+  for (const service of ['tts', 'cover-image']) {
+    const result = message(signedIn, { authenticated: true, configured: false }, service)
+    assert.match(result, /已登录 LWB 账号/u)
+    assert.match(result, /请先更新 ATS 服务/u)
+    assert.doesNotMatch(result, /前往设置登录|请先登录/u)
+  }
+  assert.match(message({ ...signedIn, serviceError: null, error: '服务连接超时' }, {}, 'tts'), /服务连接超时/u)
+  assert.match(message({ ...signedIn, serviceError: null }, { authenticated: true, reason: '配音服务维护中' }, 'tts'), /配音服务维护中/u)
+})
+
+test('login, loading, and service synchronization have distinct connection messages', async () => {
+  const { lwbServiceUnavailableText: message } = await connectionHelpers()
+  assert.match(message({ user: null }, null, 'tts'), /尚未登录 LWB 账号/u)
+  assert.match(message({ phase: 'loading' }, null, 'tts'), /正在读取/u)
+  const signedIn = { phase: 'authenticated', user: { id: '7' } }
+  assert.match(message(signedIn, { authenticated: false, reason: '请先登录 LWB 账号。' }, 'tts'), /正在同步/u)
+  assert.doesNotMatch(message(signedIn, { authenticated: false, reason: '请先登录 LWB 账号。' }, 'tts'), /请先登录/u)
+  assert.match(message(signedIn, { authenticated: true, configured: false }, 'cover-image'), /封面生图服务暂未开放/u)
+})
+
+test('audio service selection stays within the available providers without changing the saved preference', async () => {
+  const { availableMediaProvider: select } = await connectionHelpers()
+  assert.equal(select(null, ['bailian'], 'lwb'), 'bailian')
+  assert.equal(select(null, ['lwb'], 'bailian'), 'lwb')
+  assert.equal(select('bailian', ['lwb', 'bailian'], 'lwb'), 'bailian')
+  assert.equal(select(null, ['lwb', 'bailian'], 'bailian'), 'bailian')
+  assert.equal(select('lwb', [], 'lwb'), null)
+})
+
 test('account completion uses the LAN-safe action key and keeps ID creation inside error handling', async () => {
   const source = await readFile(clientPath, 'utf8')
   const start = source.indexOf('function actionKey(')
@@ -78,13 +118,14 @@ test('audio workbench selects saved scripts by account, preserves standalone tas
   assert.doesNotMatch(page, /subtitleDrawer\.draft|sv-warn-list/u)
   assert.match(source, /readAudioTaskMedia/u)
   assert.match(page, /AudioTaskPreview/u)
-  assert.match(page, /remoteStatic\('configureMediaConnection', \{ provider: connectionProvider, apiKey \}\)/u)
+  assert.match(page, /remoteStatic\('configureMediaConnection', \{ provider: connectionProvider,/u)
   assert.match(page, /remoteStatic\('clearMediaConnectionCredential', \{ provider: connectionProvider \}\)/u)
   assert.doesNotMatch(page, /remote\(packId, '(?:configureMediaConnection|clearMediaConnectionCredential)'/u)
   assert.match(page, /source\?\.projectId \? \{ sourceProjectId: source\.projectId \}/u)
   assert.doesNotMatch(page, /provider: providerId, apiKey,/u)
-  assert.match(page, /API Key 保存到 DSH 私有凭据库/u)
-  assert.match(source, /function mediaErrorText\(error\)[\s\S]*?SciTiger 账户积分不足，请充值后重试，或切换到百炼 BYOK/u)
+  assert.match(page, /h\(ServiceConnectionDrawer, \{ open: connectionOpen/u)
+  assert.match(source, /密钥保存到私有凭据库，不会写入浏览器存储/u)
+  assert.match(source, /function mediaErrorText\(error\)[\s\S]*?LWB 账户积分不足，请充值后重试，或切换到百炼 BYOK/u)
   assert.match(source, /function subtitleTaskProgress\(task, now = Date\.now\(\)\)[\s\S]*?实时识别/u)
   assert.match(page, /subtitleProgress = subtitleTaskProgress\(task\)/u)
   assert.match(page, /className: 'sv-audio-subtitle-progress'/u)
@@ -199,7 +240,8 @@ test('publish page is a flat video shelf with one lifecycle drawer and no releas
   assert.match(page, /uploadPublishCover/u)
   assert.doesNotMatch(page, /connectionEnabled|启用 AI 封面生成/u)
   assert.match(page, /service\?\.configured/u)
-  assert.match(page, /保存当前渠道的 API Key/u)
+  assert.match(page, /lwbServiceUnavailableText\(account, service\.providers\?\.lwb\?\.credential, 'cover-image'\)/u)
+  assert.doesNotMatch(page, /当前生图渠道尚未配置 API Key/u)
   // Regenerating a cover commits unsaved edits first, like the script page.
   assert.match(page, /if \(dirty\) \{[\s\S]*?updatePackaging[\s\S]*?revision = saved\.project\.revision/u)
 

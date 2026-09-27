@@ -5,7 +5,7 @@ const PROFILE_ID = LWB_RUNTIME.profileId
 
 // The pack runtime projects Loader-managed browser bundles through DSH's
 // client-module graph. Declare both host services at the bundle boundary.
-export const inject = ['loader', 'clientModules', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel', 'webServer']
+export const inject = ['loader', 'clientModules', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel', 'webServer', 'llm']
 
 import { LwbPackWorkspaces } from './pack-workspaces.mjs'
 import { LwbPackServices } from './pack-services.mjs'
@@ -16,6 +16,8 @@ import { LwbPackRegistry } from './pack-registry.mjs'
 import { LwbPackRuntime } from './pack-runtime.mjs'
 import { LwbAtsClient } from './ats-client.mjs'
 import LwbAccountGateway from './account-gateway.mjs'
+import { openTaskModel } from './task-model.mjs'
+import { registerLwbModels } from './dsh-adapter/lwb-model.mjs'
 
 /**
  * Host-side product identity for the LWB DSH composition.
@@ -39,8 +41,12 @@ export async function apply(ctx, config = {}) {
   ctx.provide('lwbPackRegistry', new LwbPackRegistry())
   const workspaces = new LwbPackWorkspaces({ root: LWB_RUNTIME.packStateDir })
   ctx.provide('lwbPackWorkspaces', workspaces)
-  ctx.provide('lwbPackServices', new LwbPackServices(ctx, workspaces))
-  ctx.provide('lwbAtsClient', new LwbAtsClient({ credentials: ctx.credentials, baseUrl: LWB_RUNTIME.atsBaseUrl }))
+  const account = new LwbAtsClient({ credentials: ctx.credentials, baseUrl: LWB_RUNTIME.atsBaseUrl })
+  const taskModel = await openTaskModel(LWB_RUNTIME.productHome, ctx)
+  ctx.provide('lwbAtsClient', account)
+  ctx.provide('lwbTaskModel', taskModel)
+  ctx.provide('lwbPackServices', new LwbPackServices(ctx, workspaces, { account, taskModel }))
+  registerLwbModels(ctx, account)
   const packGroup = await createPackGroup(ctx)
   const packRuntime = new LwbPackRuntime(ctx, { group: packGroup })
   ctx.provide('lwbPackRuntime', packRuntime)

@@ -68,6 +68,8 @@ export function createDshExecutor(ctx, subagents, packId, label, structured, { m
         label,
         prompt: [{ type: 'text', text: prompt }],
         parent: agent,
+        // Preserve the task's captured route, including across child repairs.
+        ...(agent?.options?.provider && agent?.options?.model ? { agentOptions: { provider: agent.options.provider, model: agent.options.model, ...(agent.options.reasoningEffort === undefined ? {} : { reasoningEffort: agent.options.reasoningEffort }) } } : {}),
         signal: runSignal,
         ...(structured ? { outputSchema: schema } : {}),
       })

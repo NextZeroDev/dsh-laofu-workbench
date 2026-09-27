@@ -77,10 +77,10 @@ function mediaErrorMessage(error) {
 }
 
 function providerFailure(label, detail) {
-  if (label.startsWith('SciTiger') && /(?:insufficient[ _-]*points|积分不足|余额不足)/iu.test(detail)) {
+  if (label.startsWith('LWB') && /(?:insufficient[ _-]*points|积分不足|余额不足)/iu.test(detail)) {
     return new SpokenVideoMediaError(
       'SPOKEN_VIDEO_MEDIA_INSUFFICIENT_POINTS',
-      'SciTiger 账户积分不足，请充值后重试，或切换到百炼 BYOK。',
+      'LWB 账户积分不足，请充值后重试，或切换到百炼 BYOK。',
     )
   }
   return new SpokenVideoMediaError('SPOKEN_VIDEO_MEDIA_SERVICE_FAILED', `${label}失败：${detail}`)
@@ -825,11 +825,12 @@ async function measureVisualVariation(frameFiles, orientation, durationSeconds, 
  * only sees durable operation summaries and bounded media reads through the gateway.
  */
 export class SpokenVideoMediaHost {
-  constructor({ background = (work) => work, signal, projectsStore, credentials, connectionSettings, videoCreator, videoReviewer, fetch = globalThis.fetch, environment = process.env } = {}) {
+  constructor({ background = (work) => work, signal, projectsStore, credentials, account, connectionSettings, videoCreator, videoReviewer, fetch = globalThis.fetch, environment = process.env } = {}) {
     if (!projectsStore) throw new Error('SpokenVideoMediaHost requires projectsStore.')
     this.background = background
     this.signal = signal
     this.projectsStore = projectsStore
+    this.account = account
     this.credentials = credentials || null
     this.connectionSettings = connectionSettings || null
     this.videoCreator = typeof videoCreator === 'function' ? videoCreator : null
@@ -857,7 +858,7 @@ export class SpokenVideoMediaHost {
       defaultVoice: { id: DEFAULT_VOICE_PROFILE.id, name: DEFAULT_VOICE_PROFILE.name },
       providers: {
         bailian: { configured: true, referenceVoiceConfigured, label: '使用自己的百炼账户', credential: connection.providers.bailian },
-        scitiger: { configured: config.scitigerConfigured, referenceVoiceConfigured, label: 'SciTiger 云端', credential: connection.providers.scitiger },
+        lwb: { configured: connection.providers.lwb.configured, referenceVoiceConfigured, label: 'LWB 账号', credential: connection.providers.lwb },
         legacy: { configured: config.configured, referenceVoiceConfigured: false, label: '兼容 TTS 服务' },
       },
       connection,
@@ -870,25 +871,26 @@ export class SpokenVideoMediaHost {
   }
 
   async connection() {
-    const provider = this.connectionSettings?.get?.().provider || 'bailian'
+    const provider = this.connectionSettings?.get?.().provider || 'lwb'
     return {
       provider,
       providers: {
         bailian: await this.#credentialStatus('bailian'),
-        scitiger: await this.#credentialStatus('scitiger'),
+        lwb: await this.#accountStatus('tts'),
       },
     }
   }
 
   async configureConnection(request) {
     const input = object(request, '连接设置')
-    const ref = mediaCredentialRef(input.provider)
-    const provider = input.provider.trim().toLowerCase()
+    const provider = String(input.provider).trim().toLowerCase()
+    const ref = provider === 'lwb' ? null : mediaCredentialRef(provider)
+    if (provider === 'lwb' && input.apiKey) fail('SPOKEN_VIDEO_MEDIA_INVALID_INPUT', 'LWB 服务使用已登录账号，无需填写 API Key。')
     const apiKey = input.apiKey === undefined || input.apiKey === null || (typeof input.apiKey === 'string' && !input.apiKey.trim())
       ? null
       : text(input.apiKey, 'API Key', 512)
     if (!this.connectionSettings?.update) fail('SPOKEN_VIDEO_MEDIA_CONNECTION_UNAVAILABLE', '当前运行环境不支持保存连接设置。')
-    if (apiKey) await this.#credentials().set(ref, apiKey)
+    if (apiKey && ref) await this.#credentials().set(ref, apiKey)
     await this.connectionSettings.update({ provider })
     return this.connection()
   }
@@ -1041,7 +1043,7 @@ export class SpokenVideoMediaHost {
     const tasks = await readAudioTasks(root)
     const query = typeof input.query === 'string' ? input.query.trim().toLowerCase() : ''
     const status = typeof input.status === 'string' && ['all', 'active', 'terminal', 'queued', 'running', 'succeeded', 'failed'].includes(input.status) ? input.status : 'all'
-    const provider = typeof input.provider === 'string' && ['all', 'bailian', 'scitiger', 'legacy'].includes(input.provider) ? input.provider : 'all'
+    const provider = typeof input.provider === 'string' && ['all', 'bailian', 'lwb', 'legacy'].includes(input.provider) ? input.provider : 'all'
     const recovered = await this.#recoverInterruptedAudioTasks(root, tasks)
     const projects = await this.projectsStore.list(agent)
     const projectTasks = (await Promise.all(projects.map((project) => this.#projectAudioTasks(agent, project.id)))).flatMap((entry) => entry.tasks)
@@ -1119,7 +1121,7 @@ export class SpokenVideoMediaHost {
       source = { kind: scriptBody.trim() === textSnapshot.trim() ? 'saved-script' : 'edited-script-copy', projectId: project.id, projectTitle: project.title, title: project.title, text: textSnapshot, scriptRevision: project.artifacts.script.revision }
     }
     if (input.subtitleEnabled != null && typeof input.subtitleEnabled !== 'boolean') fail('SPOKEN_VIDEO_MEDIA_INVALID_INPUT', '生成字幕开关必须是布尔值。')
-    let data = { ...normalizeVoiceoverRequest(input), subtitleEnabled: input.subtitleEnabled !== false }
+    let data = await this.#bindAccount({ ...normalizeVoiceoverRequest(input), subtitleEnabled: input.subtitleEnabled !== false }, 'tts')
     const root = await audioTasksRootFor(agent)
     const now = new Date().toISOString()
     const id = requestId()
@@ -1153,7 +1155,7 @@ export class SpokenVideoMediaHost {
   async startAudioTaskSubtitles(agent, request) {
     const input = object(request, '生成字幕请求')
     const taskId = text(input.taskId, '音频任务标识', 64)
-    const data = normalizeSubtitleRequest(input)
+    const data = await this.#bindAccount(normalizeSubtitleRequest(input), 'subtitle', input.lwbUserId)
     const root = await audioTasksRootFor(agent)
     const current = (await this.#recoverInterruptedAudioTasks(root)).tasks.find((task) => task.id === taskId)
     if (!current) {
@@ -1284,7 +1286,7 @@ export class SpokenVideoMediaHost {
     const root = await projectRootFor(agent, id)
     const detail = await this.projectsStore.get(agent, { projectId: id })
     if (detail.revision !== revision) fail('SPOKEN_VIDEO_REVISION_CONFLICT', '项目已被其他操作更新，请刷新后重试。')
-    const data = await parseInput(input, { root, detail })
+    const data = await this.#bindAccount(await parseInput(input, { root, detail }), type === 'voiceover' ? 'tts' : 'subtitle', input.lwbUserId)
     const runs = await readRuns(root)
     const active = runs.runs.find((run) => run.type === type && ['queued', 'running'].includes(run.status) && run.expectedRevision === revision && (type !== 'video' || (
       (run.input?.orientation === 'landscape' ? 'landscape' : 'portrait') === data.orientation
@@ -1458,8 +1460,8 @@ export class SpokenVideoMediaHost {
       if (task.input.provider === 'bailian') {
         generated = await this.#bailianVoiceover(root, task, task.source.text, task.input)
         outputFormat = 'wav'
-      } else if (task.input.provider === 'scitiger') {
-        generated = await this.#scitigerVoiceover(root, task, task.source.text, task.input)
+      } else if (task.input.provider === 'lwb') {
+        generated = await this.#lwbVoiceover(root, task, task.source.text, task.input)
       } else {
         const config = this.#legacyConfig()
         outputFormat = task.input.outputFormat || config.outputFormat
@@ -1486,7 +1488,7 @@ export class SpokenVideoMediaHost {
     // have their own failure boundary, so ASR cannot invalidate usable audio.
     if (task.input.subtitleEnabled) {
       try {
-        await this.startAudioTaskSubtitles(agent, { taskId, provider: task.input.provider, language: 'zh', aiOptimize: true })
+        await this.startAudioTaskSubtitles(agent, { taskId, provider: task.input.provider, lwbUserId: task.input.lwbUserId, language: 'zh', aiOptimize: true })
       } catch (error) {
         await this.#mutateAudioTask(root, taskId, (current) => ({ ...current, subtitle: { ...current.subtitle, status: 'failed', completedAt: new Date().toISOString(), error: String(error?.message || error).slice(0, 2000) } }))
       }
@@ -1529,8 +1531,8 @@ export class SpokenVideoMediaHost {
       if (input.provider === 'bailian') {
         const generated = await this.#bailianSubtitles({ id: subtitleId }, audioPath, input.language, task.source.text)
         result = { taskId: generated.taskId, subtitle: subtitleResult({ subtitle_srt: generated.srt }), diagnostics: { provider: 'bailian-realtime-asr', alignment: generated.referenceAligned ? 'reference-text' : 'asr' } }
-      } else if (input.provider === 'scitiger') {
-        result = await this.#scitigerSubtitles({ id: subtitleId }, audio, audioPath, task.source.text, input)
+      } else if (input.provider === 'lwb') {
+        result = await this.#lwbSubtitles({ id: subtitleId }, audio, audioPath, task.source.text, input)
       } else {
         const config = this.#legacyConfig()
         const submitted = serviceData(await this.#json(config, '/api/v1/subtitles/generate', { method: 'POST', body: JSON.stringify({ audio_base64: audio.toString('base64'), audio_format: extname(audioPath).slice(1) || 'wav', language: input.language, reference_text: task.source.text, return_diagnostics: true, subtitle_options: { max_chars: 22, min_duration: 0.6, max_duration: 4, punctuation_policy: 'strip_trailing', ai_optimize: input.aiOptimize } }) }), '字幕对齐提交')
@@ -1649,7 +1651,7 @@ export class SpokenVideoMediaHost {
 
   #legacyConfig() {
     const config = mediaServiceConfig(this.environment)
-    if (!config.configured) fail('SPOKEN_VIDEO_MEDIA_NOT_CONFIGURED', '未配置兼容 TTS/ASR 服务。设置 LWB_SPOKEN_VIDEO_TTS_BASE_URL 后重试，或选择百炼 BYOK / SciTiger 云端。')
+    if (!config.configured) fail('SPOKEN_VIDEO_MEDIA_NOT_CONFIGURED', '未配置兼容 TTS/ASR 服务。设置 LWB_SPOKEN_VIDEO_TTS_BASE_URL 后重试，或选择百炼 BYOK / LWB 账号。')
     return config
   }
 
@@ -1676,14 +1678,31 @@ export class SpokenVideoMediaHost {
     return { configured: status.configured === true, source: status.source || null, writable: status.writable === true }
   }
 
+  async #accountStatus(service) {
+    return this.account?.status(service) || { configured: false, authenticated: false, writable: false, reason: '请先登录 LWB 账号。' }
+  }
+
+  async #bindAccount(input, service, expectedUserId) {
+    if (input.provider !== 'lwb') return input
+    const status = await this.#accountStatus(service)
+    if (!status.configured || !status.userId) fail('SPOKEN_VIDEO_MEDIA_CREDENTIAL_REQUIRED', status.reason || '请先登录 LWB 账号。')
+    if (expectedUserId && expectedUserId !== status.userId) fail('LWB_ATS_ACCOUNT_CHANGED', '此任务属于其他 LWB 账号，请登录原账号后重试。')
+    return { ...input, lwbUserId: status.userId }
+  }
+
   async #prepareRunCredentials(run) {
     if (!['voiceover', 'subtitles'].includes(run.type)) return
     const provider = run.input?.provider
     if (provider === 'legacy') return
+    if (provider === 'lwb') {
+      if (!run.input.lwbUserId) fail('SPOKEN_VIDEO_MEDIA_CREDENTIAL_REQUIRED', '该 LWB 任务缺少账号归属，请重新创建任务。')
+      this.runSecrets.set(run.id, { service: await this.account.open(run.type === 'voiceover' ? 'tts' : 'subtitle', { userId: run.input.lwbUserId }) })
+      return
+    }
     const ref = mediaCredentialRef(provider)
     const resolved = await this.#credentials().resolve(ref)
     if (!resolved?.value) {
-      const label = provider === 'bailian' ? '百炼 BYOK' : 'SciTiger 云端'
+      const label = provider === 'bailian' ? '百炼 BYOK' : 'LWB 账号'
       fail('SPOKEN_VIDEO_MEDIA_CREDENTIAL_REQUIRED', `${label}尚未保存 API Key。请在连接设置中保存后重试。`)
     }
     this.runSecrets.set(run.id, { apiKey: resolved.value })
@@ -1924,31 +1943,24 @@ export class SpokenVideoMediaHost {
     return voice
   }
 
-  #scitigerHeaders(run, json = true) {
-    return {
-      Authorization: `Bearer ${this.#apiKey(run, 'SciTiger 云端')}`,
-      ...(json ? { 'Content-Type': 'application/json' } : {}),
-    }
-  }
-
-  #scitigerData(body, label) {
+  #lwbData(body, label) {
     if (body?.success === true && body.data && typeof body.data === 'object') return body.data
     if (body?.code === 200 && body.data && typeof body.data === 'object') return body.data
     const detail = stringAt(body, ['message'], ['error', 'message']) || `${label}没有返回有效数据。`
     throw providerFailure(label, detail)
   }
 
-  async #scitigerJson(run, path, init, label) {
-    const config = mediaServiceConfig(this.environment)
-    if (!config.scitigerConfigured) fail('SPOKEN_VIDEO_MEDIA_NOT_CONFIGURED', '未配置 SciTiger 云端地址。')
-    const { json = true, headers = {}, ...request } = init
-    return this.#externalJson(`${config.scitigerBaseUrl}${path}`, { ...request, headers: { ...this.#scitigerHeaders(run, json), ...headers } }, label)
+  async #lwbJson(run, path, init, label) {
+    const service = this.runSecrets.get(run.id)?.service
+    if (!service) fail('SPOKEN_VIDEO_MEDIA_CREDENTIAL_REQUIRED', '请先登录 LWB 账号。')
+    const { json, ...request } = init
+    return service.request(path, request)
   }
 
-  async #scitigerPoll(run, path, label) {
+  async #lwbPoll(run, path, label) {
     const started = Date.now()
     while (Date.now() - started < MAX_POLL_MS) {
-      const data = this.#scitigerData(await this.#scitigerJson(run, path, { method: 'GET' }, `${label}状态查询`), `${label}状态查询`)
+      const data = this.#lwbData(await this.#lwbJson(run, path, { method: 'GET' }, `${label}状态查询`), `${label}状态查询`)
       const state = String(data.status || data.job_status || '').trim().toLowerCase()
       if (['completed', 'succeeded', 'success'].includes(state)) return data
       if (['failed', 'cancelled', 'canceled'].includes(state)) fail('SPOKEN_VIDEO_MEDIA_SERVICE_FAILED', `${label}任务${state}：${stringAt(data, ['error_message'], ['error', 'message']) || '没有返回原因'}`)
@@ -1958,23 +1970,23 @@ export class SpokenVideoMediaHost {
     fail('SPOKEN_VIDEO_MEDIA_SERVICE_TIMEOUT', `${label}任务在 ${MAX_POLL_MS / 60_000} 分钟内未完成。`)
   }
 
-  async #scitigerVoiceover(root, run, script, input) {
+  async #lwbVoiceover(root, run, script, input) {
     const reference = ['system', 'reference', 'upload'].includes(input.voiceSource) ? await this.#voiceReference(root, input) : null
-    const submitted = this.#scitigerData(await this.#scitigerJson(run, '/api/v1/tts/jobs', {
+    const submitted = this.#lwbData(await this.#lwbJson(run, '/api/v1/tts/jobs', {
       method: 'POST',
       body: JSON.stringify({
         text: script,
-        ...(reference ? { reference_audio_asset_id: await this.#scitigerUploadAudio(run, reference.audio, reference.path, reference.name) } : { voice_source: input.voiceSource, ...(input.voiceId ? { voice_id: input.voiceId } : {}) }),
+        ...(reference ? { reference_audio_asset_id: await this.#lwbUploadAudio(run, reference.audio, reference.path, reference.name) } : { voice_source: input.voiceSource, ...(input.voiceId ? { voice_id: input.voiceId } : {}) }),
         output_format: input.outputFormat || 'wav',
         voice_settings: { rate: input.rate, volume: input.volume, pitch: input.pitch },
       }),
-    }, 'SciTiger TTS 提交'), 'SciTiger TTS 提交')
+    }, 'LWB TTS 提交'), 'LWB TTS 提交')
     const taskId = stringAt(submitted, ['job_id'], ['task_id'], ['id'])
-    if (!taskId) fail('SPOKEN_VIDEO_MEDIA_SERVICE_FAILED', 'SciTiger TTS 没有返回任务标识。')
-    const completed = await this.#scitigerPoll(run, `/api/v1/tts/jobs/${encodeURIComponent(taskId)}`, 'SciTiger TTS')
+    if (!taskId) fail('SPOKEN_VIDEO_MEDIA_SERVICE_FAILED', 'LWB TTS 没有返回任务标识。')
+    const completed = await this.#lwbPoll(run, `/api/v1/tts/jobs/${encodeURIComponent(taskId)}`, 'LWB TTS')
     const audioUrl = stringAt(completed, ['result', 'audio_url'], ['audio_url'], ['result', 'url'], ['url'])
-    if (!audioUrl) fail('SPOKEN_VIDEO_MEDIA_SERVICE_FAILED', 'SciTiger TTS 没有返回完整音频地址。')
-    return { provider: 'scitiger', taskId, voiceId: input.voiceId || null, voiceName: reference?.name || input.voiceName || null, audio: await this.#download(audioUrl, 'SciTiger 配音', this.#scitigerHeaders(run, false)) }
+    if (!audioUrl) fail('SPOKEN_VIDEO_MEDIA_SERVICE_FAILED', 'LWB TTS 没有返回完整音频地址。')
+    return { provider: 'lwb', taskId, voiceId: input.voiceId || null, voiceName: reference?.name || input.voiceName || null, audio: await this.#download(audioUrl, 'LWB 配音') }
   }
 
   async #bailianSubtitles(run, audioPath, language, referenceText) {
@@ -2091,20 +2103,20 @@ export class SpokenVideoMediaHost {
     }
   }
 
-  async #scitigerUploadAudio(run, audio, audioPath, label = 'SciTiger 音频上传') {
+  async #lwbUploadAudio(run, audio, audioPath, label = 'LWB 音频上传') {
     const extension = extname(audioPath).slice(1).toLowerCase() || 'wav'
     const form = new FormData()
     form.append('file', new Blob([audio], { type: mediaTypeForFormat(extension) }), `audio.${extension}`)
-    const body = await this.#scitigerJson(run, '/api/v1/media/audio-uploads', { method: 'POST', body: form, json: false }, label)
-    const data = this.#scitigerData(body, label)
+    const body = await this.#lwbJson(run, '/api/v1/media/audio-uploads', { method: 'POST', body: form, json: false }, label)
+    const data = this.#lwbData(body, label)
     const assetId = stringAt(data, ['asset_id'], ['assetId'])
     if (!assetId) fail('SPOKEN_VIDEO_MEDIA_SERVICE_FAILED', `${label}没有返回资产标识。`)
     return assetId
   }
 
-  async #scitigerSubtitles(run, audio, audioPath, script, input) {
-    const assetId = await this.#scitigerUploadAudio(run, audio, audioPath)
-    const submitted = this.#scitigerData(await this.#scitigerJson(run, '/api/v1/subtitle/jobs', {
+  async #lwbSubtitles(run, audio, audioPath, script, input) {
+    const assetId = await this.#lwbUploadAudio(run, audio, audioPath)
+    const submitted = this.#lwbData(await this.#lwbJson(run, '/api/v1/subtitle/jobs', {
       method: 'POST',
       body: JSON.stringify({
         audio_asset_id: assetId,
@@ -2113,10 +2125,10 @@ export class SpokenVideoMediaHost {
         reference_text: script,
         subtitle_options: { max_chars: 22, min_duration: 0.6, max_duration: 4, punctuation_policy: 'strip_trailing', ai_optimize: input.aiOptimize },
       }),
-    }, 'SciTiger 字幕提交'), 'SciTiger 字幕提交')
+    }, 'LWB 字幕提交'), 'LWB 字幕提交')
     const taskId = stringAt(submitted, ['job_id'], ['task_id'], ['id'])
-    if (!taskId) fail('SPOKEN_VIDEO_MEDIA_SERVICE_FAILED', 'SciTiger 字幕没有返回任务标识。')
-    const completed = await this.#scitigerPoll(run, `/api/v1/subtitle/jobs/${encodeURIComponent(taskId)}`, 'SciTiger 字幕')
+    if (!taskId) fail('SPOKEN_VIDEO_MEDIA_SERVICE_FAILED', 'LWB 字幕没有返回任务标识。')
+    const completed = await this.#lwbPoll(run, `/api/v1/subtitle/jobs/${encodeURIComponent(taskId)}`, 'LWB 字幕')
     return { taskId, subtitle: subtitleResult(completed), assetId }
   }
 
@@ -2254,8 +2266,8 @@ export class SpokenVideoMediaHost {
     if (input.provider === 'bailian') {
       generated = await this.#bailianVoiceover(root, run, script, input)
       outputFormat = 'wav'
-    } else if (input.provider === 'scitiger') {
-      generated = await this.#scitigerVoiceover(root, run, script, input)
+    } else if (input.provider === 'lwb') {
+      generated = await this.#lwbVoiceover(root, run, script, input)
     } else {
       const config = this.#legacyConfig()
       outputFormat = input.outputFormat || config.outputFormat
@@ -2310,8 +2322,8 @@ export class SpokenVideoMediaHost {
     if (run.input.provider === 'bailian') {
       const generated = await this.#bailianSubtitles(run, audioPath, run.input.language, script)
       result = { taskId: generated.taskId, subtitle: subtitleResult({ subtitle_srt: generated.srt }), diagnostics: { provider: 'bailian-realtime-asr', alignment: generated.referenceAligned ? 'reference-text' : 'asr' } }
-    } else if (run.input.provider === 'scitiger') {
-      result = await this.#scitigerSubtitles(run, audio, audioPath, script, run.input)
+    } else if (run.input.provider === 'lwb') {
+      result = await this.#lwbSubtitles(run, audio, audioPath, script, run.input)
     } else {
       const config = this.#legacyConfig()
       const submitted = serviceData(await this.#json(config, '/api/v1/subtitles/generate', {

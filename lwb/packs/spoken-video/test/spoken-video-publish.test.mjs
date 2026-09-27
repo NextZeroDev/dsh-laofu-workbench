@@ -1,3 +1,4 @@
+import { lwbAccountFixture } from './lwb-account-fixture.mjs'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -116,9 +117,10 @@ function packagingResult(overrides = {}) {
   }
 }
 
-function publishHost({ store, executor, credentials, settings, fetch, environment } = {}) {
+function publishHost({ store, executor, credentials, settings, fetch, environment, account } = {}) {
   return new SpokenVideoPublishHost({
     projectsStore: store,
+    account,
     credentials: credentials || null,
     connectionSettings: settings || null,
     packageExecutor: executor,
@@ -143,16 +145,15 @@ async function waitForTask(host, currentAgent, taskId) {
 
 test('publish image config validates endpoints and keeps provider credential refs distinct', () => {
   assert.equal(publishImageCredentialRef('BAILIAN'), 'DASHSCOPE_API_KEY')
-  assert.equal(publishImageCredentialRef('scitiger'), 'LWB_SPOKEN_VIDEO_CLOUD_IMAGE_API_KEY')
+  assert.throws(() => publishImageCredentialRef('lwb'), SpokenVideoPublishError)
   assert.throws(() => publishImageCredentialRef('openai'), SpokenVideoPublishError)
 
   const defaults = publishImageConfig({})
   assert.equal(defaults.bailianBaseUrl, 'https://dashscope.aliyuncs.com')
-  assert.equal(defaults.scitigerBaseUrl, 'https://link.scitiger.cn')
   assert.equal(defaults.model, 'wan2.7-image')
 
-  const overridden = publishImageConfig({ LWB_SPOKEN_VIDEO_CLOUD_IMAGE_BASE_URL: 'https://example.com/', LWB_SPOKEN_VIDEO_IMAGE_MODEL: 'custom-model' })
-  assert.equal(overridden.scitigerBaseUrl, 'https://example.com')
+  const overridden = publishImageConfig({ LWB_SPOKEN_VIDEO_BAILIAN_IMAGE_BASE_URL: 'https://example.com/', LWB_SPOKEN_VIDEO_IMAGE_MODEL: 'custom-model' })
+  assert.equal(overridden.bailianBaseUrl, 'https://example.com')
   assert.equal(overridden.model, 'custom-model')
 
   // `new URL()` only throws on a malformed value; a parsable non-HTTP scheme
@@ -392,22 +393,17 @@ test('configured credentials generate covers even when the legacy enabled switch
   await assert.rejects(host.readAsset(currentAgent, { projectId: project.id, kind: 'portrait' }), /没有可读取的发布媒体/u)
 })
 
-test('SciTiger covers use synchronous multimodal generation without the DashScope async header', async (t) => {
+test('LWB covers use synchronous multimodal generation without the DashScope async header', async (t) => {
   const cwd = await workspace(t)
   const store = new SpokenVideoProjectStore()
   const currentAgent = agent(cwd)
   const project = await projectAtQc(currentAgent, store)
   const sizes = []
-  const host = publishHost({
-    store,
-    executor: async () => packagingResult(),
-    credentials: credentialStore({ LWB_SPOKEN_VIDEO_CLOUD_IMAGE_API_KEY: 'sk-cloud-test' }),
-    settings: connectionSettings({ enabled: true, provider: 'scitiger' }),
-    fetch: async (url, init = {}) => {
+  const transport = async (url, init = {}) => {
       if (init.method === 'POST') {
-        assert.equal(String(url), 'https://link.scitiger.cn/api/v1/services/aigc/multimodal-generation/generation')
-        assert.equal(init.headers['X-DashScope-Async'], undefined)
-        assert.equal(init.headers.Authorization, 'Bearer sk-cloud-test')
+        assert.equal(String(url), 'https://ats.test/api/lwb/cover-images')
+        assert.equal(new Headers(init.headers).get('X-DashScope-Async'), null)
+        assert.equal(new Headers(init.headers).get('authorization'), 'Bearer sk-cloud-test')
         const size = JSON.parse(init.body).parameters.size
         sizes.push(size)
         return jsonResponse({ output: { choices: [{ message: { content: [{ image: `https://cdn.test/${size}.png` }] } }] } })
@@ -415,7 +411,13 @@ test('SciTiger covers use synchronous multimodal generation without the DashScop
       assert.match(String(url), /^https:\/\/cdn\.test\/(1280\*720|720\*1280)\.png$/u)
       const [width, height] = new URL(String(url)).pathname.slice(1, -4).split('*').map(Number)
       return imageResponse(png(width, height))
-    },
+    };
+  const host = publishHost({
+    store,
+    executor: async () => packagingResult(),
+    account: lwbAccountFixture((...args) => transport(...args), 'sk-cloud-test'),
+    settings: connectionSettings({ enabled: true, provider: 'lwb' }),
+    fetch: transport,
   })
   const started = await host.startPackaging(currentAgent, { projectId: project.id, expectedRevision: project.revision })
   const finished = await waitForTask(host, currentAgent, started.id)
@@ -436,7 +438,7 @@ test('a missing selected-provider credential skips automatic covers without fail
     store,
     executor: async () => packagingResult(),
     credentials: credentialStore({}),
-    settings: connectionSettings({ enabled: true, provider: 'scitiger', model: 'wan2.7-image' }),
+    settings: connectionSettings({ enabled: true, provider: 'lwb', model: 'wan2.7-image' }),
   })
   const started = await host.startPackaging(currentAgent, { projectId: project.id, expectedRevision: project.revision })
   assert.equal(started.imageProvider, null)
@@ -576,7 +578,7 @@ test('regenerateCover reuses a hand-edited prompt for one direction and keeps th
   const bare = publishHost({ store, executor: async () => packagingResult() })
   await assert.rejects(
     bare.regenerateCover(currentAgent, { projectId: project.id, expectedRevision: project.revision, kind: 'landscape', prompt: '新提示词' }),
-    (error) => error instanceof SpokenVideoPublishError && error.code === 'SPOKEN_VIDEO_PUBLISH_CONNECTION_UNAVAILABLE' && /保存当前渠道的 API Key/u.test(error.message),
+    (error) => error instanceof SpokenVideoPublishError && error.code === 'SPOKEN_VIDEO_PUBLISH_CONNECTION_UNAVAILABLE' && /配置百炼 API Key/u.test(error.message),
   )
   await assert.rejects(
     host.regenerateCover(currentAgent, { projectId: project.id, expectedRevision: project.revision, kind: 'landscape', prompt: '新提示词' }),
@@ -769,23 +771,23 @@ test('the selected provider credential is the only cover-generation availability
   const initial = await host.status()
   assert.equal(initial.enabled, false)
   assert.equal(initial.configured, false)
-  assert.equal(initial.provider, 'bailian')
+  assert.equal(initial.provider, 'lwb')
   assert.equal(initial.providers.bailian.credential.configured, false)
   assert.equal(initial.imageMaxBytes, 20 * 1024 * 1024)
 
-  const configured = await host.configureConnection({ provider: 'scitiger', model: 'wan2.7-image', apiKey: 'sk-secret-cloud' })
+  const configured = await host.configureConnection({ provider: 'bailian', model: 'wan2.7-image', apiKey: 'sk-secret-cloud' })
   assert.equal(configured.enabled, true)
   assert.equal(configured.configured, true)
-  assert.equal(configured.provider, 'scitiger')
+  assert.equal(configured.provider, 'bailian')
   assert.equal(configured.model, 'wan2.7-image')
-  assert.equal(configured.providers.scitiger.credential.configured, true)
+  assert.equal(configured.providers.bailian.credential.configured, true)
   assert.equal(JSON.stringify(configured).includes('sk-secret-cloud'), false)
   assert.equal(settings.get().enabled, false, 'the legacy switch is preserved but ignored')
 
   await assert.rejects(host.configureConnection({ provider: 'openai' }), /生图渠道无效/u)
-  const cleared = await host.clearConnectionCredential({ provider: 'scitiger' })
+  const cleared = await host.clearConnectionCredential({ provider: 'bailian' })
   assert.equal(cleared.configured, false)
-  assert.equal(cleared.providers.scitiger.credential.configured, false)
+  assert.equal(cleared.providers.bailian.credential.configured, false)
 
   // Without a settings service the host reports the boundary instead of guessing.
   const bare = new SpokenVideoPublishHost({ projectsStore: store })

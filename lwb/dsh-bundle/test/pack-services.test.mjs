@@ -101,16 +101,25 @@ test('new pack sessions follow updated DSH defaults while each in-flight session
   finish.resolve(); await inFlight
 })
 
-test('missing DSH selection points to native settings; native execution errors propagate unchanged', async (t) => {
+test('missing selection points to scene model settings; native execution errors propagate unchanged', async (t) => {
   const { first, services, setSelection, calls, ctx } = await setup(t)
   setSelection(null)
   assert.equal((await services.executionStatus(first.id)).configured, false)
-  await assert.rejects(first.withAgent(() => {}), /DSH 尚未选择默认模型/)
+  await assert.rejects(first.withAgent(() => {}), /场景任务默认模型/)
   assert.equal(calls.length, 0)
   setSelection({ provider: 'ordinary', model: 'dsh-default' })
   const failure = Object.assign(new Error('DSH provider credentials unavailable'), { code: 'MISSING_CREDENTIAL' })
   ctx.agents.create = async () => { throw failure }
   await assert.rejects(first.withAgent(() => {}), (error) => error === failure)
+})
+
+test('independent scene model governs all pack roots without modifying DSH defaults', async t => {
+  const { services, first, second, calls, ctx } = await setup(t)
+  services.taskModel = { selection: () => ({ provider: 'lwb', model: 'lwb-fast' }) }
+  await first.withAgent(() => {})
+  await second.withAgent(() => {})
+  assert.deepEqual(calls.filter(([kind]) => kind === 'create').map(([, options]) => options.agentOptions), [{ provider: 'lwb', model: 'lwb-fast' }, { provider: 'lwb', model: 'lwb-fast' }])
+  assert.equal(ctx.agentDefaultModel.currentSelection().model, 'dsh-default')
 })
 
 test('unload waits for late background final writes admitted by an in-flight request', async (t) => {

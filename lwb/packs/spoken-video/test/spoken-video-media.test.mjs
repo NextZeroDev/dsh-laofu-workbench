@@ -1,3 +1,4 @@
+import { lwbAccountFixture } from './lwb-account-fixture.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
@@ -196,7 +197,7 @@ test('normalizes service configuration and rejects malformed generated subtitles
 })
 
 test('defaults voiceover requests to the packaged Tiffy reference voice', () => {
-  const request = normalizeVoiceoverRequest({ provider: 'scitiger' })
+  const request = normalizeVoiceoverRequest({ provider: 'lwb' })
   assert.equal(request.voiceSource, 'system')
   assert.equal(request.voiceName, DEFAULT_VOICE_PROFILE.name)
   assert.equal(request.voiceId, null)
@@ -379,22 +380,22 @@ test('persists connection credentials outside the media host and never exposes t
   const credentials = credentialStore()
   const settings = connectionSettings()
   const first = new SpokenVideoMediaHost({ projectsStore: new SpokenVideoProjectStore(), credentials, connectionSettings: settings })
-  const saved = await first.configureConnection({ provider: 'scitiger', apiKey: 'sk-persisted-connection' })
-  assert.equal(saved.provider, 'scitiger')
-  assert.equal(saved.providers.scitiger.configured, true)
+  const saved = await first.configureConnection({ provider: 'bailian', apiKey: 'sk-persisted-connection' })
+  assert.equal(saved.provider, 'bailian')
+  assert.equal(saved.providers.bailian.configured, true)
   assert.equal(JSON.stringify(saved).includes('sk-persisted-connection'), false)
 
   const restarted = new SpokenVideoMediaHost({ projectsStore: new SpokenVideoProjectStore(), credentials, connectionSettings: settings })
   const status = await restarted.status()
-  assert.equal(status.connection.provider, 'scitiger')
-  assert.equal(status.providers.scitiger.credential.configured, true)
+  assert.equal(status.connection.provider, 'bailian')
+  assert.equal(status.providers.bailian.credential.configured, true)
   assert.equal(JSON.stringify(status).includes('sk-persisted-connection'), false)
 
-  await restarted.clearConnectionCredential({ provider: 'scitiger' })
-  assert.equal((await restarted.connection()).providers.scitiger.configured, false)
+  await restarted.clearConnectionCredential({ provider: 'bailian' })
+  assert.equal((await restarted.connection()).providers.bailian.configured, false)
 })
 
-test('submits the packaged Tiffy reference audio to SciTiger before generating voiceover', async (t) => {
+test('submits the packaged Tiffy reference audio to LWB before generating voiceover', async (t) => {
   if (!mediaBinariesAvailable()) { t.skip('ffmpeg or ffprobe is unavailable in this environment'); return }
   const cwd = await workspace(t)
   const store = new SpokenVideoProjectStore()
@@ -405,15 +406,14 @@ test('submits the packaged Tiffy reference audio to SciTiger before generating v
   const outputAudio = await readFile(outputFile)
   const referenceAudio = await readFile(new URL('../assets/voices/tiffy-confident.mp3', import.meta.url))
   const observed = { upload: null, submit: null, authorization: [] }
-  const host = new SpokenVideoMediaHost({
+  const host = lwbMediaHost({
     projectsStore: store,
-    credentials: credentialStore({ LWB_SPOKEN_VIDEO_SCITIGER_API_KEY: 'sk-tiffy-reference' }),
-    environment: { LWB_SPOKEN_VIDEO_SCITIGER_BASE_URL: 'https://scitiger.test' },
+    lwbTestKey: 'sk-tiffy-reference',
     fetch: async (url, init = {}) => {
       const parsed = new URL(String(url))
       if (parsed.pathname === '/api/v1/media/audio-uploads') {
         assert.equal(init.method, 'POST')
-        observed.authorization.push(init.headers.Authorization)
+        observed.authorization.push(new Headers(init.headers).get('authorization'))
         const file = init.body.get('file')
         assert.equal(file.type, 'audio/mpeg')
         assert.deepEqual(Buffer.from(await file.arrayBuffer()), referenceAudio)
@@ -421,16 +421,16 @@ test('submits the packaged Tiffy reference audio to SciTiger before generating v
         return new Response(JSON.stringify({ success: true, data: { assetId: 'asset_tiffy_reference' } }))
       }
       if (parsed.pathname === '/api/v1/tts/jobs') {
-        observed.authorization.push(init.headers.Authorization)
+        observed.authorization.push(new Headers(init.headers).get('authorization'))
         observed.submit = JSON.parse(init.body)
         return new Response(JSON.stringify({ success: true, data: { job_id: 'tts_tiffy_reference' } }))
       }
       if (parsed.pathname === '/api/v1/tts/jobs/tts_tiffy_reference') {
-        observed.authorization.push(init.headers.Authorization)
+        observed.authorization.push(new Headers(init.headers).get('authorization'))
         return new Response(JSON.stringify({ success: true, data: { status: 'completed', result: { audio_url: 'https://media.test/tiffy.wav' } } }))
       }
       if (parsed.hostname === 'media.test') {
-        observed.authorization.push(init.headers.Authorization)
+        observed.authorization.push(new Headers(init.headers).get('authorization'))
         return new Response(outputAudio)
       }
       throw new Error(`unexpected request: ${url}`)
@@ -439,26 +439,25 @@ test('submits the packaged Tiffy reference audio to SciTiger before generating v
   const started = await host.startVoiceover(currentAgent, {
     projectId: project.id,
     expectedRevision: project.revision,
-    provider: 'scitiger',
+    provider: 'lwb',
   })
   const finished = await waitForOperation(host, currentAgent, project.id, started.id)
   assert.equal(finished.status, 'succeeded', finished.error)
   assert.equal(observed.upload, true)
   assert.equal(observed.submit.reference_audio_asset_id, 'asset_tiffy_reference')
   assert.equal(Object.hasOwn(observed.submit, 'voice_source'), false)
-  assert.deepEqual(observed.authorization, ['Bearer sk-tiffy-reference', 'Bearer sk-tiffy-reference', 'Bearer sk-tiffy-reference', 'Bearer sk-tiffy-reference'])
+  assert.deepEqual(observed.authorization, ['Bearer sk-tiffy-reference', 'Bearer sk-tiffy-reference', 'Bearer sk-tiffy-reference', null])
   const detail = await store.get(currentAgent, { projectId: project.id })
   assert.equal(detail.artifacts.voiceover.data.voiceName, DEFAULT_VOICE_PROFILE.name)
-  assert.equal(detail.artifacts.voiceover.data.provider, 'scitiger')
+  assert.equal(detail.artifacts.voiceover.data.provider, 'lwb')
 })
 
-test('maps SciTiger insufficient points to an actionable user-facing error', async (t) => {
+test('maps LWB insufficient points to an actionable user-facing error', async (t) => {
   const cwd = await workspace(t)
   const currentAgent = agent(cwd)
-  const host = new SpokenVideoMediaHost({
+  const host = lwbMediaHost({
     projectsStore: new SpokenVideoProjectStore(),
-    credentials: credentialStore({ LWB_SPOKEN_VIDEO_SCITIGER_API_KEY: 'sk-no-points' }),
-    environment: { LWB_SPOKEN_VIDEO_SCITIGER_BASE_URL: 'https://scitiger.test' },
+    lwbTestKey: 'sk-no-points',
     fetch: async (url) => {
       const parsed = new URL(String(url))
       if (parsed.pathname === '/api/v1/media/audio-uploads') {
@@ -473,12 +472,12 @@ test('maps SciTiger insufficient points to an actionable user-facing error', asy
   const started = await host.startAudioTask(currentAgent, {
     text: '这是一段积分不足时不会进入字幕阶段的测试文稿。',
     title: '积分不足测试',
-    provider: 'scitiger',
+    provider: 'lwb',
     subtitleEnabled: true,
   })
   const finished = await waitForAudioTask(host, currentAgent, started.id)
   assert.equal(finished.status, 'failed')
-  assert.equal(finished.error, 'SciTiger 账户积分不足，请充值后重试，或切换到百炼 BYOK。')
+  assert.equal(finished.error, 'LWB 账户积分不足，请充值后重试，或切换到百炼 BYOK。')
   assert.equal(finished.subtitle.status, 'idle')
   assert.ok(!finished.error.includes('SPOKEN_VIDEO_MEDIA'))
 })
@@ -495,10 +494,9 @@ test('validates an uploaded reference audio and freezes it into the audio task',
   const referenceAudio = await readFile(referenceFile)
   const outputAudio = await readFile(outputFile)
   const observed = { uploadedAudio: null, submit: null }
-  const host = new SpokenVideoMediaHost({
+  const host = lwbMediaHost({
     projectsStore: store,
-    credentials: credentialStore({ LWB_SPOKEN_VIDEO_SCITIGER_API_KEY: 'sk-uploaded-reference' }),
-    environment: { LWB_SPOKEN_VIDEO_SCITIGER_BASE_URL: 'https://scitiger.test' },
+    lwbTestKey: 'sk-uploaded-reference',
     fetch: async (url, init = {}) => {
       const parsed = new URL(String(url))
       if (parsed.pathname === '/api/v1/media/audio-uploads') {
@@ -534,7 +532,7 @@ test('validates an uploaded reference audio and freezes it into the audio task',
   const started = await host.startAudioTask(currentAgent, { subtitleEnabled: false,
     title: '上传音色测试',
     text: '这是一次上传参考音频的配音测试。',
-    provider: 'scitiger',
+    provider: 'lwb',
     voiceSource: 'upload',
     referenceAudio: uploaded,
   })
@@ -549,7 +547,7 @@ test('validates an uploaded reference audio and freezes it into the audio task',
   assert.deepEqual(await readFile(frozen), referenceAudio)
 })
 
-test('converts completed SciTiger subtitle segments into SRT without downloading the subtitle URL', async (t) => {
+test('converts completed LWB subtitle segments into SRT without downloading the subtitle URL', async (t) => {
   const cwd = await workspace(t)
   const store = new SpokenVideoProjectStore()
   const currentAgent = agent(cwd)
@@ -560,17 +558,16 @@ test('converts completed SciTiger subtitle segments into SRT without downloading
   await writeFile(audioPath, 'generated audio')
   project = (await store.commitProduced(currentAgent, {
     projectId: project.id, expectedRevision: project.revision, stage: 'voiceover', idempotencyKey: 'media-scitiger-subtitle-voice-0001', source: 'spoken-video/tts',
-    payload: { mode: 'tts', provider: 'scitiger', settings: { rate: 1, volume: 1, pitch: 0 }, audio: { file: audioRelativePath, mediaType: 'audio/wav', bytes: 15, durationSeconds: 2 } },
+    payload: { mode: 'tts', provider: 'lwb', settings: { rate: 1, volume: 1, pitch: 0 }, audio: { file: audioRelativePath, mediaType: 'audio/wav', bytes: 15, durationSeconds: 2 } },
   })).project
   const requests = []
-  const host = new SpokenVideoMediaHost({
+  const host = lwbMediaHost({
     projectsStore: store,
-    credentials: credentialStore({ LWB_SPOKEN_VIDEO_SCITIGER_API_KEY: 'sk-subtitle-segments' }),
-    environment: { LWB_SPOKEN_VIDEO_SCITIGER_BASE_URL: 'https://scitiger.test' },
+    lwbTestKey: 'sk-subtitle-segments',
     fetch: async (url, init = {}) => {
       const parsed = new URL(String(url))
       requests.push(parsed.toString())
-      assert.equal(init.headers.Authorization, 'Bearer sk-subtitle-segments')
+      assert.equal(new Headers(init.headers).get('authorization'), 'Bearer sk-subtitle-segments')
       if (parsed.pathname === '/api/v1/media/audio-uploads') {
         return new Response(JSON.stringify({ success: true, data: { asset_id: 'asset_subtitle_audio' } }))
       }
@@ -598,7 +595,7 @@ test('converts completed SciTiger subtitle segments into SRT without downloading
   const started = await host.startSubtitles(currentAgent, {
     projectId: project.id,
     expectedRevision: project.revision,
-    provider: 'scitiger',
+    provider: 'lwb',
     language: 'zh',
   })
   const finished = await waitForOperation(host, currentAgent, project.id, started.id)
@@ -630,7 +627,7 @@ test('enrols the packaged reference voice through the active Bailian endpoint an
       if (parsed.hostname === 'workspace.test' && parsed.pathname === '/api/v1/services/audio/tts/customization') {
         observed.enrollments += 1
         const payload = JSON.parse(init.body)
-        assert.equal(init.headers.Authorization, 'Bearer sk-bailian-reference')
+        assert.equal(new Headers(init.headers).get('authorization'), 'Bearer sk-bailian-reference')
         assert.equal(payload.model, 'qwen-voice-enrollment')
         assert.equal(payload.input.target_model, 'qwen3-tts-vc-2026-01-22')
         assert.match(payload.input.preferred_name, /^lwb_tiffy_[a-f0-9]{6}$/u)
@@ -641,7 +638,7 @@ test('enrols the packaged reference voice through the active Bailian endpoint an
       if (parsed.pathname === '/api/v1/services/aigc/multimodal-generation/generation') {
         const payload = JSON.parse(init.body)
         observed.tts.push(payload)
-        assert.equal(init.headers.Authorization, 'Bearer sk-bailian-reference')
+        assert.equal(new Headers(init.headers).get('authorization'), 'Bearer sk-bailian-reference')
         return new Response(JSON.stringify({ request_id: `tts_${observed.tts.length}`, output: { audio: { url: 'https://media.test/tiffy.wav' } } }))
       }
       if (parsed.hostname === 'media.test') return new Response(outputAudio)
@@ -1635,3 +1632,7 @@ test('scheduled project media appears in the audio feed with playback, subtitle 
   assert.equal((await scopedHost.listAudioTasks(currentAgent, { accountId, status: 'failed' })).total, 0)
   assert.equal((await scopedHost.listAudioTasks(currentAgent, { accountId, provider: 'legacy' })).total, 2)
 })
+
+function lwbMediaHost({ lwbTestKey, ...options }) {
+  return new SpokenVideoMediaHost({ ...options, account: lwbAccountFixture(options.fetch, lwbTestKey) })
+}

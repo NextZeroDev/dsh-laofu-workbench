@@ -1,7 +1,6 @@
-export const PUBLISH_IMAGE_PROVIDERS = Object.freeze(['bailian', 'scitiger'])
+export const PUBLISH_IMAGE_PROVIDERS = Object.freeze(['lwb', 'bailian'])
 export const PUBLISH_IMAGE_CREDENTIALS = Object.freeze({
   bailian: 'DASHSCOPE_API_KEY',
-  scitiger: 'LWB_SPOKEN_VIDEO_CLOUD_IMAGE_API_KEY',
 })
 export const PUBLISH_IMAGE_MODEL = 'wan2.7-image'
 export const PUBLISH_PACKAGE_SCHEMA = Object.freeze({
@@ -46,14 +45,13 @@ function endpoint(value, label) {
 
 export function publishImageCredentialRef(provider) {
   const normalized = String(provider || '').trim().toLowerCase()
-  if (!PUBLISH_IMAGE_PROVIDERS.includes(normalized)) fail('SPOKEN_VIDEO_PUBLISH_INVALID_INPUT', '生图渠道无效。')
+  if (!PUBLISH_IMAGE_CREDENTIALS[normalized]) fail('SPOKEN_VIDEO_PUBLISH_INVALID_INPUT', '生图渠道无效。')
   return PUBLISH_IMAGE_CREDENTIALS[normalized]
 }
 
 export function publishImageConfig(environment = process.env) {
   return {
     bailianBaseUrl: endpoint(environment.LWB_SPOKEN_VIDEO_BAILIAN_IMAGE_BASE_URL || 'https://dashscope.aliyuncs.com', '百炼生图地址'),
-    scitigerBaseUrl: endpoint(environment.LWB_SPOKEN_VIDEO_CLOUD_IMAGE_BASE_URL || environment.LWB_SPOKEN_VIDEO_SCITIGER_BASE_URL || 'https://link.scitiger.cn', '云端生图地址'),
     model: clipped(environment.LWB_SPOKEN_VIDEO_IMAGE_MODEL || PUBLISH_IMAGE_MODEL, 120) || PUBLISH_IMAGE_MODEL,
   }
 }

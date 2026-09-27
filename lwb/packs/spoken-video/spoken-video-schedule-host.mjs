@@ -104,7 +104,7 @@ async function writeJsonFile(path, value) {
 export class SpokenVideoScheduleHost {
   constructor({
     ctx,
-    context, executionStatus, background = (work) => work,
+    context, executionStatus, modelSelection, background = (work) => work,
     content,
     projects,
     media,
@@ -126,6 +126,7 @@ export class SpokenVideoScheduleHost {
     this.context = context
     this.executionStatus = executionStatus
     this.background = background
+    this.modelSelection = modelSelection
     this.ctx = ctx || null
     this.content = content
     this.projects = projects
@@ -526,11 +527,11 @@ export class SpokenVideoScheduleHost {
     if (!agentPresets || typeof agentPresets.mount !== 'function') {
       fail('SPOKEN_VIDEO_SCHEDULE_UNAVAILABLE', '当前运行环境不提供 Agent 预设服务，无法执行自动化任务。')
     }
-    if (!agentDefaultModel || typeof agentDefaultModel.currentSelection !== 'function') {
+    if (!this.modelSelection && (!agentDefaultModel || typeof agentDefaultModel.currentSelection !== 'function')) {
       fail('SPOKEN_VIDEO_SCHEDULE_UNAVAILABLE', '当前运行环境不提供默认模型服务，无法执行自动化任务。')
     }
-    const selection = agentDefaultModel.currentSelection()
-    const agentOptions = { provider: selection.provider, model: selection.model }
+    const selection = this.modelSelection ? this.modelSelection() : agentDefaultModel.currentSelection()
+    const agentOptions = { ...selection }
     const preset = await agentPresets.resolve(this.presetId)
     const setup = async (agentCtx) => { await agentPresets.mount(agentCtx, preset.id) }
     // One identity per task, reused across rounds, so the sidebar gains a

@@ -7,7 +7,7 @@ const PAYMENT_FORM_TTL_MS = 10 * 60 * 1000
 function decorateRemote(prototype, method, exportName) { const decorate = Remote(exportName); decorate(prototype[method], { kind: 'method', name: method, static: false, private: false, addInitializer(initializer) { remoteInitializers.push(initializer) } }) }
 /** Browser-safe LWB account projection. Tokens stay in the Host credentials store. */
 export class LwbAccountGateway extends TypertRemoteService {
-  static inject = ['lwbAtsClient', 'webServer']
+  static inject = ['lwbAtsClient', 'webServer', 'lwbTaskModel', 'llm']
   constructor(ctx) {
     super(ctx, 'lwbAccount')
     this.paymentForms = new Map()
@@ -21,7 +21,19 @@ export class LwbAccountGateway extends TypertRemoteService {
   async login(request) { return { user: (await this.ctx.lwbAtsClient.login(request)).user } }
   async register(request) { return { user: (await this.ctx.lwbAtsClient.register(request)).user } }
   async logout() { return this.ctx.lwbAtsClient.logout() }
-  async status() { return this.ctx.lwbAtsClient.status() }
+  async status() {
+    const account = await this.ctx.lwbAtsClient.status()
+    try { return { ...account, catalog: await this.ctx.lwbAtsClient.catalog(), serviceError: null } }
+    catch (error) { return { ...account, catalog: null, serviceError: error.status === 404 ? '请先更新 ATS 服务以启用 LWB 模型与场景服务。' : error.message } }
+  }
+  async taskModel() {
+    const groups = await Promise.all(this.ctx.llm.listProviders().map(async provider => {
+      try { return { ...provider, models: await this.ctx.llm.listModels(provider.id) } }
+      catch { return { ...provider, models: [] } }
+    }))
+    return { config: this.ctx.lwbTaskModel.get(), selection: this.ctx.lwbTaskModel.selection(), groups }
+  }
+  async setTaskModel(request) { await this.ctx.lwbTaskModel.update(request); return this.taskModel() }
   async rechargePackages() { return this.ctx.lwbAtsClient.rechargePackages() }
   async membershipPlans() { return this.ctx.lwbAtsClient.membershipPlans() }
   async createPayment(request) {
@@ -70,5 +82,5 @@ export class LwbAccountGateway extends TypertRemoteService {
     for (const [token, payment] of this.paymentForms) if (payment.expiresAt <= now) this.paymentForms.delete(token)
   }
 }
-for (const method of ['login', 'register', 'logout', 'status', 'rechargePackages', 'membershipPlans', 'createPayment', 'orderStatus']) decorateRemote(LwbAccountGateway.prototype, method, method)
+for (const method of ['login', 'register', 'logout', 'status', 'taskModel', 'setTaskModel', 'rechargePackages', 'membershipPlans', 'createPayment', 'orderStatus']) decorateRemote(LwbAccountGateway.prototype, method, method)
 export default LwbAccountGateway

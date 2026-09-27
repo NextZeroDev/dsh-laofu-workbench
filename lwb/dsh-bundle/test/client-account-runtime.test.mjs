@@ -62,7 +62,7 @@ async function checkClientActivation(accountInitiallyReady, exerciseAccountContr
   vm.runInNewContext(await readFile(new URL('../client.js', import.meta.url), 'utf8'), {
     window, document: window.document, localStorage: window.localStorage,
     MutationObserver: window.MutationObserver, Node: window.Node, NodeFilter: window.NodeFilter,
-    AbortController, URL,
+    AbortController, URL, setInterval, clearInterval,
   })
   const slots = new Map()
   ctx.provide('slots', {

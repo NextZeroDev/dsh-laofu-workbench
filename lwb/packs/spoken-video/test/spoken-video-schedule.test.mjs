@@ -544,6 +544,15 @@ test('depth packaging runs the whole chain and records a full lifeline', async (
   assert.deepEqual(fake.created[0].agentOptions, { provider: 'deepseek', model: 'deepseek-chat' })
 })
 
+test('scheduled roots use the independent scene model including reasoning selection', async t => {
+  const selection = { provider: 'lwb', model: 'lwb-fast', reasoningEffort: 'low' }
+  const { host, currentAgent, fake } = await setup(t, { hostOptions: { modelSelection: () => selection } })
+  const created = await createTask(host, currentAgent, { depth: 'script' })
+  const { runId } = await host.runSchedule(currentAgent, { scheduleId: created.id })
+  await settleRun(host, currentAgent, runId)
+  assert.deepEqual(fake.created[0].agentOptions, selection)
+})
+
 test('depth script stops at the saved draft and never confirms it', async (t) => {
   const { host, currentAgent, fake } = await setup(t, { depth: 'script' })
   const created = await createTask(host, currentAgent, { depth: 'script' })

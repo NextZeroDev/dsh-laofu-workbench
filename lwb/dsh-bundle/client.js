@@ -36,7 +36,8 @@ window.__ModuleLoader__.load({
 
     let productState = readState();
     const productListeners = new Set();
-    let lwbAccountState = { phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, error: null };
+    let lwbAccountState = { phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, catalog: null, serviceError: null, error: null };
+    let lwbAccountGeneration = 0;
     const lwbAccountListeners = new Set();
     let lwbAccountRequest;
     let dshAccountState = { phase: 'unavailable', status: 'signed-out', attempt: null, error: null };
@@ -119,26 +120,31 @@ window.__ModuleLoader__.load({
     }
     async function refreshLwbAccount() {
       if (lwbAccountRequest) return lwbAccountRequest;
-      setLwbAccountState({ phase: 'loading', error: null });
-      lwbAccountRequest = lwbAccountRpc('status').then((value) => {
-        setLwbAccountState({ phase: 'authenticated', user: value?.user || null, membership: value?.membership || null, points: value?.points || null, entitlements: value?.entitlements || null, error: null });
+      const generation = lwbAccountGeneration;
+      if (!lwbAccountState.user && lwbAccountState.phase !== 'anonymous') setLwbAccountState({ phase: 'loading', error: null });
+      const request = lwbAccountRpc('status').then((value) => {
+        if (generation !== lwbAccountGeneration) return null;
+        setLwbAccountState({ phase: 'authenticated', user: value?.user || null, membership: value?.membership || null, points: value?.points || null, entitlements: value?.entitlements || null, catalog: value?.catalog || null, serviceError: value?.serviceError || null, error: null });
         return value;
       }).catch((error) => {
-        if (error?.code === 'LWB_ATS_NOT_AUTHENTICATED' || /尚未登录|not authenticated|log in/i.test(error?.message || '')) {
-          setLwbAccountState({ phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, error: null });
+        if (generation !== lwbAccountGeneration) return null;
+        if (['LWB_ATS_NOT_AUTHENTICATED', 'LWB_ATS_UNAUTHORIZED'].includes(error?.code) || /尚未登录|请先登录|not authenticated|log in/i.test(error?.message || '')) {
+          setLwbAccountState({ phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, catalog: null, serviceError: null, error: null });
           return null;
         }
         setLwbAccountState({ phase: 'error', error: error?.message || 'LWB 账号状态读取失败。' });
         return null;
-      }).finally(() => { lwbAccountRequest = undefined; });
-      return lwbAccountRequest;
+      }).finally(() => { if (lwbAccountRequest === request) lwbAccountRequest = undefined; });
+      lwbAccountRequest = request;
+      return request;
     }
     async function lwbAccountAction(method, request) {
+      lwbAccountGeneration += 1; lwbAccountRequest = undefined;
       setLwbAccountState({ phase: 'loading', error: null });
       try {
         const value = await lwbAccountRpc(method, request ? { request } : {});
         if (method === 'logout') {
-          setLwbAccountState({ phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, error: null });
+          setLwbAccountState({ phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, catalog: null, serviceError: null, error: null });
         } else {
           await refreshLwbAccount();
         }
@@ -309,7 +315,7 @@ window.__ModuleLoader__.load({
         capabilityPageFailed: '能力包页面暂时不可用', capabilityPageFailedCopy: '该页面未能正常渲染。工作台导航仍可用，可返回对话或打开场景能力包。',
         returnToConversation: '返回对话', viewPacks: '查看能力包',
         about: '关于', runtime: '运行方式', runtimeHint: '基于 DeepSeek Harness（DSH）构建的本机单用户工作台。', connected: '已连接', connecting: '连接中', disconnected: '连接已断开', basicConfiguration: '基础配置', systemSettings: 'DSH 系统设置', systemSettingsHint: '配置 DSH 的语言、外观、模型服务、权限、插件及 Agent 预设。', openRuntimeSettings: '打开设置', dshSignIn: '登录 DSH', dshSigningIn: '正在登录 DSH…', dshSignOut: '退出 DSH', dshSigningOut: '正在退出 DSH…', dshSignOutConfirm: '退出 DSH 登录吗？如果当前有使用 DSH 账号的任务，退出可能会中断这些任务。', dshSignInFailed: '登录 DSH 失败，请重试。', dshSignOutFailed: '退出 DSH 失败，请稍后重试。', dshAccountUnavailable: 'DSH 账号服务暂不可用。',
-        lwbAccount: 'LWB 账号', lwbAccountHint: '管理 LWB 服务账号、会员权益和可用积分。', lwbLogin: '登录', lwbRegister: '注册', lwbLogout: '退出登录', lwbEmail: '账号或邮箱', lwbPassword: '密码', lwbConfirmPassword: '确认密码', lwbActivationCode: '激活码（可选）', lwbNotLoggedIn: '尚未登录 LWB 账号。', lwbAccountLoading: '正在读取账号状态…', lwbAccountFailed: '账号状态暂时不可用。', lwbLoginSuccess: '登录成功。', lwbRegisterSuccess: '注册成功。', lwbMembership: '会员套餐', lwbPoints: '可用积分', lwbFrozenPoints: '冻结积分', lwbNoMembership: '免费版', lwbEntitlementsUnavailable: '能力包权益将在服务端接入后显示。', lwbSwitchToRegister: '注册新账号', lwbSwitchToLogin: '已有账号，去登录', lwbSubmit: '提交', lwbPurchase: '购买积分与会员', lwbPurchaseHint: '选择套餐后打开支付宝收银台，支付成功后自动同步账户状态。', lwbRefreshPackages: '刷新套餐', lwbRechargePackages: '积分包', lwbMembershipPlans: '会员套餐', lwbNoPackages: '暂无可购买套餐。', lwbLoginToPurchase: '登录 LWB 账号后可查看和购买套餐。', lwbPointsAmount: '到账积分', lwbBonusPoints: '赠送积分', lwbMonthlyPoints: '每月赠送', lwbMonthlyPrice: '月费', lwbPriceDiscount: '模型折扣', lwbRpmLimit: '请求限制', lwbMaxApiKeys: 'API Key 数量', lwbCurrentPlan: '当前套餐', lwbPayAlipay: '支付宝支付', lwbOpenPayment: '打开收银台', lwbCheckPayment: '检查支付状态', lwbClearOrder: '清除订单', lwbCreatingOrder: '创建订单中…', lwbOrderCreated: (orderNo) => `订单 ${orderNo} 已创建，支付成功后将自动同步积分和会员状态。`, lwbOrderCreatedBlocked: (orderNo) => `订单 ${orderNo} 已创建，但收银台未打开，请重新打开。`, lwbOrderPending: '订单待支付，到账后将自动同步。', lwbPaymentSuccess: '支付成功，积分和会员状态已同步。', lwbPaymentCancelled: '订单已取消，未扣款。', lwbPaymentFailed: '订单支付失败，请重新创建订单。', lwbPaymentExpired: '订单已结束，请刷新账户确认到账状态。', lwbPaymentTimeout: '支付状态查询已超时，请稍后刷新账户状态。', lwbPackageLoadFailed: '套餐信息暂时不可用。',
+        lwbAccount: 'LWB 账号', lwbAccountHint: '管理 LWB 服务账号、会员权益和可用积分。', lwbLogin: '登录', lwbRegister: '注册', lwbLogout: '退出登录', lwbEmail: '账号或邮箱', lwbPassword: '密码', lwbConfirmPassword: '确认密码', lwbActivationCode: '激活码（可选）', lwbNotLoggedIn: '尚未登录 LWB 账号。', lwbAccountLoading: '正在读取账号状态…', lwbAccountFailed: '账号状态暂时不可用。', lwbLoginSuccess: '登录成功。', lwbRegisterSuccess: '注册成功。', lwbMembership: '会员套餐', lwbPoints: '可用积分', lwbFrozenPoints: '冻结积分', lwbNoMembership: '免费版', lwbPacksHint: '可在「场景能力包」中查看和管理当前可用的场景能力包。', lwbSwitchToRegister: '注册新账号', lwbSwitchToLogin: '已有账号，去登录', lwbSubmit: '提交', lwbPurchase: '购买积分与会员', lwbPurchaseHint: '选择套餐后打开支付宝收银台，支付成功后自动同步账户状态。', lwbRefreshPackages: '刷新套餐', lwbRechargePackages: '积分包', lwbMembershipPlans: '会员套餐', lwbNoPackages: '暂无可购买套餐。', lwbLoginToPurchase: '登录 LWB 账号后可查看和购买套餐。', lwbPointsAmount: '到账积分', lwbBonusPoints: '赠送积分', lwbMonthlyPoints: '每月赠送', lwbMonthlyPrice: '月费', lwbPriceDiscount: '模型折扣', lwbRpmLimit: '请求限制', lwbMaxApiKeys: 'API Key 数量', lwbCurrentPlan: '当前套餐', lwbPayAlipay: '支付宝支付', lwbOpenPayment: '打开收银台', lwbCheckPayment: '检查支付状态', lwbClearOrder: '清除订单', lwbCreatingOrder: '创建订单中…', lwbOrderCreated: (orderNo) => `订单 ${orderNo} 已创建，支付成功后将自动同步积分和会员状态。`, lwbOrderCreatedBlocked: (orderNo) => `订单 ${orderNo} 已创建，但收银台未打开，请重新打开。`, lwbOrderPending: '订单待支付，到账后将自动同步。', lwbPaymentSuccess: '支付成功，积分和会员状态已同步。', lwbPaymentCancelled: '订单已取消，未扣款。', lwbPaymentFailed: '订单支付失败，请重新创建订单。', lwbPaymentExpired: '订单已结束，请刷新账户确认到账状态。', lwbPaymentTimeout: '支付状态查询已超时，请稍后刷新账户状态。', lwbPackageLoadFailed: '套餐信息暂时不可用。',
         packsIntro: '基础版暂未预装场景能力包；加载后的能力包会实时注入左侧菜单。', settingsIntro: '管理工作台的系统配置与偏好。', capabilityIntro: '已加载能力包的页面入口。',
       },
       en: {
@@ -348,7 +354,7 @@ window.__ModuleLoader__.load({
         capabilityPageFailed: 'Capability page is temporarily unavailable', capabilityPageFailedCopy: 'This page could not render. Workbench navigation remains available, so you can return to the conversation or open capability packs.',
         returnToConversation: 'Back to conversation', viewPacks: 'View capability packs',
         about: 'ABOUT', runtime: 'Runtime', runtimeHint: 'A local single-user workbench built on DeepSeek Harness (DSH).', connected: 'Connected', connecting: 'Connecting', disconnected: 'Disconnected', basicConfiguration: 'BASIC CONFIGURATION', systemSettings: 'DSH system settings', systemSettingsHint: 'Configure DSH language, appearance, model providers, permissions, plugins, and agent presets.', openRuntimeSettings: 'Open settings', dshSignIn: 'Sign in to DSH', dshSigningIn: 'Signing in to DSH...', dshSignOut: 'Sign out of DSH', dshSigningOut: 'Signing out of DSH...', dshSignOutConfirm: 'Sign out of DSH? Running tasks that use the DSH account may be interrupted.', dshSignInFailed: 'DSH sign-in failed. Please try again.', dshSignOutFailed: 'DSH sign-out failed. Please try again later.', dshAccountUnavailable: 'The DSH account service is unavailable.',
-        lwbAccount: 'LWB account', lwbAccountHint: 'Manage the LWB service account, membership, and available points.', lwbLogin: 'Sign in', lwbRegister: 'Register', lwbLogout: 'Sign out', lwbEmail: 'Account or email', lwbPassword: 'Password', lwbConfirmPassword: 'Confirm password', lwbActivationCode: 'Activation code (optional)', lwbNotLoggedIn: 'No LWB account is signed in.', lwbAccountLoading: 'Loading account status...', lwbAccountFailed: 'Account status is temporarily unavailable.', lwbLoginSuccess: 'Signed in successfully.', lwbRegisterSuccess: 'Account created successfully.', lwbMembership: 'Membership', lwbPoints: 'Available points', lwbFrozenPoints: 'Frozen points', lwbNoMembership: 'Free', lwbEntitlementsUnavailable: 'Capability pack entitlements will appear after the service endpoint is connected.', lwbSwitchToRegister: 'Create an account', lwbSwitchToLogin: 'Already have an account? Sign in', lwbSubmit: 'Submit', lwbPurchase: 'Buy points and membership', lwbPurchaseHint: 'Choose a plan to open the Alipay checkout. Account status syncs after payment.', lwbRefreshPackages: 'Refresh plans', lwbRechargePackages: 'Point packages', lwbMembershipPlans: 'Membership plans', lwbNoPackages: 'No plans are available.', lwbLoginToPurchase: 'Sign in to view and buy plans.', lwbPointsAmount: 'Points', lwbBonusPoints: 'Bonus points', lwbMonthlyPoints: 'Monthly points', lwbMonthlyPrice: 'Monthly price', lwbPriceDiscount: 'Model discount', lwbRpmLimit: 'Request limit', lwbMaxApiKeys: 'API keys', lwbCurrentPlan: 'Current plan', lwbPayAlipay: 'Pay with Alipay', lwbOpenPayment: 'Open checkout', lwbCheckPayment: 'Check payment', lwbClearOrder: 'Clear order', lwbCreatingOrder: 'Creating order...', lwbOrderCreated: (orderNo) => `Order ${orderNo} created. Points and membership will sync after payment.`, lwbOrderCreatedBlocked: (orderNo) => `Order ${orderNo} created, but checkout did not open. Reopen it below.`, lwbOrderPending: 'Order is pending. Account will sync after payment.', lwbPaymentSuccess: 'Payment succeeded. Points and membership are synced.', lwbPaymentCancelled: 'Order cancelled. No charge was made.', lwbPaymentFailed: 'Payment failed. Create a new order and try again.', lwbPaymentExpired: 'Order ended. Refresh the account to confirm the result.', lwbPaymentTimeout: 'Payment status polling timed out. Refresh the account later.', lwbPackageLoadFailed: 'Plans are temporarily unavailable.',
+        lwbAccount: 'LWB account', lwbAccountHint: 'Manage the LWB service account, membership, and available points.', lwbLogin: 'Sign in', lwbRegister: 'Register', lwbLogout: 'Sign out', lwbEmail: 'Account or email', lwbPassword: 'Password', lwbConfirmPassword: 'Confirm password', lwbActivationCode: 'Activation code (optional)', lwbNotLoggedIn: 'No LWB account is signed in.', lwbAccountLoading: 'Loading account status...', lwbAccountFailed: 'Account status is temporarily unavailable.', lwbLoginSuccess: 'Signed in successfully.', lwbRegisterSuccess: 'Account created successfully.', lwbMembership: 'Membership', lwbPoints: 'Available points', lwbFrozenPoints: 'Frozen points', lwbNoMembership: 'Free', lwbPacksHint: 'View and manage available packs in Capability Packs.', lwbSwitchToRegister: 'Create an account', lwbSwitchToLogin: 'Already have an account? Sign in', lwbSubmit: 'Submit', lwbPurchase: 'Buy points and membership', lwbPurchaseHint: 'Choose a plan to open the Alipay checkout. Account status syncs after payment.', lwbRefreshPackages: 'Refresh plans', lwbRechargePackages: 'Point packages', lwbMembershipPlans: 'Membership plans', lwbNoPackages: 'No plans are available.', lwbLoginToPurchase: 'Sign in to view and buy plans.', lwbPointsAmount: 'Points', lwbBonusPoints: 'Bonus points', lwbMonthlyPoints: 'Monthly points', lwbMonthlyPrice: 'Monthly price', lwbPriceDiscount: 'Model discount', lwbRpmLimit: 'Request limit', lwbMaxApiKeys: 'API keys', lwbCurrentPlan: 'Current plan', lwbPayAlipay: 'Pay with Alipay', lwbOpenPayment: 'Open checkout', lwbCheckPayment: 'Check payment', lwbClearOrder: 'Clear order', lwbCreatingOrder: 'Creating order...', lwbOrderCreated: (orderNo) => `Order ${orderNo} created. Points and membership will sync after payment.`, lwbOrderCreatedBlocked: (orderNo) => `Order ${orderNo} created, but checkout did not open. Reopen it below.`, lwbOrderPending: 'Order is pending. Account will sync after payment.', lwbPaymentSuccess: 'Payment succeeded. Points and membership are synced.', lwbPaymentCancelled: 'Order cancelled. No charge was made.', lwbPaymentFailed: 'Payment failed. Create a new order and try again.', lwbPaymentExpired: 'Order ended. Refresh the account to confirm the result.', lwbPaymentTimeout: 'Payment status polling timed out. Refresh the account later.', lwbPackageLoadFailed: 'Plans are temporarily unavailable.',
         packsIntro: 'The base release has no scenario capability packs preinstalled; loaded packs will appear in the left menu.', settingsIntro: 'Manage the workbench’s system configuration and preferences.', capabilityIntro: 'Entry point for the loaded capability pack.',
       },
     };
@@ -571,14 +577,15 @@ window.__ModuleLoader__.load({
       return response.value;
     }
     function navTo(page, capabilityPage) {
-      updateProduct({ page, capabilityPage: capabilityPage || null, mobileNavOpen: false, conversationPanelOpen: false }, false);
+      updateProduct({ page, accountReturnRoute: null, capabilityPage: capabilityPage || null, mobileNavOpen: false, conversationPanelOpen: false }, false);
       if (page !== 'conversation') persist(productState);
     }
     function showConversation(sessionId) {
       if (sessionId) services?.sessions?.open?.(sessionId);
-      updateProduct({ page: 'conversation', capabilityPage: null, mobileNavOpen: false, conversationPanelOpen: false }, false);
+      updateProduct({ page: 'conversation', accountReturnRoute: null, capabilityPage: null, mobileNavOpen: false, conversationPanelOpen: false }, false);
     }
     const css = `
+      .lwb-task-model { display:grid; gap:12px; padding:22px; border-bottom:1px solid var(--lwb-line); } .lwb-task-model p { margin:0; line-height:1.6; } .lwb-task-model .lwb-field { display:grid; gap:8px; } .lwb-service-card { padding:18px; border:1px solid var(--lwb-line); border-radius:12px; background:var(--lwb-surface); display:grid; gap:12px; color:var(--lwb-ink); } .lwb-service-card p { margin:0; line-height:1.6; } .lwb-service-email { overflow-wrap:anywhere; color:var(--lwb-muted); } .lwb-service-card .lwb-account-metrics { display:grid; gap:16px; grid-template-columns:1fr 1fr; } .lwb-service-card .lwb-account-metrics > div { display:grid; gap:6px; min-width:0; } .lwb-service-card .lwb-account-metrics span { color:var(--lwb-muted); font-size:12px; } .lwb-service-card .lwb-account-metrics strong { overflow-wrap:anywhere; font-size:16px; } .lwb-account-return { padding:16px 22px; }
       :root { --lwb-text-xs:12px; --lwb-text-sm:13px; --lwb-text-base:14px; --lwb-text-md:15px; --lwb-text-lg:16px; --lwb-text-section:18px; --lwb-text-heading:20px; --lwb-text-title:24px; --lwb-sidebar-width:248px; --lwb-ink:#1d2733; --lwb-muted:#5f6f80; --lwb-line:#e5e9ee; --lwb-page:#f7f9fb; --lwb-surface:#fff; --lwb-blue:#2869d8; --lwb-blue-soft:#edf4ff; --lwb-green:#16865f; --lwb-green-soft:#eaf8f1; --lwb-warm:#b97016; --lwb-warm-soft:#fff5e7; }
       body[data-ds-dark-theme] { --lwb-ink:var(--dsw-alias-label-primary,#edf3f8); --lwb-muted:var(--dsw-alias-label-secondary,#a9b7c5); --lwb-line:var(--dsw-alias-border-l1,#334352); --lwb-page:var(--dsw-alias-bg-base,#131c25); --lwb-surface:var(--dsw-alias-bg-layer-1,#1c2733); --lwb-blue:#78adff; --lwb-blue-soft:#203f64; --lwb-green:#5bd0a0; --lwb-green-soft:#173f34; --lwb-warm:#f0b45b; --lwb-warm-soft:#49351c; }
       body[data-ds-dark-theme] .lwb-sidebar { background:var(--lwb-surface); } body[data-ds-dark-theme] .lwb-nav-caption,body[data-ds-dark-theme] .lwb-conversation-label,body[data-ds-dark-theme] .lwb-conversation-section-toggle { color:#91a2b3; } body[data-ds-dark-theme] .lwb-nav-item,body[data-ds-dark-theme] .lwb-workspace-row,body[data-ds-dark-theme] .lwb-session-row,body[data-ds-dark-theme] .lwb-cap-toggle,body[data-ds-dark-theme] .lwb-field label { color:var(--lwb-ink); } body[data-ds-dark-theme] .lwb-nav-item:hover,body[data-ds-dark-theme] .lwb-cap-toggle:hover,body[data-ds-dark-theme] .lwb-workspace-row:hover,body[data-ds-dark-theme] .lwb-session-row:hover,body[data-ds-dark-theme] .lwb-session-row[data-active="true"] { background:#25384b; } body[data-ds-dark-theme] .lwb-nav-item[data-icon="conversation"] { --nav-soft:#1d4058; } body[data-ds-dark-theme] .lwb-nav-item[data-icon="packs"] { --nav-soft:#52331f; } body[data-ds-dark-theme] .lwb-nav-item[data-icon="settings"],body[data-ds-dark-theme] .lwb-nav-item[data-tone="violet"] { --nav-soft:#303947; } body[data-ds-dark-theme] .lwb-nav-item[data-tone="orange"] { --nav-soft:#513522; } body[data-ds-dark-theme] .lwb-nav-item[data-tone="pink"] { --nav-soft:#4b2f40; } body[data-ds-dark-theme] .lwb-nav-item[data-tone="red"] { --nav-soft:#4c302b; } body[data-ds-dark-theme] .lwb-nav-item[data-tone="green"] { --nav-soft:#1d4438; }
@@ -1442,7 +1449,68 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function openLwbAccountSettings() {
+      updateProduct({ page: 'settings', accountReturnRoute: productState.capabilityPage, mobileNavOpen: false }, false);
+    }
+    function LwbServiceCard({ service, description }) {
+      const account = useLwbAccount();
+      const state = account.catalog?.services?.[service];
+      const points = Number(account.points?.availablePoints);
+      const insufficient = state?.available && Number.isFinite(points) && points < Number(state.minimumPoints || 0);
+      return h('section', { className: 'lwb-service-card', 'aria-label': 'LWB 账号服务' },
+        h('strong', null, 'LWB 账号'),
+        h('p', null, description),
+        account.user ? h(React.Fragment, null,
+          h('span', { className: 'lwb-service-email' }, account.user.email),
+          h('div', { className: 'lwb-account-metrics' },
+            h('div', null, h('span', null, '会员等级'), h('strong', null, account.membership?.planName || account.membership?.planCode || '免费用户')),
+            h('div', null, h('span', null, '可用积分'), h('strong', null, Number.isFinite(points) ? points.toLocaleString('zh-CN') : '—'))),
+          h('p', { role: 'status', className: insufficient || account.error || account.serviceError || !state?.available ? 'lwb-dialog-error' : 'lwb-account-muted' }, account.error || account.serviceError || (insufficient ? '积分不足，请购买积分后再提交任务。' : state?.available ? 'LWB 服务已就绪，选择此服务后将按实际用量扣除账号积分。' : state?.reason || '服务暂未开放。')),
+          h('div', { className: 'lwb-row-actions' }, button('lwb-primary-button', '购买积分 / 会员', openLwbAccountSettings), button('lwb-plain-button', '刷新账号', () => { void refreshLwbAccount(); })),
+        ) : h(React.Fragment, null,
+          h('p', { role: 'status' }, account.phase === 'loading' ? '正在读取账号…' : account.error || '登录后即可使用 LWB 提供的服务。'),
+          button('lwb-primary-button', '前往设置登录 LWB', openLwbAccountSettings),
+          account.error && button('lwb-plain-button', '重新读取', () => { void refreshLwbAccount(); })),
+      );
+    }
+    const lwbAccountFacade = Object.freeze({ useAccount: useLwbAccount, refresh: refreshLwbAccount, openSettings: openLwbAccountSettings, ServiceCard: LwbServiceCard });
+    function TaskModelSetting() {
+      const account = useLwbAccount();
+      const [value, setValue] = React.useState(null);
+      const [draft, setDraft] = React.useState({ mode: 'follow-dsh', key: '' });
+      const [error, setError] = React.useState('');
+      const [busy, setBusy] = React.useState(false);
+      const [notice, setNotice] = React.useState('');
+      const load = React.useCallback(async () => {
+        try { const next = await lwbAccountRpc('taskModel'); setValue(next); setDraft({ mode: next.config.mode, key: next.config.provider ? JSON.stringify([next.config.provider, next.config.model]) : '' }); setError(''); }
+        catch (cause) { setError(cause.message); }
+      }, []);
+      React.useEffect(() => { void load(); }, [load, account.user?.id]);
+      const models = (value?.groups || []).flatMap((group) => (group.models || []).map((model) => ({ key: JSON.stringify([group.id, model.id]), label: `${group.name || group.id} · ${model.name || model.id}` })));
+      const save = async () => {
+        setBusy(true); setNotice('');
+        try {
+          const [provider, model] = draft.mode === 'specified' ? JSON.parse(draft.key || '[]') : [];
+          const next = await lwbAccountRpc('setTaskModel', { request: { mode: draft.mode, ...(draft.mode === 'specified' ? { provider, model } : {}) } });
+          setValue(next); setError(''); setNotice('已保存，将用于后续新建场景任务。');
+        } catch (cause) { setError(cause.message); } finally { setBusy(false); }
+      };
+      return h('section', { className: 'lwb-task-model' },
+        h('strong', null, '场景任务默认模型'),
+        h('p', { className: 'lwb-account-muted' }, '统一用于场景包的文本创作、视频 Agent、子任务和自动化任务。配音、字幕和封面服务在各自模块单独选择。'),
+        h('label', { className: 'lwb-field' }, h('span', null, '选择方式'), h('select', { className: 'lwb-select', value: draft.mode, disabled: !value || busy, onChange: event => { setDraft({ ...draft, mode: event.target.value }); setNotice(''); } }, h('option', { value: 'follow-dsh' }, '跟随 DSH 默认模型'), h('option', { value: 'specified' }, '指定场景任务模型'))),
+        draft.mode === 'specified' && h('label', { className: 'lwb-field' }, h('span', null, '场景任务模型'), h('select', { className: 'lwb-select', value: draft.key, disabled: busy, onChange: event => { setDraft({ ...draft, key: event.target.value }); setNotice(''); } }, h('option', { value: '' }, '请选择模型'), draft.key && !models.some(model => model.key === draft.key) && h('option', { value: draft.key }, '已保存的模型当前不可用，请检查账号或服务'), models.map(model => h('option', { key: model.key, value: model.key }, model.label)))),
+        draft.mode === 'follow-dsh' && h('p', { className: 'lwb-account-muted' }, '保留当前行为：新任务读取 DSH 默认选择；对话中切换模型并保存默认值后，也会影响后续场景任务。'),
+        account.user && account.catalog?.models?.map(model => !model.available && h('p', { key: model.id, className: 'lwb-account-muted' }, `LWB · ${model.name}：${model.reason || '暂不可用'}`)),
+        account.serviceError && h('p', { className: 'lwb-dialog-error' }, account.serviceError),
+        error && h('p', { className: 'lwb-dialog-error', role: 'alert' }, error), notice && h('p', { role: 'status' }, notice),
+        h('div', { className: 'lwb-row-actions' }, button('lwb-primary-button', busy ? '保存中…' : '保存模型设置', () => { void save(); }, { disabled: busy || !value || (draft.mode === 'specified' && !draft.key) }), button('lwb-plain-button', '刷新模型列表', () => { void load(); })),
+      );
+    }
+
     function SettingsPage({ renderSlot }) {
+      const product = useProduct();
+      React.useEffect(() => { if (product.accountReturnRoute) document.getElementById('lwb-account-section')?.scrollIntoView({ block: 'start' }); }, [product.accountReturnRoute]);
       const copy = useLwbCopy();
       const connectionState = useObservable(services?.connection?.state, 'connecting');
       const account = useLwbAccount();
@@ -1569,7 +1637,7 @@ window.__ModuleLoader__.load({
             h('div', null, h('span', null, copy.lwbMembership), h('strong', null, membership.planName || membership.planCode || copy.lwbNoMembership), expiresAt && h('small', null, expiresAt)),
             h('div', null, h('span', null, copy.lwbPoints), h('strong', null, String(points.availablePoints ?? 0)), points.frozenPoints ? h('small', null, `${copy.lwbFrozenPoints}: ${points.frozenPoints}`) : null),
           ),
-          h('p', { className: 'lwb-account-muted' }, copy.lwbEntitlementsUnavailable),
+          h('p', { className: 'lwb-account-muted' }, copy.lwbPacksHint),
           h('section', { className: 'lwb-purchase-section' },
             h('div', { className: 'lwb-purchase-heading' },
               h('div', null, h('strong', null, copy.lwbPurchase), h('p', null, copy.lwbPurchaseHint)),
@@ -1611,7 +1679,9 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'lwb-card lwb-settings-list' },
         h('div', { className: 'lwb-settings-section' }, copy.basicConfiguration),
         h('div', { className: 'lwb-setting-row' }, h('div', { className: 'lwb-setting-copy' }, h('strong', null, copy.systemSettings), h('span', null, copy.systemSettingsHint)), h('div', { className: 'lwb-dsh-settings-actions' }, h('div', { className: 'lwb-dsh-settings-launcher' }, renderSlot('sidebar.settings', { wide: true })), dshAccountButton)),
-        h('div', { className: 'lwb-settings-section lwb-account-section-label' }, h('span', { className: 'lwb-account-section-mark', 'aria-hidden': 'true' }, 'LWB'), h('span', null, copy.lwbAccount)),
+        h(TaskModelSetting),
+        product.accountReturnRoute && h('div', { className: 'lwb-account-return' }, button('lwb-plain-button', '← 返回场景页面（保留草稿）', () => updateProduct({ page: 'capability', capabilityPage: product.accountReturnRoute }, false))),
+        h('div', { id: 'lwb-account-section', className: 'lwb-settings-section lwb-account-section-label' }, h('span', { className: 'lwb-account-section-mark', 'aria-hidden': 'true' }, 'LWB'), h('span', null, copy.lwbAccount)),
         h('div', { className: 'lwb-setting-row lwb-account-setting-row' }, h('div', { className: 'lwb-setting-copy' }, h('strong', null, copy.lwbAccount), h('span', null, copy.lwbAccountHint)), h('span', { className: 'lwb-status', role: 'status', 'data-tone': account.phase === 'authenticated' ? 'good' : account.phase === 'error' ? 'warm' : 'muted' }, account.phase === 'authenticated' ? (account.user?.email || 'LWB') : account.phase === 'loading' ? copy.lwbAccountLoading : copy.lwbNotLoggedIn)),
         h('div', { className: 'lwb-account-setting-body' }, accountPanel),
         h('div', { className: 'lwb-settings-section' }, copy.about),
@@ -1648,6 +1718,7 @@ window.__ModuleLoader__.load({
         pack,
         menu,
         packId: pack.id,
+        lwbAccount: lwbAccountFacade,
         openConversation: () => showConversation(),
         openPacks: () => navTo('packs'),
         openPackMenu: (menuId) => { if (pack.menus.some((item) => item.id === menuId)) navTo('capability', capabilityRoute(pack.id, menuId)); },
@@ -1683,7 +1754,9 @@ window.__ModuleLoader__.load({
       const selected = state.page === 'capability' ? capabilityAtRoute(catalog.packs, state.capabilityPage) : undefined;
       const chrome = pageChrome(state.page, selected, copy);
       if (state.page === 'conversation') return h(React.Fragment, null, h(MobileNavToggle), h(ConversationOverlay, { renderSlot }));
-      const body = state.page === 'packs' ? h(PacksPage) : state.page === 'settings' ? h(SettingsPage, { renderSlot }) : h(CapabilityPage);
+      const body = h(React.Fragment, null,
+        (state.page === 'capability' || (state.page === 'settings' && state.accountReturnRoute)) && h('div', { key: 'capability', hidden: state.page !== 'capability', style: state.page !== 'capability' ? { display: 'none' } : undefined }, h(CapabilityPage)),
+        state.page === 'packs' ? h(PacksPage, { key: 'packs' }) : state.page === 'settings' ? h(SettingsPage, { key: 'settings', renderSlot }) : null);
       return h(React.Fragment, null, h(MobileNavToggle), h('section', { className: 'lwb-overlay', 'aria-label': chrome.ariaLabel },
         h('header', { className: 'lwb-overlay-head' }, h('div', { className: 'lwb-overlay-title' }, h('b', null, chrome.title), h('span', null, chrome.hint)), button('lwb-plain-button', `← ${copy.conversation}`, () => showConversation())),
         h('main', { className: 'lwb-overlay-body' }, h('div', { className: state.page === 'capability' ? 'lwb-page lwb-page-capability' : 'lwb-page' },
@@ -1705,6 +1778,11 @@ window.__ModuleLoader__.load({
       const disposeProductMetadata = installProductMetadata();
       const disposeDshAccount = startDshAccountStream();
       void refreshPackCatalog();
+      const refreshAccountWhenVisible = () => { if (document.visibilityState !== 'hidden') void refreshLwbAccount(); };
+      refreshAccountWhenVisible();
+      const accountTimer = setInterval(refreshAccountWhenVisible, 15000);
+      window.addEventListener('focus', refreshAccountWhenVisible);
+      document.addEventListener('visibilitychange', refreshAccountWhenVisible);
       const disposePackCatalogReset = ctx.on('connection/reset', () => {
         void refreshPackCatalog();
         });
@@ -1739,6 +1817,9 @@ window.__ModuleLoader__.load({
           disposeOverlay?.();
           disposePackCatalogReset?.();
           disposeDshAccount?.();
+          clearInterval(accountTimer);
+          window.removeEventListener('focus', refreshAccountWhenVisible);
+          document.removeEventListener('visibilitychange', refreshAccountWhenVisible);
           disposeProductMetadata();
           lwbPackClient = undefined;
           lwbPackClientRuntime = undefined;

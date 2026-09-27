@@ -14,12 +14,12 @@ import { buildVideoCreatorContinuationPrompt, VIDEO_REVIEW_SCHEMA } from './spok
 export const inject = ['lwbPackRegistry', 'lwbPackServices', 'subagents', 'tools']
 
 const MediaConnectionSettings = z.object({
-  provider: z.union(['bailian', 'scitiger']).default('bailian'),
+  provider: z.union(['lwb', 'bailian']).default('lwb'),
   bailianReferenceVoices: z.any().default({}),
 })
 
 const PublishConnectionSettings = z.object({
-  provider: z.union(['bailian', 'scitiger']).default('bailian'),
+  provider: z.union(['lwb', 'bailian']).default('lwb'),
   model: z.string().default(''),
 })
 
@@ -53,7 +53,7 @@ export async function apply(ctx, config = {}) {
   const media = new SpokenVideoMediaHost({
     background: scope.background, fetch: scope.fetch, signal: scope.signal,
     projectsStore: projects,
-    credentials: scope.credentials,
+    credentials: scope.credentials, account: scope.account,
     connectionSettings,
     videoCreator: config.videoCreator || createAgentExecutor(ctx, ctx.subagents, 'spoken-video-video-creator', {
       maxTokenContinuations: 2,
@@ -65,13 +65,13 @@ export async function apply(ctx, config = {}) {
   const publish = new SpokenVideoPublishHost({
     background: scope.background, fetch: scope.fetch,
     projectsStore: projects,
-    credentials: scope.credentials,
+    credentials: scope.credentials, account: scope.account,
     connectionSettings: publishConnectionSettings,
     packageExecutor: config.publishExecutor || createStructuredExecutor(ctx, ctx.subagents, 'spoken-video-publish'),
   })
   // Scheduling uses the same owned data context and DSH defaults as manual jobs.
   const schedule = new SpokenVideoScheduleHost({
-    context, background: scope.background,
+    context, background: scope.background, modelSelection: scope.modelSelection,
     executionStatus: () => ctx.lwbPackServices.executionStatus(manifest.id),
     ctx,
     content,

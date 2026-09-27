@@ -9,6 +9,98 @@ function setup(fetch) {
   return { client: new LwbAtsClient({ credentials, fetch, baseUrl: 'https://ats.example.test', deviceId: 'test-device' }), values }
 }
 
+function deferred() { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
+const sessionFor = id => ({ accessToken: `access-${id}`, refreshToken: `refresh-${id}`, user: { id } })
+const catalog = { schemaVersion: 1, models: [], services: { tts: { available: true }, subtitle: { available: true } } }
+
+test('missing LWB service endpoints do not invalidate a successful account login', async () => {
+  const { client } = setup(async url => {
+    if (url.endsWith('/api/auth/me')) return response(200, sessionFor('7').user)
+    if (url.endsWith('/api/membership/current')) return response(200, { planName: 'Business' })
+    if (url.endsWith('/api/points/account')) return response(200, { availablePoints: 100000 })
+    if (url.endsWith('/api/lwb/catalog')) return response(404, { message: 'Cannot GET /api/lwb/catalog' })
+    throw new Error(`Unexpected request: ${url}`)
+  })
+  await client.writeSession(sessionFor('7'))
+  assert.equal((await client.status()).user.id, '7')
+  for (const service of ['tts', 'subtitle', 'cover-image']) {
+    const state = await client.serviceStatus(service)
+    assert.equal(state.authenticated, true)
+    assert.equal(state.configured, false)
+    assert.match(state.reason, /更新 ATS/u)
+  }
+  assert.equal((await client.readSession()).user.id, '7')
+})
+
+test('logout during bootstrap cannot restore managed credentials', async () => {
+  const entered = deferred(), release = deferred()
+  const { client, values } = setup(async url => {
+    if (url.endsWith('/bootstrap')) { entered.resolve(); await release.promise; return response(200, { application: 'lwb', userId: '7', credential: { apiKey: 'secret-key' } }) }
+    return response(200, {})
+  })
+  await client.writeSession(sessionFor('7'))
+  const result = client.serviceCredential().then(value => ({ value }), error => ({ error }))
+  await entered.promise; await client.logout(); release.resolve()
+  assert.equal((await result).error.code, 'LWB_ATS_ACCOUNT_CHANGED')
+  assert.equal(values.size, 0)
+})
+
+test('logout waits for an in-flight credential write then clears it', async () => {
+  const entered = deferred(), release = deferred(), values = new Map()
+  const credentials = { resolve: async key => ({ value: values.get(key) }), unset: async key => values.delete(key), set: async (key, value) => { entered.resolve(); await release.promise; values.set(key, value) } }
+  const client = new LwbAtsClient({ credentials, fetch: async () => response(200, {}) })
+  const writing = client.writeSession(sessionFor('7')).catch(error => error)
+  await entered.promise
+  const clearing = client.clearSession(); release.resolve()
+  assert.equal((await writing).code, 'LWB_ATS_ACCOUNT_CHANGED')
+  await clearing; assert.equal(values.size, 0)
+})
+
+test('refresh network failures preserve login; revoked refresh tokens clear it', async () => {
+  let status = 503
+  const { client, values } = setup(async url => response(url.endsWith('/refresh') ? status : 401, { message: 'test failure' }))
+  await client.writeSession(sessionFor('7'))
+  await assert.rejects(client.request('/api/auth/me'), { status: 503 })
+  assert.ok(values.has('lwb-ats-session'))
+  status = 401
+  await assert.rejects(client.request('/api/auth/me'), { status: 401 })
+  assert.equal(values.size, 0)
+})
+
+test('service handles are scoped, abort on logout, and reject a queued task from another user', async () => {
+  let serviceCalls = 0, bootstraps = 0
+  const { client } = setup(async (url, init) => {
+    if (url.endsWith('/catalog')) return response(200, catalog)
+    if (url.endsWith('/bootstrap')) { bootstraps++; return response(200, { application: 'lwb', userId: '7', credential: { apiKey: 'managed-key' } }) }
+    if (url.endsWith('/tts/jobs')) { serviceCalls++; assert.equal(init.headers.get('authorization'), 'Bearer managed-key'); return response(200, { task_id: '1' }) }
+    return response(200, {})
+  })
+  await client.writeSession(sessionFor('7'))
+  const handle = await client.openService('tts', { userId: '7' })
+  assert.deepEqual(Object.keys(handle), ['userId', 'request'])
+  await assert.rejects(handle.request('/api/v1/subtitle/jobs', { method: 'POST' }), { code: 'LWB_ATS_SERVICE_SCOPE' })
+  await handle.request('/api/v1/tts/jobs', { method: 'POST', body: '{}' })
+  await client.logout(); await client.writeSession(sessionFor('8'))
+  await assert.rejects(handle.request('/api/v1/tts/jobs', { method: 'POST' }))
+  await assert.rejects(client.openService('tts', { userId: '7' }), { code: 'LWB_ATS_ACCOUNT_CHANGED' })
+  assert.equal(serviceCalls, 1); assert.equal(bootstraps, 1)
+})
+
+test('managed-key rejection does not retry a paid POST and recreates the key next time', async () => {
+  let bootstraps = 0, posts = 0
+  const { client, values } = setup(async url => {
+    if (url.endsWith('/catalog')) return response(200, catalog)
+    if (url.endsWith('/bootstrap')) { bootstraps++; return response(200, { application: 'lwb', userId: '7', credential: { apiKey: `key-${bootstraps}` } }) }
+    posts++; return response(401, { message: 'revoked' })
+  })
+  await client.writeSession(sessionFor('7'))
+  const handle = await client.openService('tts')
+  await assert.rejects(handle.request('/api/v1/tts/jobs', { method: 'POST', body: '{}' }), { status: 401 })
+  assert.equal(posts, 1); assert.equal(values.has('lwb-ats-service'), false)
+  await client.openService('tts')
+  assert.equal(bootstraps, 2)
+})
+
 test('login stores opaque session in host credentials and status projects account data', async () => {
   const calls = []
   const { client, values } = setup(async (url, options) => {
