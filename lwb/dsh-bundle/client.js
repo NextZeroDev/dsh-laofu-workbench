@@ -39,6 +39,9 @@ window.__ModuleLoader__.load({
     let lwbAccountState = { phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, error: null };
     const lwbAccountListeners = new Set();
     let lwbAccountRequest;
+    let dshAccountState = { phase: 'unavailable', status: 'signed-out', attempt: null, error: null };
+    const dshAccountListeners = new Set();
+    let dshAccountStreamDispose;
 
     function cloneDefaults() {
       return JSON.parse(JSON.stringify(defaultState));
@@ -145,6 +148,122 @@ window.__ModuleLoader__.load({
         throw error;
       }
     }
+    function setDshAccountState(next) {
+      dshAccountState = Object.assign({}, dshAccountState, next);
+      dshAccountListeners.forEach((listener) => listener());
+    }
+    function useDshAccount() {
+      return React.useSyncExternalStore(
+        (listener) => { dshAccountListeners.add(listener); return () => dshAccountListeners.delete(listener); },
+        () => dshAccountState,
+        () => dshAccountState,
+      );
+    }
+    function dshAccountRemote() {
+      return services?.remote?.account;
+    }
+    function dshClientMetadata() {
+      const locale = services?.locale?.getSnapshot?.()?.active || 'zh';
+      const version = globalThis.__DSH_CLIENT_VERSION__ || globalThis.__DSH_TRANSPORT__?.clientVersion || '0.1.7-rc.2';
+      return { version, locale, timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60 };
+    }
+    function dshCallbackOrigin() {
+      const streamBaseUrl = globalThis.__DSH_TRANSPORT__?.streamBaseUrl;
+      try { return streamBaseUrl ? new URL(streamBaseUrl).origin : window.location.origin; } catch (_) { return window.location.origin; }
+    }
+    function applyDshAccountView(view) {
+      if (!view || typeof view !== 'object') return;
+      const status = view.status === 'credential-stored' ? 'credential-stored' : 'signed-out';
+      const attempt = view.attempt || null;
+      const attemptPhase = attempt?.phase;
+      const signingIn = ['initializing', 'waiting-browser', 'exchanging', 'committing'].includes(attemptPhase);
+      setDshAccountState({
+        phase: signingIn ? 'signing-in' : status === 'credential-stored' ? 'authenticated' : 'available',
+        status,
+        attempt,
+        error: null,
+      });
+    }
+    function startDshAccountStream() {
+      const remote = services?.remote;
+      const account = remote?.account;
+      if (!account?.watch) {
+        setDshAccountState({ phase: 'unavailable', status: 'signed-out', attempt: null, error: null });
+        return () => {};
+      }
+      let disposed = false;
+      let controller;
+      let stream;
+      try {
+        if (typeof remote.$stream === 'function') {
+          stream = remote.$stream({ name: 'lwb-dsh-account', open: (signal) => account.watch(signal), ended: () => new Error('DSH account stream ended') });
+        } else {
+          controller = new AbortController();
+          stream = account.watch(controller.signal);
+        }
+      } catch (error) {
+        setDshAccountState({ phase: 'error', error: error?.message || 'DSH 账号状态暂时不可用。' });
+        return () => {};
+      }
+      dshAccountStreamDispose = () => {
+        if (disposed) return;
+        disposed = true;
+        try { stream?.dispose?.(); } catch (_) {}
+        try { controller?.abort(); } catch (_) {}
+        if (dshAccountStreamDispose) dshAccountStreamDispose = undefined;
+      };
+      void (async () => {
+        try {
+          for await (const frame of stream) {
+            if (disposed) break;
+            applyDshAccountView(frame?.value || frame);
+            try { frame?.accept?.(); } catch (_) {}
+          }
+        } catch (error) {
+          if (!disposed) setDshAccountState({ phase: 'error', error: error?.message || 'DSH 账号状态暂时不可用。' });
+        }
+      })();
+      return dshAccountStreamDispose;
+    }
+    async function startDshSignIn() {
+      const account = dshAccountRemote();
+      if (!account?.startSignIn) {
+        setDshAccountState({ phase: 'unavailable', error: 'DSH 账号服务暂不可用。' });
+        return;
+      }
+      setDshAccountState({ phase: 'signing-in', error: null });
+      try {
+        const result = await account.startSignIn(dshClientMetadata(), dshCallbackOrigin(), 'desktop');
+        if (!result?.ok) throw Object.assign(new Error(result?.error?.message || 'DSH 登录失败。'), result?.error || {});
+        applyDshAccountView(result.value);
+      } catch (error) {
+        setDshAccountState({ phase: 'error', error: error?.message || 'DSH 登录失败，请重试。' });
+      }
+    }
+    async function signOutDsh() {
+      const account = dshAccountRemote();
+      if (!account?.signOut) {
+        setDshAccountState({ phase: 'unavailable', error: 'DSH 账号服务暂不可用。' });
+        return;
+      }
+      try {
+        if (account.hasRunningAccountTasks) {
+          const result = await account.hasRunningAccountTasks();
+          if (result?.ok === false) throw result.error || new Error('DSH 运行任务状态查询失败。');
+          const running = result?.ok === true ? result.value : Boolean(result);
+          if (running) {
+            const message = currentLwbCopy().dshSignOutConfirm;
+            if (!window.confirm(message)) return;
+          }
+        }
+        setDshAccountState({ phase: 'signing-out', error: null });
+        const result = await account.signOut(dshClientMetadata());
+        if (!result?.ok) throw Object.assign(new Error(result?.error?.message || 'DSH 退出失败。'), result?.error || {});
+        applyDshAccountView(result.value);
+      } catch (error) {
+        setDshAccountState({ phase: 'error', error: error?.message || 'DSH 退出失败，请稍后重试。' });
+      }
+    }
     function useObservable(observable, fallback) {
       return React.useSyncExternalStore(
         (listener) => observable?.subscribe ? observable.subscribe(listener) : () => {},
@@ -189,7 +308,7 @@ window.__ModuleLoader__.load({
         capabilityPageCopy: (name) => `“${name}”没有提供此菜单对应的浏览器页面。`, clientUnavailable: '能力包客户端页面不可用',
         capabilityPageFailed: '能力包页面暂时不可用', capabilityPageFailedCopy: '该页面未能正常渲染。工作台导航仍可用，可返回对话或打开场景能力包。',
         returnToConversation: '返回对话', viewPacks: '查看能力包',
-        about: '关于', runtime: '运行方式', runtimeHint: '基于 DeepSeek Harness（DSH）构建的本机单用户工作台。', connected: '已连接', connecting: '连接中', disconnected: '连接已断开', basicConfiguration: '基础配置', systemSettings: '系统设置', systemSettingsHint: '配置语言与外观、模型服务、权限、插件及 Agent 预设。', openRuntimeSettings: '打开设置',
+        about: '关于', runtime: '运行方式', runtimeHint: '基于 DeepSeek Harness（DSH）构建的本机单用户工作台。', connected: '已连接', connecting: '连接中', disconnected: '连接已断开', basicConfiguration: '基础配置', systemSettings: 'DSH 系统设置', systemSettingsHint: '配置 DSH 的语言、外观、模型服务、权限、插件及 Agent 预设。', openRuntimeSettings: '打开设置', dshSignIn: '登录 DSH', dshSigningIn: '正在登录 DSH…', dshSignOut: '退出 DSH', dshSigningOut: '正在退出 DSH…', dshSignOutConfirm: '退出 DSH 登录吗？如果当前有使用 DSH 账号的任务，退出可能会中断这些任务。', dshSignInFailed: '登录 DSH 失败，请重试。', dshSignOutFailed: '退出 DSH 失败，请稍后重试。', dshAccountUnavailable: 'DSH 账号服务暂不可用。',
         lwbAccount: 'LWB 账号', lwbAccountHint: '管理 LWB 服务账号、会员权益和可用积分。', lwbLogin: '登录', lwbRegister: '注册', lwbLogout: '退出登录', lwbEmail: '账号或邮箱', lwbPassword: '密码', lwbConfirmPassword: '确认密码', lwbActivationCode: '激活码（可选）', lwbNotLoggedIn: '尚未登录 LWB 账号。', lwbAccountLoading: '正在读取账号状态…', lwbAccountFailed: '账号状态暂时不可用。', lwbLoginSuccess: '登录成功。', lwbRegisterSuccess: '注册成功。', lwbMembership: '会员套餐', lwbPoints: '可用积分', lwbFrozenPoints: '冻结积分', lwbNoMembership: '免费版', lwbEntitlementsUnavailable: '能力包权益将在服务端接入后显示。', lwbSwitchToRegister: '注册新账号', lwbSwitchToLogin: '已有账号，去登录', lwbSubmit: '提交', lwbPurchase: '购买积分与会员', lwbPurchaseHint: '选择套餐后打开支付宝收银台，支付成功后自动同步账户状态。', lwbRefreshPackages: '刷新套餐', lwbRechargePackages: '积分包', lwbMembershipPlans: '会员套餐', lwbNoPackages: '暂无可购买套餐。', lwbLoginToPurchase: '登录 LWB 账号后可查看和购买套餐。', lwbPointsAmount: '到账积分', lwbBonusPoints: '赠送积分', lwbMonthlyPoints: '每月赠送', lwbMonthlyPrice: '月费', lwbPriceDiscount: '模型折扣', lwbRpmLimit: '请求限制', lwbMaxApiKeys: 'API Key 数量', lwbCurrentPlan: '当前套餐', lwbPayAlipay: '支付宝支付', lwbOpenPayment: '打开收银台', lwbCheckPayment: '检查支付状态', lwbClearOrder: '清除订单', lwbCreatingOrder: '创建订单中…', lwbOrderCreated: (orderNo) => `订单 ${orderNo} 已创建，支付成功后将自动同步积分和会员状态。`, lwbOrderCreatedBlocked: (orderNo) => `订单 ${orderNo} 已创建，但收银台未打开，请重新打开。`, lwbOrderPending: '订单待支付，到账后将自动同步。', lwbPaymentSuccess: '支付成功，积分和会员状态已同步。', lwbPaymentCancelled: '订单已取消，未扣款。', lwbPaymentFailed: '订单支付失败，请重新创建订单。', lwbPaymentExpired: '订单已结束，请刷新账户确认到账状态。', lwbPaymentTimeout: '支付状态查询已超时，请稍后刷新账户状态。', lwbPackageLoadFailed: '套餐信息暂时不可用。',
         packsIntro: '基础版暂未预装场景能力包；加载后的能力包会实时注入左侧菜单。', settingsIntro: '管理工作台的系统配置与偏好。', capabilityIntro: '已加载能力包的页面入口。',
       },
@@ -228,7 +347,7 @@ window.__ModuleLoader__.load({
         capabilityPageCopy: (name) => `${name} does not provide a browser page for this menu.`, clientUnavailable: 'Capability pack client page is unavailable',
         capabilityPageFailed: 'Capability page is temporarily unavailable', capabilityPageFailedCopy: 'This page could not render. Workbench navigation remains available, so you can return to the conversation or open capability packs.',
         returnToConversation: 'Back to conversation', viewPacks: 'View capability packs',
-        about: 'ABOUT', runtime: 'Runtime', runtimeHint: 'A local single-user workbench built on DeepSeek Harness (DSH).', connected: 'Connected', connecting: 'Connecting', disconnected: 'Disconnected', basicConfiguration: 'BASIC CONFIGURATION', systemSettings: 'System settings', systemSettingsHint: 'Configure language, appearance, model providers, permissions, plugins, and agent presets.', openRuntimeSettings: 'Open settings',
+        about: 'ABOUT', runtime: 'Runtime', runtimeHint: 'A local single-user workbench built on DeepSeek Harness (DSH).', connected: 'Connected', connecting: 'Connecting', disconnected: 'Disconnected', basicConfiguration: 'BASIC CONFIGURATION', systemSettings: 'DSH system settings', systemSettingsHint: 'Configure DSH language, appearance, model providers, permissions, plugins, and agent presets.', openRuntimeSettings: 'Open settings', dshSignIn: 'Sign in to DSH', dshSigningIn: 'Signing in to DSH...', dshSignOut: 'Sign out of DSH', dshSigningOut: 'Signing out of DSH...', dshSignOutConfirm: 'Sign out of DSH? Running tasks that use the DSH account may be interrupted.', dshSignInFailed: 'DSH sign-in failed. Please try again.', dshSignOutFailed: 'DSH sign-out failed. Please try again later.', dshAccountUnavailable: 'The DSH account service is unavailable.',
         lwbAccount: 'LWB account', lwbAccountHint: 'Manage the LWB service account, membership, and available points.', lwbLogin: 'Sign in', lwbRegister: 'Register', lwbLogout: 'Sign out', lwbEmail: 'Account or email', lwbPassword: 'Password', lwbConfirmPassword: 'Confirm password', lwbActivationCode: 'Activation code (optional)', lwbNotLoggedIn: 'No LWB account is signed in.', lwbAccountLoading: 'Loading account status...', lwbAccountFailed: 'Account status is temporarily unavailable.', lwbLoginSuccess: 'Signed in successfully.', lwbRegisterSuccess: 'Account created successfully.', lwbMembership: 'Membership', lwbPoints: 'Available points', lwbFrozenPoints: 'Frozen points', lwbNoMembership: 'Free', lwbEntitlementsUnavailable: 'Capability pack entitlements will appear after the service endpoint is connected.', lwbSwitchToRegister: 'Create an account', lwbSwitchToLogin: 'Already have an account? Sign in', lwbSubmit: 'Submit', lwbPurchase: 'Buy points and membership', lwbPurchaseHint: 'Choose a plan to open the Alipay checkout. Account status syncs after payment.', lwbRefreshPackages: 'Refresh plans', lwbRechargePackages: 'Point packages', lwbMembershipPlans: 'Membership plans', lwbNoPackages: 'No plans are available.', lwbLoginToPurchase: 'Sign in to view and buy plans.', lwbPointsAmount: 'Points', lwbBonusPoints: 'Bonus points', lwbMonthlyPoints: 'Monthly points', lwbMonthlyPrice: 'Monthly price', lwbPriceDiscount: 'Model discount', lwbRpmLimit: 'Request limit', lwbMaxApiKeys: 'API keys', lwbCurrentPlan: 'Current plan', lwbPayAlipay: 'Pay with Alipay', lwbOpenPayment: 'Open checkout', lwbCheckPayment: 'Check payment', lwbClearOrder: 'Clear order', lwbCreatingOrder: 'Creating order...', lwbOrderCreated: (orderNo) => `Order ${orderNo} created. Points and membership will sync after payment.`, lwbOrderCreatedBlocked: (orderNo) => `Order ${orderNo} created, but checkout did not open. Reopen it below.`, lwbOrderPending: 'Order is pending. Account will sync after payment.', lwbPaymentSuccess: 'Payment succeeded. Points and membership are synced.', lwbPaymentCancelled: 'Order cancelled. No charge was made.', lwbPaymentFailed: 'Payment failed. Create a new order and try again.', lwbPaymentExpired: 'Order ended. Refresh the account to confirm the result.', lwbPaymentTimeout: 'Payment status polling timed out. Refresh the account later.', lwbPackageLoadFailed: 'Plans are temporarily unavailable.',
         packsIntro: 'The base release has no scenario capability packs preinstalled; loaded packs will appear in the left menu.', settingsIntro: 'Manage the workbench’s system configuration and preferences.', capabilityIntro: 'Entry point for the loaded capability pack.',
       },
@@ -530,6 +649,16 @@ window.__ModuleLoader__.load({
       .lwb-dsh-settings-launcher button[aria-haspopup="dialog"] { min-height:40px; padding:8px 14px; border-radius:8px; white-space:nowrap; }
       .lwb-dsh-settings-trigger { display:inline-flex; line-height:1.4; font-size:var(--lwb-text-base); }
       .lwb-dsh-settings-trigger svg { flex:none; }
+      .lwb-dsh-settings-actions { display:flex; flex:0 0 auto; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; }
+      .lwb-dsh-account-button { min-height:40px; padding:8px 14px; border:1px solid #c6d9ec; border-radius:8px; color:#245f9b; background:#f7fbff; font:inherit; font-size:var(--lwb-text-base,14px); font-weight:700; line-height:1.4; cursor:pointer; }
+      .lwb-dsh-account-button:hover { border-color:#8cb5dc; color:#174b7d; background:#edf6ff; }
+      .lwb-dsh-account-button.is-signed-in { border-color:#d9b9b1; color:#9a4a3d; background:#fff8f5; }
+      .lwb-dsh-account-button.is-signed-in:hover { border-color:#d79c90; color:#80392e; background:#fff0eb; }
+      .lwb-dsh-account-button:disabled { opacity:.55; cursor:not-allowed; }
+      body[data-ds-dark-theme] .lwb-dsh-account-button { border-color:#405b74; color:#9ecbff; background:#1d344a; }
+      body[data-ds-dark-theme] .lwb-dsh-account-button:hover { border-color:#6b91b8; color:#d2e8ff; background:#253f58; }
+      body[data-ds-dark-theme] .lwb-dsh-account-button.is-signed-in { border-color:#79534e; color:#ffb9ae; background:#422d2a; }
+      body[data-ds-dark-theme] .lwb-dsh-account-button.is-signed-in:hover { border-color:#a16a61; color:#ffd6cf; background:#51332f; }
       .lwb-plain-button,.lwb-primary-button,.lwb-danger-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:38px; padding:7px 13px; line-height:1.4; }
       .lwb-plain-button:disabled,.lwb-primary-button:disabled,.lwb-danger-button:disabled { opacity:.5; cursor:not-allowed; }
       .lwb-input,.lwb-select,.lwb-market-search,.lwb-conversation-search { min-height:38px; }
@@ -548,7 +677,8 @@ window.__ModuleLoader__.load({
         .lwb-overlay-head { min-height:64px; gap:8px; padding-left:56px; padding-right:12px; }
         .lwb-overlay-title span { display:none; }
         .lwb-page-capability { padding:20px 16px 40px; }
-        .lwb-dsh-settings-launcher { margin-top:16px; }
+        .lwb-dsh-settings-actions { justify-content:flex-start; margin-top:16px; }
+        .lwb-dsh-settings-launcher { margin-top:0; }
         .lwb-setting-row > .lwb-status { margin-top:12px; }
         .lwb-market-controls { grid-template-columns:1fr; }
         .lwb-sidebar .lwb-nav-item,.lwb-plain-button,.lwb-primary-button,.lwb-danger-button { min-height:44px; }
@@ -1316,6 +1446,7 @@ window.__ModuleLoader__.load({
       const copy = useLwbCopy();
       const connectionState = useObservable(services?.connection?.state, 'connecting');
       const account = useLwbAccount();
+      const dshAccount = useDshAccount();
       const [mode, setMode] = React.useState('login');
       const [accountValue, setAccountValue] = React.useState('');
       const [password, setPassword] = React.useState('');
@@ -1328,6 +1459,15 @@ window.__ModuleLoader__.load({
       const [pendingPayment, setPendingPayment] = React.useState(null);
       const [purchasingCode, setPurchasingCode] = React.useState('');
       const connectionLabel = connectionState === 'connected' ? copy.connected : connectionState === 'disconnected' ? copy.disconnected : copy.connecting;
+      const dshAccountBusy = dshAccount.phase === 'signing-in' || dshAccount.phase === 'signing-out';
+      const dshAccountButton = dshAccount.phase === 'unavailable' ? null : h('button', {
+        type: 'button',
+        className: dshAccount.phase === 'authenticated' ? 'lwb-dsh-account-button is-signed-in' : 'lwb-dsh-account-button',
+        onClick: dshAccount.phase === 'authenticated' ? () => { void signOutDsh(); } : () => { void startDshSignIn(); },
+        disabled: dshAccountBusy,
+        'aria-busy': dshAccountBusy ? 'true' : 'false',
+        title: dshAccount.error || undefined,
+      }, dshAccount.phase === 'authenticated' ? copy.dshSignOut : dshAccount.phase === 'signing-out' ? copy.dshSigningOut : dshAccount.phase === 'signing-in' ? copy.dshSigningIn : copy.dshSignIn);
       React.useEffect(() => {
         if (connectionState === 'connected') void refreshLwbAccount();
       }, [connectionState]);
@@ -1470,7 +1610,7 @@ window.__ModuleLoader__.load({
         );
       return h('div', { className: 'lwb-card lwb-settings-list' },
         h('div', { className: 'lwb-settings-section' }, copy.basicConfiguration),
-        h('div', { className: 'lwb-setting-row' }, h('div', { className: 'lwb-setting-copy' }, h('strong', null, copy.systemSettings), h('span', null, copy.systemSettingsHint)), h('div', { className: 'lwb-dsh-settings-launcher' }, renderSlot('sidebar.settings', { wide: true }))),
+        h('div', { className: 'lwb-setting-row' }, h('div', { className: 'lwb-setting-copy' }, h('strong', null, copy.systemSettings), h('span', null, copy.systemSettingsHint)), h('div', { className: 'lwb-dsh-settings-actions' }, h('div', { className: 'lwb-dsh-settings-launcher' }, renderSlot('sidebar.settings', { wide: true })), dshAccountButton)),
         h('div', { className: 'lwb-settings-section lwb-account-section-label' }, h('span', { className: 'lwb-account-section-mark', 'aria-hidden': 'true' }, 'LWB'), h('span', null, copy.lwbAccount)),
         h('div', { className: 'lwb-setting-row lwb-account-setting-row' }, h('div', { className: 'lwb-setting-copy' }, h('strong', null, copy.lwbAccount), h('span', null, copy.lwbAccountHint)), h('span', { className: 'lwb-status', role: 'status', 'data-tone': account.phase === 'authenticated' ? 'good' : account.phase === 'error' ? 'warm' : 'muted' }, account.phase === 'authenticated' ? (account.user?.email || 'LWB') : account.phase === 'loading' ? copy.lwbAccountLoading : copy.lwbNotLoggedIn)),
         h('div', { className: 'lwb-account-setting-body' }, accountPanel),
@@ -1559,10 +1699,11 @@ window.__ModuleLoader__.load({
       ctx.provide('lwbPackClient', lwbPackClient);
       lwbPackClientRuntime = new LwbPackClientRuntime(ctx.get('modules'));
       services = {
-        slots: ctx.get('slots'), connection: ctx.get('connection'), sessions: ctx.get('sessions'), workspaces: ctx.get('workspaces'), uiWorkspace: ctx.get('uiWorkspace'), layout: ctx.get('layout'), locale: ctx.get('locale'),
+        slots: ctx.get('slots'), connection: ctx.get('connection'), sessions: ctx.get('sessions'), workspaces: ctx.get('workspaces'), uiWorkspace: ctx.get('uiWorkspace'), layout: ctx.get('layout'), locale: ctx.get('locale'), remote: ctx.get('remote'),
       };
       installStyle();
       const disposeProductMetadata = installProductMetadata();
+      const disposeDshAccount = startDshAccountStream();
       void refreshPackCatalog();
       const disposePackCatalogReset = ctx.on('connection/reset', () => {
         void refreshPackCatalog();
@@ -1597,6 +1738,7 @@ window.__ModuleLoader__.load({
           disposeRuntimeSettingsTrigger?.();
           disposeOverlay?.();
           disposePackCatalogReset?.();
+          disposeDshAccount?.();
           disposeProductMetadata();
           lwbPackClient = undefined;
           lwbPackClientRuntime = undefined;
@@ -1606,7 +1748,7 @@ window.__ModuleLoader__.load({
       }, 'lwb: unified workbench shell');
     }
 
-    exports.inject = ['slots', 'connection', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'locale', 'loader', 'modules'];
+    exports.inject = ['slots', 'connection', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'locale', 'remote', 'loader', 'modules'];
     exports.apply = apply;
     return module.exports;
   },

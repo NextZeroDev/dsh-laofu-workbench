@@ -68,7 +68,7 @@ test('settings is the only primary navigation entry to native DSH runtime settin
   assert.match(source, /function LwbRuntimeSettingsTrigger\(\{ openSettings \}\)/u)
   assert.match(source, /html\[data-platform='darwin'\] \.lwb-sidebar \{ padding-top:48px; \}/u)
   assert.match(source, /html\[data-platform='darwin'\]:has\(\.lwb-sidebar\) \[data-shell-leading\] \{ display:none; \}/u)
-  assert.match(source, /systemSettings: '系统设置'/u)
+  assert.match(source, /systemSettings: 'DSH 系统设置'/u)
   assert.match(source, /function SettingsPage\(\{ renderSlot \}\)/u)
   assert.match(source, /renderSlot\('sidebar\.settings', \{ wide: true \}\)/u)
   assert.doesNotMatch(source, /function LwbSidebar\(\{ collapsed, width, renderSlot \}\)/u)
@@ -76,6 +76,22 @@ test('settings is the only primary navigation entry to native DSH runtime settin
   assert.match(source, /ctx\.slots\.inject\('settings\.launcher', \(\) => ctx\.slots\.register\(\{[\s\S]*?name: 'settings\.launcher', priority: -10, registrant: 'lwb-workbench'/u)
   assert.match(source, /ctx\.slots\.inject\('shell\.overlay', \(\) => ctx\.slots\.register\(\{[\s\S]*?children: \{[\s\S]*?'sidebar\.settings': \{ kind: 'single', scope: 'root' \}/u)
   assert.match(source, /\.lwb-dsh-settings-launcher button\[aria-haspopup="dialog"\]/u)
+})
+
+test('settings exposes the official DSH account controls beside native settings', async () => {
+  const source = await readFile(clientPath, 'utf8')
+  assert.match(source, /function useDshAccount\(\)/u)
+  assert.match(source, /account\.watch\(signal\)/u)
+  assert.match(source, /account\.startSignIn\(dshClientMetadata\(\), dshCallbackOrigin\(\), 'desktop'\)/u)
+  assert.match(source, /account\.hasRunningAccountTasks\(\)/u)
+  assert.match(source, /result\?\.ok === false\) throw result\.error/u)
+  assert.match(source, /window\.confirm\(message\)/u)
+  assert.match(source, /account\.signOut\(dshClientMetadata\(\)\)/u)
+  assert.match(source, /dshAccount\.phase === 'authenticated' \? 'lwb-dsh-account-button is-signed-in'/u)
+  assert.match(source, /copy\.dshSignOut/u)
+  assert.match(source, /copy\.dshSignIn/u)
+  assert.match(source, /remote: ctx\.get\('remote'\)/u)
+  assert.match(source, /exports\.inject = \['slots',[\s\S]*'remote',[\s\S]*'loader'/u)
 })
 
 test('LWB styles follow the DSH-owned theme runtime', async () => {
