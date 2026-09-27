@@ -54,6 +54,8 @@ test('settings do not duplicate DSH theme or language controls', async () => {
 test('settings is the only primary navigation entry to native DSH runtime settings', async () => {
   const source = await readFile(clientPath, 'utf8')
   assert.match(source, /function LwbRuntimeSettingsTrigger\(\{ openSettings \}\)/u)
+  assert.match(source, /html\[data-platform='darwin'\] \.lwb-sidebar \{ padding-top:48px; \}/u)
+  assert.match(source, /html\[data-platform='darwin'\]:has\(\.lwb-sidebar\) \[data-shell-leading\] \{ display:none; \}/u)
   assert.match(source, /systemSettings: '系统设置'/u)
   assert.match(source, /function SettingsPage\(\{ renderSlot \}\)/u)
   assert.match(source, /renderSlot\('sidebar\.settings', \{ wide: true \}\)/u)
