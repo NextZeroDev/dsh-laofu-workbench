@@ -36,6 +36,9 @@ window.__ModuleLoader__.load({
 
     let productState = readState();
     const productListeners = new Set();
+    let lwbAccountState = { phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, error: null };
+    const lwbAccountListeners = new Set();
+    let lwbAccountRequest;
 
     function cloneDefaults() {
       return JSON.parse(JSON.stringify(defaultState));
@@ -90,6 +93,58 @@ window.__ModuleLoader__.load({
         () => productState,
       );
     }
+    function setLwbAccountState(next) {
+      lwbAccountState = Object.assign({}, lwbAccountState, next);
+      lwbAccountListeners.forEach((listener) => listener());
+    }
+    function useLwbAccount() {
+      return React.useSyncExternalStore(
+        (listener) => { lwbAccountListeners.add(listener); return () => lwbAccountListeners.delete(listener); },
+        () => lwbAccountState,
+        () => lwbAccountState,
+      );
+    }
+    async function lwbAccountRpc(method, args = {}) {
+      if (!services?.connection?.rpc?.call) throw new Error('DSH 连接尚未就绪。');
+      const response = await services.connection.rpc.call('/api', `lwbAccount/${method}`, { args });
+      if (!response?.ok) {
+        const error = new Error(response?.error?.message || 'LWB 账号操作未完成。');
+        Object.assign(error, response?.error || {});
+        throw error;
+      }
+      return response.value;
+    }
+    async function refreshLwbAccount() {
+      if (lwbAccountRequest) return lwbAccountRequest;
+      setLwbAccountState({ phase: 'loading', error: null });
+      lwbAccountRequest = lwbAccountRpc('status').then((value) => {
+        setLwbAccountState({ phase: 'authenticated', user: value?.user || null, membership: value?.membership || null, points: value?.points || null, entitlements: value?.entitlements || null, error: null });
+        return value;
+      }).catch((error) => {
+        if (error?.code === 'LWB_ATS_NOT_AUTHENTICATED' || /尚未登录|not authenticated|log in/i.test(error?.message || '')) {
+          setLwbAccountState({ phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, error: null });
+          return null;
+        }
+        setLwbAccountState({ phase: 'error', error: error?.message || 'LWB 账号状态读取失败。' });
+        return null;
+      }).finally(() => { lwbAccountRequest = undefined; });
+      return lwbAccountRequest;
+    }
+    async function lwbAccountAction(method, request) {
+      setLwbAccountState({ phase: 'loading', error: null });
+      try {
+        const value = await lwbAccountRpc(method, request ? { request } : {});
+        if (method === 'logout') {
+          setLwbAccountState({ phase: 'anonymous', user: null, membership: null, points: null, entitlements: null, error: null });
+        } else {
+          await refreshLwbAccount();
+        }
+        return value;
+      } catch (error) {
+        setLwbAccountState({ phase: 'error', error: error?.message || 'LWB 账号操作未完成。' });
+        throw error;
+      }
+    }
     function useObservable(observable, fallback) {
       return React.useSyncExternalStore(
         (listener) => observable?.subscribe ? observable.subscribe(listener) : () => {},
@@ -135,6 +190,7 @@ window.__ModuleLoader__.load({
         capabilityPageFailed: '能力包页面暂时不可用', capabilityPageFailedCopy: '该页面未能正常渲染。工作台导航仍可用，可返回对话或打开场景能力包。',
         returnToConversation: '返回对话', viewPacks: '查看能力包',
         about: '关于', runtime: '运行方式', runtimeHint: '基于 DeepSeek Harness（DSH）构建的本机单用户工作台。', connected: '已连接', connecting: '连接中', disconnected: '连接已断开', basicConfiguration: '基础配置', systemSettings: '系统设置', systemSettingsHint: '配置语言与外观、模型服务、权限、插件及 Agent 预设。', openRuntimeSettings: '打开设置',
+        lwbAccount: 'LWB 账号', lwbAccountHint: '管理 LWB 服务账号、会员权益和可用积分。', lwbLogin: '登录', lwbRegister: '注册', lwbLogout: '退出登录', lwbEmail: '账号或邮箱', lwbPassword: '密码', lwbConfirmPassword: '确认密码', lwbActivationCode: '激活码（可选）', lwbNotLoggedIn: '尚未登录 LWB 账号。', lwbAccountLoading: '正在读取账号状态…', lwbAccountFailed: '账号状态暂时不可用。', lwbLoginSuccess: '登录成功。', lwbRegisterSuccess: '注册成功。', lwbMembership: '会员套餐', lwbPoints: '可用积分', lwbFrozenPoints: '冻结积分', lwbNoMembership: '免费版', lwbEntitlementsUnavailable: '能力包权益将在服务端接入后显示。', lwbSwitchToRegister: '注册新账号', lwbSwitchToLogin: '已有账号，去登录', lwbSubmit: '提交',
         packsIntro: '基础版暂未预装场景能力包；加载后的能力包会实时注入左侧菜单。', settingsIntro: '管理工作台的系统配置与偏好。', capabilityIntro: '已加载能力包的页面入口。',
       },
       en: {
@@ -173,6 +229,7 @@ window.__ModuleLoader__.load({
         capabilityPageFailed: 'Capability page is temporarily unavailable', capabilityPageFailedCopy: 'This page could not render. Workbench navigation remains available, so you can return to the conversation or open capability packs.',
         returnToConversation: 'Back to conversation', viewPacks: 'View capability packs',
         about: 'ABOUT', runtime: 'Runtime', runtimeHint: 'A local single-user workbench built on DeepSeek Harness (DSH).', connected: 'Connected', connecting: 'Connecting', disconnected: 'Disconnected', basicConfiguration: 'BASIC CONFIGURATION', systemSettings: 'System settings', systemSettingsHint: 'Configure language, appearance, model providers, permissions, plugins, and agent presets.', openRuntimeSettings: 'Open settings',
+        lwbAccount: 'LWB account', lwbAccountHint: 'Manage the LWB service account, membership, and available points.', lwbLogin: 'Sign in', lwbRegister: 'Register', lwbLogout: 'Sign out', lwbEmail: 'Account or email', lwbPassword: 'Password', lwbConfirmPassword: 'Confirm password', lwbActivationCode: 'Activation code (optional)', lwbNotLoggedIn: 'No LWB account is signed in.', lwbAccountLoading: 'Loading account status...', lwbAccountFailed: 'Account status is temporarily unavailable.', lwbLoginSuccess: 'Signed in successfully.', lwbRegisterSuccess: 'Account created successfully.', lwbMembership: 'Membership', lwbPoints: 'Available points', lwbFrozenPoints: 'Frozen points', lwbNoMembership: 'Free', lwbEntitlementsUnavailable: 'Capability pack entitlements will appear after the service endpoint is connected.', lwbSwitchToRegister: 'Create an account', lwbSwitchToLogin: 'Already have an account? Sign in', lwbSubmit: 'Submit',
         packsIntro: 'The base release has no scenario capability packs preinstalled; loaded packs will appear in the left menu.', settingsIntro: 'Manage the workbench’s system configuration and preferences.', capabilityIntro: 'Entry point for the loaded capability pack.',
       },
     };
@@ -434,6 +491,9 @@ window.__ModuleLoader__.load({
       .lwb-pack-tabs { display:flex; gap:4px; margin-bottom:14px; } .lwb-pack-tab { min-height:32px; padding:0 12px; border:1px solid transparent; border-radius:6px; color:#6e7c8a; background:transparent; cursor:pointer; } .lwb-pack-tab[data-active="true"] { border-color:#d6e5f9; color:var(--lwb-blue); background:var(--lwb-blue-soft); } .lwb-market-controls { display:grid; grid-template-columns:minmax(220px,1fr) 142px 142px; gap:9px; margin-bottom:16px; } .lwb-market-search { width:100%; height:34px; padding:0 10px; border:1px solid #d8e2ec; border-radius:6px; outline:0; color:var(--lwb-ink); background:var(--lwb-surface); font-size:var(--lwb-text-base,14px); } .lwb-market-search:focus { border-color:var(--lwb-blue); box-shadow:0 0 0 2px var(--lwb-blue-soft); } .lwb-pack-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(248px,1fr)); gap:13px; } .lwb-pack-card { display:flex; min-height:258px; flex-direction:column; padding:17px; cursor:pointer; } .lwb-pack-card:hover { border-color:#b9d4f4; box-shadow:0 5px 17px rgba(39,78,123,.09); } .lwb-pack-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; } .lwb-pack-title { display:flex; min-width:0; align-items:center; gap:11px; } .lwb-pack-title > div { min-width:0; } .lwb-pack-icon { width:37px; height:37px; flex:none; font-size:var(--lwb-text-heading,20px); } .lwb-pack-title h3 { overflow:hidden; margin:0; font-size:var(--lwb-text-lg,16px); text-overflow:ellipsis; white-space:nowrap; } .lwb-pack-title p { margin:4px 0 0; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-pack-card > p { margin:14px 0; color:#657586; font-size:var(--lwb-text-base,14px); line-height:1.6; } .lwb-pack-menu { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; } .lwb-menu-pill { padding:4px 7px; border-radius:4px; color:#617183; background:#f2f5f8; font-size:var(--lwb-text-xs,12px); } .lwb-pack-actions { margin-top:auto; } .lwb-pack-card-note { min-height:16px; margin:0 0 10px; color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); }
       .lwb-pack-empty { border:1px dashed #d6dee7; border-radius:7px; color:#82909e; background:#fbfcfd; font-size:var(--lwb-text-base,14px); }
       .lwb-settings-list { display:block; overflow:hidden; } .lwb-settings-section { padding:13px 19px 7px; color:#7a8997; background:#fbfcfd; font-size:var(--lwb-text-xs,12px); font-weight:800; letter-spacing:.08em; } .lwb-setting-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:17px 19px; border-bottom:1px solid var(--lwb-line); } .lwb-setting-row:last-child { border-bottom:0; } .lwb-setting-copy > strong { display:block; font-size:var(--lwb-text-md,15px); } .lwb-setting-copy > span { display:block; margin-top:5px; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); line-height:1.5; } .lwb-select { min-width:110px; height:32px; padding:0 8px; border:1px solid #d7e0e9; border-radius:6px; color:#4f6071; background:#fff; font-size:var(--lwb-text-base,14px); } .lwb-field { display:grid; gap:6px; } .lwb-field label { color:#566879; font-size:var(--lwb-text-sm,13px); font-weight:700; } .lwb-input { width:100%; height:34px; padding:0 10px; border:1px solid #d8e2ec; border-radius:6px; outline:0; color:#40505f; background:#fff; font-size:var(--lwb-text-base,14px); } .lwb-input:focus,.lwb-select:focus { border-color:#9fc0f4; box-shadow:0 0 0 2px #eef5ff; } .lwb-form { display:grid; gap:14px; } .lwb-modal-title { margin:0; color:#253646; font-size:var(--lwb-text-heading,20px); } .lwb-modal-copy { margin:6px 0 0; color:#7a8997; font-size:var(--lwb-text-sm,13px); line-height:1.55; } .lwb-dialog-error { margin:0; padding:9px 10px; border:1px solid #efcfcf; border-radius:6px; color:#a54848; background:#fff7f7; font-size:var(--lwb-text-sm,13px); line-height:1.45; }
+      .lwb-account-setting-body { padding:0 19px 20px; } .lwb-account-panel { display:grid; gap:15px; padding:16px; border:1px solid var(--lwb-line); border-radius:7px; background:var(--lwb-page); } .lwb-account-meta { display:flex; min-width:0; align-items:baseline; justify-content:space-between; gap:12px; } .lwb-account-meta strong { overflow:hidden; color:var(--lwb-ink); font-size:var(--lwb-text-md,15px); text-overflow:ellipsis; white-space:nowrap; } .lwb-account-meta span,.lwb-account-muted { color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-account-stat-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .lwb-account-stat-grid > div { display:grid; gap:4px; min-width:0; padding:11px 12px; border:1px solid var(--lwb-line); border-radius:6px; background:var(--lwb-surface); } .lwb-account-stat-grid span,.lwb-account-stat-grid small { color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); } .lwb-account-stat-grid strong { overflow:hidden; color:var(--lwb-ink); font-size:var(--lwb-text-md,15px); text-overflow:ellipsis; white-space:nowrap; } .lwb-account-form { max-width:520px; } .lwb-account-mode { display:flex; align-items:center; justify-content:space-between; gap:12px; } .lwb-link-button { padding:0; border:0; color:var(--lwb-blue); background:transparent; font:inherit; font-size:var(--lwb-text-sm,13px); cursor:pointer; } .lwb-link-button:hover { text-decoration:underline; } .lwb-account-notice { margin:0; padding:9px 10px; border:1px solid #b9dfca; border-radius:6px; color:#24714f; background:#f1fbf5; font-size:var(--lwb-text-sm,13px); line-height:1.45; }
+      .lwb-account-setting-row { align-items:flex-start; } .lwb-account-setting-row > .lwb-status { flex:none; }
+      body[data-ds-dark-theme] .lwb-account-panel { border-color:var(--lwb-line); background:#1b2733; } body[data-ds-dark-theme] .lwb-account-stat-grid > div { border-color:var(--lwb-line); background:#23313f; } body[data-ds-dark-theme] .lwb-account-notice { border-color:#376b56; color:#8fe0b5; background:#17372d; }
       .lwb-modal-backdrop { position:fixed; z-index:20; inset:0; display:grid; place-items:center; padding:24px; background:rgba(27,39,53,.28); pointer-events:auto; } .lwb-pack-drawer-backdrop { position:fixed; z-index:20; inset:0; display:flex; justify-content:flex-end; background:rgba(27,39,53,.28); pointer-events:auto; } .lwb-pack-detail { width:min(560px,100%); max-height:min(720px,calc(100vh - 48px)); overflow:auto; padding:21px; } .lwb-pack-drawer { width:min(510px,100%); height:100%; max-height:none; padding:24px; border-radius:0; box-shadow:-12px 0 32px rgba(20,34,49,.13); } .lwb-pack-detail-head { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; margin-bottom:17px; } .lwb-pack-detail-head h2 { margin:0; font-size:var(--lwb-text-heading,20px); } .lwb-pack-detail-head p { margin:5px 0 0; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-detail-close { width:30px; height:30px; border:1px solid #d7e0e9; border-radius:6px; color:#647487; background:#fff; cursor:pointer; } .lwb-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin-bottom:17px; } .lwb-detail-fact { padding:12px; border:1px solid #e5e9ee; border-radius:6px; background:#fbfcfd; } .lwb-detail-fact small { display:block; color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); } .lwb-detail-fact strong { display:block; margin-top:5px; color:#334456; font-size:var(--lwb-text-base,14px); } .lwb-detail-section { padding:14px 0; border-top:1px solid var(--lwb-line); } .lwb-detail-section h3 { margin:0 0 10px; color:#5d6d7d; font-size:var(--lwb-text-sm,13px); letter-spacing:.04em; } .lwb-detail-menu { display:grid; gap:7px; } .lwb-detail-menu-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #e7ebef; border-radius:6px; color:#4d5e6f; background:#fff; font-size:var(--lwb-text-sm,13px); } .lwb-detail-menu-row b { color:var(--lwb-blue); font-size:var(--lwb-text-md,15px); } .lwb-workflow-list { display:grid; gap:7px; padding:0; margin:0; list-style:none; } .lwb-workflow-list li { display:flex; gap:8px; align-items:flex-start; color:var(--lwb-ink); font-size:var(--lwb-text-base,14px); line-height:1.5; } .lwb-workflow-list i { color:var(--lwb-blue); font-style:normal; }
       .lwb-mobile-nav-trigger,.lwb-mobile-conversation-trigger,.lwb-mobile-nav-backdrop { display:none; }
       @media (max-width:680px) { :root { --lwb-sidebar-width:0px !important; } .lwb-sidebar { position:fixed; z-index:80; top:0; bottom:0; left:0; width:248px; transform:translateX(-105%); transition:transform .18s ease; box-shadow:10px 0 30px rgba(24,39,56,.18); } .lwb-sidebar[data-mobile-open="true"] { transform:translateX(0); } .lwb-conversation-overlay,.lwb-overlay { inset:0; } .lwb-conversation-pane { position:fixed; z-index:60; top:0; bottom:0; left:0; transform:translateX(-105%); transition:transform .18s ease; box-shadow:8px 0 26px rgba(24,39,56,.18); } .lwb-conversation-overlay[data-open="true"] .lwb-conversation-pane { transform:translateX(0); } .lwb-conversation-backdrop { position:fixed; z-index:55; inset:0; border:0; background:rgba(24,39,56,.24); } .lwb-conversation-overlay[data-open="true"] .lwb-conversation-backdrop,.lwb-conversation-close { display:block; } .lwb-mobile-nav-trigger,.lwb-mobile-conversation-trigger { position:fixed; z-index:70; top:13px; display:grid; width:32px; height:32px; place-items:center; border:1px solid #dbe4ec; border-radius:6px; background:#fff; cursor:pointer; } .lwb-mobile-nav-trigger { left:12px; } .lwb-mobile-conversation-trigger { left:52px; } .lwb-mobile-nav-backdrop { position:fixed; z-index:75; inset:0; border:0; background:rgba(24,39,56,.24); } .lwb-overlay-head { padding-left:96px; } .lwb-page { padding:24px 16px 40px; } .lwb-page-intro,.lwb-setting-row { display:block; } .lwb-page-intro .lwb-row-actions { margin-top:14px; } .lwb-history-row-actions { opacity:1; pointer-events:auto; } .lwb-market-controls { grid-template-columns:1fr; } .lwb-pack-drawer { width:min(100%,430px); padding:20px; } }
@@ -1225,10 +1285,66 @@ window.__ModuleLoader__.load({
     function SettingsPage({ renderSlot }) {
       const copy = useLwbCopy();
       const connectionState = useObservable(services?.connection?.state, 'connecting');
+      const account = useLwbAccount();
+      const [mode, setMode] = React.useState('login');
+      const [accountValue, setAccountValue] = React.useState('');
+      const [password, setPassword] = React.useState('');
+      const [confirmPassword, setConfirmPassword] = React.useState('');
+      const [activationCode, setActivationCode] = React.useState('');
+      const [formError, setFormError] = React.useState('');
+      const [notice, setNotice] = React.useState('');
       const connectionLabel = connectionState === 'connected' ? copy.connected : connectionState === 'disconnected' ? copy.disconnected : copy.connecting;
+      React.useEffect(() => {
+        if (connectionState === 'connected') void refreshLwbAccount();
+      }, [connectionState]);
+      const submitAccount = async (event) => {
+        event.preventDefault();
+        if (account.phase === 'loading') return;
+        setFormError(''); setNotice('');
+        if (!accountValue.trim() || !password) { setFormError(copy.lwbAccountFailed); return; }
+        if (mode === 'register' && password !== confirmPassword) { setFormError(copy.lwbAccountFailed); return; }
+        try {
+          await lwbAccountAction(mode === 'login' ? 'login' : 'register', mode === 'login'
+            ? { account: accountValue.trim(), password }
+            : { email: accountValue.trim(), password, confirmPassword, activationCode: activationCode.trim() });
+          setNotice(mode === 'login' ? copy.lwbLoginSuccess : copy.lwbRegisterSuccess);
+          setPassword(''); setConfirmPassword(''); setActivationCode('');
+        } catch (error) { setFormError(error?.message || copy.lwbAccountFailed); }
+      };
+      const membership = account.membership || {};
+      const points = account.points || {};
+      const expiresAt = membership.expiresAt ? new Date(membership.expiresAt).toLocaleDateString() : null;
+      const accountPanel = account.phase === 'authenticated'
+        ? h('div', { className: 'lwb-account-panel' },
+          h('div', { className: 'lwb-account-meta' },
+            h('strong', null, account.user?.email || account.user?.username || 'LWB'),
+            h('span', null, account.user?.role || 'user')),
+          h('div', { className: 'lwb-account-stat-grid' },
+            h('div', null, h('span', null, copy.lwbMembership), h('strong', null, membership.planName || membership.planCode || copy.lwbNoMembership), expiresAt && h('small', null, expiresAt)),
+            h('div', null, h('span', null, copy.lwbPoints), h('strong', null, String(points.availablePoints ?? 0)), points.frozenPoints ? h('small', null, `${copy.lwbFrozenPoints}: ${points.frozenPoints}`) : null),
+          ),
+          h('p', { className: 'lwb-account-muted' }, copy.lwbEntitlementsUnavailable),
+          h('div', { className: 'lwb-row-actions' }, button('lwb-plain-button', copy.lwbLogout, () => { void lwbAccountAction('logout').catch(() => {}); }, { disabled: account.phase === 'loading' })),
+        )
+        : h('form', { className: 'lwb-account-panel lwb-account-form', onSubmit: submitAccount },
+          h('div', { className: 'lwb-account-mode' },
+            h('strong', null, mode === 'login' ? copy.lwbLogin : copy.lwbRegister),
+            button('lwb-link-button', mode === 'login' ? copy.lwbSwitchToRegister : copy.lwbSwitchToLogin, () => { setMode(mode === 'login' ? 'register' : 'login'); setFormError(''); setNotice(''); }),
+          ),
+          h('div', { className: 'lwb-field' }, h('label', { htmlFor: 'lwb-account-email' }, mode === 'login' ? copy.lwbEmail : copy.lwbEmail), h('input', { id: 'lwb-account-email', className: 'lwb-input', type: mode === 'login' ? 'text' : 'email', value: accountValue, autoComplete: mode === 'login' ? 'username' : 'email', onChange: (event) => setAccountValue(event.target.value) })),
+          h('div', { className: 'lwb-field' }, h('label', { htmlFor: 'lwb-account-password' }, copy.lwbPassword), h('input', { id: 'lwb-account-password', className: 'lwb-input', type: 'password', value: password, autoComplete: mode === 'login' ? 'current-password' : 'new-password', onChange: (event) => setPassword(event.target.value) })),
+          mode === 'register' && h('div', { className: 'lwb-field' }, h('label', { htmlFor: 'lwb-account-confirm-password' }, copy.lwbConfirmPassword), h('input', { id: 'lwb-account-confirm-password', className: 'lwb-input', type: 'password', value: confirmPassword, autoComplete: 'new-password', onChange: (event) => setConfirmPassword(event.target.value) })),
+          mode === 'register' && h('div', { className: 'lwb-field' }, h('label', { htmlFor: 'lwb-account-activation' }, copy.lwbActivationCode), h('input', { id: 'lwb-account-activation', className: 'lwb-input', value: activationCode, onChange: (event) => setActivationCode(event.target.value) })),
+          (formError || account.error) && h('p', { className: 'lwb-dialog-error', role: 'alert' }, formError || account.error),
+          notice && h('p', { className: 'lwb-account-notice', role: 'status' }, notice),
+          h('div', { className: 'lwb-row-actions' }, button('lwb-primary-button', account.phase === 'loading' ? copy.lwbAccountLoading : (mode === 'login' ? copy.lwbLogin : copy.lwbRegister), () => {}, { type: 'submit', disabled: account.phase === 'loading' })),
+        );
       return h('div', { className: 'lwb-card lwb-settings-list' },
         h('div', { className: 'lwb-settings-section' }, copy.basicConfiguration),
         h('div', { className: 'lwb-setting-row' }, h('div', { className: 'lwb-setting-copy' }, h('strong', null, copy.systemSettings), h('span', null, copy.systemSettingsHint)), h('div', { className: 'lwb-dsh-settings-launcher' }, renderSlot('sidebar.settings', { wide: true }))),
+        h('div', { className: 'lwb-settings-section' }, copy.lwbAccount),
+        h('div', { className: 'lwb-setting-row lwb-account-setting-row' }, h('div', { className: 'lwb-setting-copy' }, h('strong', null, copy.lwbAccount), h('span', null, copy.lwbAccountHint)), h('span', { className: 'lwb-status', role: 'status', 'data-tone': account.phase === 'authenticated' ? 'good' : account.phase === 'error' ? 'warm' : 'muted' }, account.phase === 'authenticated' ? (account.user?.email || 'LWB') : account.phase === 'loading' ? copy.lwbAccountLoading : copy.lwbNotLoggedIn)),
+        h('div', { className: 'lwb-account-setting-body' }, accountPanel),
         h('div', { className: 'lwb-settings-section' }, copy.about),
         h('div', { className: 'lwb-setting-row' }, h('div', { className: 'lwb-setting-copy' }, h('strong', null, copy.runtime), h('span', null, copy.runtimeHint)), h('span', { className: 'lwb-status', role: 'status', 'data-tone': connectionState === 'connected' ? undefined : 'warm' }, connectionLabel)),
       );

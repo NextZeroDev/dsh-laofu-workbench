@@ -51,6 +51,18 @@ test('settings do not duplicate DSH theme or language controls', async () => {
   assert.doesNotMatch(source, /services\.locale\.setLocale\(/u)
 })
 
+test('settings exposes an optional LWB account without forcing sign-in at startup', async () => {
+  const source = await readFile(clientPath, 'utf8')
+  assert.match(source, /services\.connection\.rpc\.call\('\/api', `lwbAccount\/\$\{method\}`/u)
+  assert.match(source, /lwbAccountAction\(mode === 'login' \? 'login' : 'register'/u)
+  assert.match(source, /lwbAccountAction\('logout'/u)
+  assert.match(source, /lwbAccountRpc\('status'\)/u)
+  assert.match(source, /if \(connectionState === 'connected'\) void refreshLwbAccount\(\)/u)
+  assert.match(source, /renderSlot\('sidebar\.settings', \{ wide: true \}\)/u)
+  assert.match(source, /lwbLogin: '登录'/u)
+  assert.match(source, /lwbLogin: 'Sign in'/u)
+})
+
 test('settings is the only primary navigation entry to native DSH runtime settings', async () => {
   const source = await readFile(clientPath, 'utf8')
   assert.match(source, /function LwbRuntimeSettingsTrigger\(\{ openSettings \}\)/u)

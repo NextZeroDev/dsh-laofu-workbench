@@ -14,6 +14,8 @@ import LwbArchiveGateway from './archive-gateway.mjs'
 import LwbPackGateway from './pack-gateway.mjs'
 import { LwbPackRegistry } from './pack-registry.mjs'
 import { LwbPackRuntime } from './pack-runtime.mjs'
+import { LwbAtsClient } from './ats-client.mjs'
+import LwbAccountGateway from './account-gateway.mjs'
 
 /**
  * Host-side product identity for the LWB DSH composition.
@@ -38,11 +40,13 @@ export async function apply(ctx, config = {}) {
   const workspaces = new LwbPackWorkspaces({ root: LWB_RUNTIME.packStateDir })
   ctx.provide('lwbPackWorkspaces', workspaces)
   ctx.provide('lwbPackServices', new LwbPackServices(ctx, workspaces))
+  ctx.provide('lwbAtsClient', new LwbAtsClient({ credentials: ctx.credentials, baseUrl: LWB_RUNTIME.atsBaseUrl }))
   const packGroup = await createPackGroup(ctx)
   const packRuntime = new LwbPackRuntime(ctx, { group: packGroup })
   ctx.provide('lwbPackRuntime', packRuntime)
   ctx.plugin(LwbArchiveGateway)
   ctx.plugin(LwbPackGateway)
+  ctx.plugin(LwbAccountGateway)
   // The bundle's own services are only injectable once this fiber is active.
   // Start restoration on that transition, after the baseline pack dependencies
   // are available, and let the gateway await the resulting task.

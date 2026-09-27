@@ -107,11 +107,13 @@ ATS 负责：
 - 为公开口播包声明 `tts`、`subtitle`、`cover-image` 依赖以及三类 Provider。
 - 增加契约测试和文档。
 
-### 阶段二：Host 账号与服务入口
+### 阶段二：Host 账号与服务入口（已开始实施）
 
-- 增加 LWB 设置中的账号登录、注册、退出和 Token 刷新。
-- 增加 Host-owned ATS client 和凭据存储，不改变官方 DSH 登录。
-- 增加账号、会员、积分和权益的只读状态接口。
+- 已增加 LWB 设置中的账号登录、注册、退出和 Token 刷新入口；打开设置页时读取状态，启动时不强制登录 ATS。
+- 已增加 Host-owned ATS client 和凭据存储。会话令牌只写入 DSH credentials，浏览器 RPC 只返回脱敏后的用户、会员和积分状态，不改变官方 DSH 登录。
+- 已接入账号、会员、积分的只读状态接口，并为 401、并发刷新和刷新失败清理凭据定义了客户端行为。
+- ATS 当前已确认的接口列表中没有能力包权益查询端点，因此 `status().entitlements` 暂时返回 `null`；能力包权益展示和服务端授权仍留到阶段三，客户端不伪造权益结果。
+- 设置页保留官方 `sidebar.settings` 入口，LWB 账号区域与官方设置相互独立；公开能力包继续可以走 BYOK。
 
 ### 阶段三：能力包目录与权益
 
@@ -147,4 +149,3 @@ ATS 负责：
 3. registry 和 market 返回这些声明，但不暴露凭据或内部服务地址。
 4. 口播视频现有页面、Provider 配置和百炼 API Key 路径没有改动。
 5. `npm test` 和 Pack SDK/registry 定向测试通过。
-

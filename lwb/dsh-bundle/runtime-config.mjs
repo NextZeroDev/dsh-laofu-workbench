@@ -32,8 +32,15 @@ export const LWB_RUNTIME = Object.freeze({
   productHome,
   registryPath: resolve(text(process.env.LWB_PACK_REGISTRY) || join(productHome, 'packs.json')),
   sourcePacksDir: resolve(text(process.env.LWB_PACKS_DIR) || join(PROJECT_ROOT, 'lwb', 'packs')),
+  atsBaseUrl: normalizeAtsUrl(process.env.LWB_ATS_URL),
   packRuntimeDir: text(process.env.LWB_PACK_RUNTIME_DIR) ? resolve(process.env.LWB_PACK_RUNTIME_DIR) : undefined,
 })
+
+function normalizeAtsUrl(value) {
+  const candidate = text(value)
+  if (!candidate) return undefined
+  try { return new URL(candidate).href.replace(/\/$/u, '') } catch { return undefined }
+}
 
 export function lwbProfilePath(...segments) {
   return join(LWB_RUNTIME.profileHome, ...segments)
