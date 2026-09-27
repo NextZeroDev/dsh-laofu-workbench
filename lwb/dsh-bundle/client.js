@@ -1748,7 +1748,7 @@ window.__ModuleLoader__.load({
       }, 'lwb: unified workbench shell');
     }
 
-    exports.inject = ['slots', 'connection', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'locale', 'remote', 'loader', 'modules'];
+    exports.inject = ['slots', 'connection', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'locale', 'remote', 'remote.account', 'loader', 'modules'];
     exports.apply = apply;
     return module.exports;
   },
