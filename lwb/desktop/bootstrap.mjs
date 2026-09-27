@@ -1,8 +1,9 @@
-/** Product entry point; the official Electron main remains byte-for-byte intact. */
+/** Product entry point; official files stay intact, with an in-memory entry policy. */
 import { app } from 'electron'
 import { cp, mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { installLwbEntryPolicy } from './lwb-entry-policy.mjs'
 
 const payload = join(process.resourcesPath, 'lwb-product')
 const build = JSON.parse(await readFile(join(payload, 'build.json'), 'utf8'))
@@ -32,4 +33,5 @@ app.setName('Laofu Workbench')
 app.setPath('userData', join(productHome, 'electron-user-data'))
 const { prepareLwbProfile } = await import(pathToFileURL(join(runtime, 'lwb', 'profile-setup.mjs')))
 await prepareLwbProfile()
+installLwbEntryPolicy(new URL('./lib/main.js', import.meta.url))
 await import('./lib/main.js')

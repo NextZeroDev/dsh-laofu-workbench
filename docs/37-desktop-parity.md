@@ -15,7 +15,9 @@ npm run start:desktop
 
 启动器调用官方 `initProfile`，然后调用官方 Desktop 开发入口。pnpm 从 Desktop 自己的依赖解析，无需根目录 `.bin/pnpm`。不会修改上游源码。
 
-首次出现官方欢迎页时，可选择“添加 API Key → 稍后配置”进入工作台，随后从 LWB 设置配置模型。
+启动直接进入 LWB 工作台。DSH 账号是可选连接，在「设置 → DSH 系统设置」旁点击「登录 DSH」发起官方浏览器授权；成功后按钮变为「退出 DSH」。退出或会话过期后保留当前工作台页面，按钮恢复为「登录 DSH」，不会弹出官方欢迎窗口。模型和 API Key 仍通过「打开设置」配置。
+
+当前锁定的官方版本没有欢迎窗口策略配置，LWB 在 `entry-policy.mjs` 中维护一个受版本检查约束的内存适配：只调整主进程 `needsWelcome` 的界面决策。官方源码和构建文件不改写，官方账号授权、凭据管理及任务取消继续执行。开发入口和安装版 bootstrap 共用此适配；详见[扩展边界](38-dsh-extension-boundary.md)。
 
 开发入口默认本地端口 19487（可用 `LWB_DESKTOP_PORT` 覆盖），避免和单独安装的官方应用冲突。以终端启动命令为开发运行入口，官方开发 Dock 启动器不是 LWB 发行包。
 
@@ -41,8 +43,8 @@ npm run package:desktop:dir
 npm run package:desktop
 ```
 
-先按官方 `apps/desktop/.env.macos.example` 或 `.env.windows.example` 配置对应的本地文件，使用产品自己的 app ID、更新服务、签名与公证资料。命令复用官方 release 准备和 electron-builder 配置工厂，追加 LWB bootstrap 与资源，不修改官方 main 或 Host。
+先按官方 `apps/desktop/.env.macos.example` 或 `.env.windows.example` 配置对应的本地文件，使用产品自己的 app ID、更新服务、签名与公证资料。命令复用官方 release 准备和 electron-builder 配置工厂，追加 LWB bootstrap、入口策略与资源，不改写官方 main 或 Host 文件。
 
-安装版由 bootstrap 在系统 appData 下创建 `LaofuWorkbench` 数据根（可显式覆盖），将本次构建的产品资源放到可写 runtime 中，再通过公共 Profile API 装配 LWB，最后加载原封不动的官方 main。业务工作区在 runtime 外，能力包不静态启用。发布上传被禁用。
+安装版由 bootstrap 在系统 appData 下创建 `LaofuWorkbench` 数据根（可显式覆盖），将本次构建的产品资源放到可写 runtime 中，再通过公共 Profile API 装配 LWB，最后在加载官方 main 时应用上述入口策略。业务工作区在 runtime 外，能力包不静态启用。发布上传被禁用。
 
 当前仓库未配置 macOS 签名环境，因此已验证开发入口和打包预检报错路径；尚未生成、安装或验收签名发行包。Windows 打包也需在目标环境验收。详细边界与升级门禁见 [扩展边界](38-dsh-extension-boundary.md)。

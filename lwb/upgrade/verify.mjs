@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { assertUpstream, DSH_ROOT, UPSTREAM } from '../upstream.mjs'
 import { dshPackageDirectory } from '../dsh-bundle/dsh-adapter/package-paths.mjs'
+import { applyLwbEntryPolicy } from '../desktop/entry-policy.mjs'
 const result = assertUpstream()
 // Inspect the exact built exports consumed by both product clients. Renamed
 // upstream primitives must fail upgrade acceptance before opening a window.
@@ -15,4 +16,5 @@ for (const file of ['../dsh-bundle/client.js', '../packs/spoken-video/client.js'
 for (const path of ['apps/cli/lib/bin.js', 'apps/desktop/lib/main.js']) {
   if (!existsSync(join(DSH_ROOT, path))) throw new Error(`Missing official build: ${path}; run npm run setup`)
 }
+applyLwbEntryPolicy(readFileSync(join(DSH_ROOT, 'apps/desktop/lib/main.js'), 'utf8'))
 console.log(`LWB upstream contract passed: ${UPSTREAM.tag} (${result.commit}); official source clean.`)

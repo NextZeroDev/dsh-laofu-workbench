@@ -14,7 +14,7 @@ Web 和 Desktop 装配相同的三个基础模块：对话、场景能力包、�
 | --- | --- | --- |
 | 官方引擎与载体 | 干净的 `vendor/deepseek-harness` | 精确 commit、依赖安装、官方构建 |
 | Profile 装配 | `lwb/profile-setup.mjs`、Bundle 的 `cordis.patch.yml` | `initProfile`、包解析、配置行 ID |
-| Desktop 入口 | `lwb/desktop/dev.mjs`、`bootstrap.mjs`、`package-config.mjs` | 官方开发入口、资源布局、构建配置工厂 |
+| Desktop 入口 | `lwb/desktop/dev.mjs`、`bootstrap.mjs`、`package-config.mjs`、`entry-policy.mjs` | 官方开发入口、资源布局、构建配置工厂、欢迎窗口决策 |
 | 动态加载边界 | `lwb/dsh-bundle/dsh-adapter/` | Cordis Loader、活动状态、官方客户端 graph 同步 |
 | 产品与业务包 | Registry、Pack Services、SDK、`lwb/packs/` | 页面、业务服务、工作区隔离、卸载等待 |
 
@@ -23,6 +23,16 @@ Web 和 Desktop 装配相同的三个基础模块：对话、场景能力包、�
 `cordis.patch.yml` 是 DSH 官方 Bundle 的声明式组合机制，不是修改官方源码的文本补丁。原来的 `patch-upstream.mjs` 已删除。
 
 不能把“零源码补丁”理解成“升级永远零改动”。当前 Loader 的 `group.data`、`fiber.inertia`、内部状态枚举，以及客户端 slots、图标、服务方法、Profile 行 ID 和 Desktop 构建工厂都属于版本相关接缝；它们没有跨版本稳定性保证。适配只针对当前版本，不添加旧版本探测分支。
+
+### DSH 账号与桌面入口策略（2026-09-27）
+
+官方 Desktop 在退出账号且未配置 API Key 时，会通过 `needsWelcome` 再次打开原生欢迎窗口并隐藏工作台。当前版本没有可通过 Profile 配置的开关，因此这里存在一个明确的运行时适配例外：LWB 的 `entry-policy.mjs` 使用 Node 模块加载钩子，只对指定官方 `lib/main.js` 的欢迎窗口谓词做内存转换，首次加载后注销钩子。官方源码和磁盘构建产物保持原样；这不是官方稳定扩展 API，升级时必须审核。
+
+开发启动器以 `--import` 预加载策略，且只在 LWB 的 Electron browser 主进程安装；Host、构建子进程和 Web 不安装。发行版将策略作为独立文件打包，由 bootstrap 在导入官方 main 前安装。两种路径使用同一适配。
+
+未登录启动、主动退出、会话过期都保留 LWB 入口。设置页仍直接调用官方 `account.startSignIn`、`account.signOut` 并订阅 `account.watch`；桌面主进程仍按官方逻辑打开浏览器授权。账号状态和模型权限不被伪造，官方清理凭据与取消账号任务的行为不变，LWB 账号及场景能力包独立保留。
+
+启动加载与 `upstream:check` 校验精确谓词和三个调用点；不匹配时拒绝继续，要求审核适配。回归测试执行当前官方构建中的账号观察和启动分支，覆盖退出、过期、匿名启动、授权打开、加载钩子范围，以及真实 LWB 组件的按钮原位切换。
 
 ## 设置与数据
 

@@ -11,6 +11,7 @@ export async function createLwbPackageConfig(payload) {
   config.protocols = [{ name: 'Laofu Workbench', schemes: ['lwb'] }]
   config.extraMetadata = { ...config.extraMetadata, main: 'lwb-bootstrap.mjs' }
   config.files.push({ from: fileURLToPath(new URL('./bootstrap.mjs', import.meta.url)), to: 'lwb-bootstrap.mjs' })
+  config.files.push({ from: fileURLToPath(new URL('./entry-policy.mjs', import.meta.url)), to: 'lwb-entry-policy.mjs' })
   config.extraResources.push({ from: payload, to: 'lwb-product' })
   return config
 }
