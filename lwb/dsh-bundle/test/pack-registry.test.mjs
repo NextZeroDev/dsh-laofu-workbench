@@ -33,6 +33,23 @@ test('fails closed for package-id collisions', () => {
   assert.throws(() => registry.register({ ...manifest, packageName: '@example/other', name: 'other' }), /id collision/u)
 })
 
+test('projects service and entitlement declarations without exposing mutable state', () => {
+  const registry = new LwbPackRegistry()
+  registry.register({
+    ...manifest,
+    minHostVersion: '0.1.0',
+    requiredServices: ['tts'],
+    providers: ['ats', 'custom'],
+    entitlements: ['pack.spoken-video'],
+  })
+  const projected = registry.list()[0]
+  assert.deepEqual(projected.requiredServices, ['tts'])
+  assert.deepEqual(projected.providers, ['ats', 'custom'])
+  assert.deepEqual(projected.entitlements, ['pack.spoken-video'])
+  projected.requiredServices.push('subtitle')
+  assert.deepEqual(registry.list()[0].requiredServices, ['tts'])
+})
+
 test('projects only a revisioned DSH-served browser bundle for a mounted pack', () => {
   const bundle = projectClientBundle({
     entries: [{

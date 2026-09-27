@@ -5,6 +5,20 @@
   "name": "口播视频内容创作",
   "version": "0.1.0",
   "description": "从热点发现到视频制作，完成口播稿、配音字幕与发布资料，支持按账号定位创作和定时内容安排。",
+  "minHostVersion": "0.1.0",
+  "requiredServices": [
+    "tts",
+    "subtitle",
+    "cover-image"
+  ],
+  "providers": [
+    "official",
+    "ats",
+    "custom"
+  ],
+  "entitlements": [
+    "pack.spoken-video"
+  ],
   "market": {
     "category": "内容创作",
     "tags": [

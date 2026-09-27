@@ -20,6 +20,7 @@
 | [能力包开发入门](develop-a-pack.md) | 最小独立包与注册、加载、卸载 |
 | [总体架构](01-architecture.md) | 工作台与 DSH、业务包的职责边界 |
 | [能力包契约](12-capability-packs.md) | 清单、host/client 贡献及当前口播流程 |
+| [ATS 服务、能力包权益与多模型来源方案](39-ats-capability-service-and-pack-entitlements.md) | 公开能力包、ATS 账号权益、Provider 路由与仓库边界 |
 | [工作区与执行作用域](29-pack-owned-workspaces.md) | 生命周期、默认模型复用、任务及凭据隔离 |
 | [统一执行详情](32-execution-details.md) | 业务任务与 DSH 原生会话展示 |
 | [上游锁定](08-base-lock.md) | 运行时版本、构建和回滚边界 |
