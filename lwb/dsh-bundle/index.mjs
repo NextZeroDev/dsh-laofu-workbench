@@ -5,7 +5,7 @@ const PROFILE_ID = LWB_RUNTIME.profileId
 
 // The pack runtime projects Loader-managed browser bundles through DSH's
 // client-module graph. Declare both host services at the bundle boundary.
-export const inject = ['loader', 'clientModules', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel']
+export const inject = ['loader', 'clientModules', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel', 'webServer']
 
 import { LwbPackWorkspaces } from './pack-workspaces.mjs'
 import { LwbPackServices } from './pack-services.mjs'

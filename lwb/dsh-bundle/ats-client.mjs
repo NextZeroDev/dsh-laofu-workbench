@@ -11,6 +11,37 @@ function normalizeBaseUrl(value) {
 }
 function errorWithCode(message, code, status) { const error = new Error(message); error.code = code; if (status) error.status = status; return error }
 
+function normalizePublicPackage(value) {
+  if (!value || typeof value !== 'object') return null
+  const packageValue = value
+  const code = text(packageValue.code)
+  if (!code) return null
+  return {
+    code,
+    name: text(packageValue.name) || code,
+    amountCents: Number.isFinite(packageValue.amountCents) ? packageValue.amountCents : 0,
+    pointsAmount: Number.isFinite(packageValue.pointsAmount) ? packageValue.pointsAmount : 0,
+    bonusPoints: Number.isFinite(packageValue.bonusPoints) ? packageValue.bonusPoints : 0,
+    totalPoints: Number.isFinite(packageValue.totalPoints) ? packageValue.totalPoints : 0,
+  }
+}
+
+function normalizePublicPlan(value) {
+  if (!value || typeof value !== 'object') return null
+  const plan = value
+  const code = text(plan.code)
+  if (!code) return null
+  return {
+    code,
+    name: text(plan.name) || code,
+    monthlyPriceCents: Number.isFinite(plan.monthlyPriceCents) ? plan.monthlyPriceCents : 0,
+    monthlyPointsGrant: Number.isFinite(plan.monthlyPointsGrant) ? plan.monthlyPointsGrant : 0,
+    priceDiscount: Number.isFinite(plan.priceDiscount) ? plan.priceDiscount : 1,
+    rpmLimit: Number.isFinite(plan.rpmLimit) ? plan.rpmLimit : undefined,
+    maxApiKeys: Number.isFinite(plan.maxApiKeys) ? plan.maxApiKeys : undefined,
+  }
+}
+
 /** Host-owned ATS protocol. Tokens never cross the browser RPC boundary. */
 export class LwbAtsClient {
   constructor({ credentials, fetch = globalThis.fetch, baseUrl, deviceId, deviceName } = {}) {
@@ -55,5 +86,30 @@ export class LwbAtsClient {
   }
   async logout() { const session = await this.readSession(); if (session?.refreshToken) await this.raw('/api/auth/logout', { method: 'POST', body: { refreshToken: session.refreshToken } }).catch(() => undefined); await this.clearSession(); return { ok: true } }
   async status() { const [user, membership, points] = await Promise.all([this.request('/api/auth/me'), this.request('/api/membership/current'), this.request('/api/points/account')]); return { user, membership, points, entitlements: null } }
+  async rechargePackages() {
+    const payload = await this.request('/api/recharge-packages')
+    return Array.isArray(payload) ? payload.map(normalizePublicPackage).filter(Boolean) : []
+  }
+  async membershipPlans() {
+    const payload = await this.request('/api/membership/plans')
+    return Array.isArray(payload) ? payload.map(normalizePublicPlan).filter(Boolean) : []
+  }
+  async createPayment({ type, code }) {
+    if (type !== 'recharge' && type !== 'membership') throw errorWithCode('不支持的购买类型。', 'LWB_ATS_INVALID_PURCHASE')
+    const normalizedCode = text(code)
+    if (!normalizedCode) throw errorWithCode('购买套餐缺少编码。', 'LWB_ATS_INVALID_PURCHASE')
+    const order = await this.request('/api/orders', { method: 'POST', body: { type, code: normalizedCode } })
+    const orderId = text(order?.id)
+    if (!orderId) throw errorWithCode('ATS 创建订单响应缺少订单编号。', 'LWB_ATS_PROTOCOL_ERROR')
+    const payment = await this.request(`/api/orders/${encodeURIComponent(orderId)}/pay/alipay`, { method: 'POST' })
+    const paymentFormHtml = text(payment?.paymentFormHtml)
+    if (!paymentFormHtml) throw errorWithCode('ATS 支付响应缺少收银台页面。', 'LWB_ATS_PROTOCOL_ERROR')
+    return { orderId: text(payment?.orderId) || orderId, orderNo: text(payment?.orderNo) || text(order?.orderNo) || orderId, paymentFormHtml }
+  }
+  async orderStatus(orderId) {
+    const normalizedId = text(orderId)
+    if (!normalizedId) throw errorWithCode('订单编号不能为空。', 'LWB_ATS_INVALID_ORDER')
+    return this.request(`/api/orders/${encodeURIComponent(normalizedId)}`)
+  }
 }
-export { DEFAULT_BASE_URL, SESSION_REF, normalizeBaseUrl }
+export { DEFAULT_BASE_URL, SESSION_REF, normalizeBaseUrl, normalizePublicPackage, normalizePublicPlan }

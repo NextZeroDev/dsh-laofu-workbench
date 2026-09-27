@@ -47,3 +47,52 @@ test('refresh failure clears credentials and unauthenticated calls do not touch 
   await client.login({ account: 'user', password: 'password123' }).catch(() => {})
   assert.equal(values.has('lwb-ats-session'), false)
 })
+
+test('purchase catalogs use authenticated requests and normalize public DTOs', async () => {
+  const calls = []
+  const { client } = setup(async (url, options) => {
+    calls.push([url, options])
+    if (url.endsWith('/auth/login')) return response(200, { accessToken: 'access', refreshToken: 'refresh', user: { id: '1', email: 'user@example.com' } })
+    if (url.endsWith('/api/recharge-packages')) return response(200, [{ code: 'starter', name: '入门包', amountCents: 1200, pointsAmount: 100000, bonusPoints: 10000, totalPoints: 110000 }])
+    if (url.endsWith('/api/membership/plans')) return response(200, [{ code: 'pro', name: '专业版', monthlyPriceCents: 3900, monthlyPointsGrant: 500000, priceDiscount: 0.8, maxApiKeys: 5, rpmLimit: 120 }])
+    throw new Error(`unexpected request: ${url}`)
+  })
+  await client.login({ account: 'user', password: 'password123' })
+  assert.deepEqual(await client.rechargePackages(), [{ code: 'starter', name: '入门包', amountCents: 1200, pointsAmount: 100000, bonusPoints: 10000, totalPoints: 110000 }])
+  assert.deepEqual(await client.membershipPlans(), [{ code: 'pro', name: '专业版', monthlyPriceCents: 3900, monthlyPointsGrant: 500000, priceDiscount: 0.8, maxApiKeys: 5, rpmLimit: 120 }])
+  assert.equal(calls.filter(([url]) => url.endsWith('/api/recharge-packages')).length, 1)
+  assert.equal(calls.filter(([url]) => url.endsWith('/api/membership/plans')).length, 1)
+  for (const [url, options] of calls.slice(1)) assert.equal(options.headers.authorization, 'Bearer access', url)
+})
+
+test('createPayment creates an order and then requests an Alipay form', async () => {
+  const calls = []
+  const { client } = setup(async (url, options) => {
+    calls.push([url, options])
+    if (url.endsWith('/auth/login')) return response(200, { accessToken: 'access', refreshToken: 'refresh', user: { id: '1' } })
+    if (url.endsWith('/api/orders')) return response(200, { id: '123', orderNo: 'ATS-123' })
+    if (url.includes('/api/orders/123/pay/alipay')) return response(200, { orderId: '123', orderNo: 'ATS-123', paymentFormHtml: '<form>pay</form>' })
+    throw new Error(`unexpected request: ${url}`)
+  })
+  await client.login({ account: 'user', password: 'password123' })
+  const payment = await client.createPayment({ type: 'recharge', code: 'starter' })
+  assert.deepEqual(payment, { orderId: '123', orderNo: 'ATS-123', paymentFormHtml: '<form>pay</form>' })
+  assert.equal(calls[1][0].endsWith('/api/orders'), true)
+  assert.deepEqual(JSON.parse(calls[1][1].body), { type: 'recharge', code: 'starter' })
+  assert.equal(calls[2][0].endsWith('/api/orders/123/pay/alipay'), true)
+  assert.equal(calls[2][1].method, 'POST')
+})
+
+test('orderStatus queries the authenticated order endpoint', async () => {
+  const calls = []
+  const { client } = setup(async (url, options) => {
+    calls.push([url, options])
+    if (url.endsWith('/auth/login')) return response(200, { accessToken: 'access', refreshToken: 'refresh', user: { id: '1' } })
+    if (url.endsWith('/api/orders/123')) return response(200, { status: 'paid', terminal: true, shouldRefreshAccount: true, paidAt: '2026-09-27T00:00:00.000Z' })
+    throw new Error(`unexpected request: ${url}`)
+  })
+  await client.login({ account: 'user', password: 'password123' })
+  assert.deepEqual(await client.orderStatus('123'), { status: 'paid', terminal: true, shouldRefreshAccount: true, paidAt: '2026-09-27T00:00:00.000Z' })
+  assert.equal(calls[1][0], 'https://ats.example.test/api/orders/123')
+  assert.equal(calls[1][1].headers.authorization, 'Bearer access')
+})

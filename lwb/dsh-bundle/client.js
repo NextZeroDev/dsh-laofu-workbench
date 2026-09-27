@@ -190,7 +190,7 @@ window.__ModuleLoader__.load({
         capabilityPageFailed: '能力包页面暂时不可用', capabilityPageFailedCopy: '该页面未能正常渲染。工作台导航仍可用，可返回对话或打开场景能力包。',
         returnToConversation: '返回对话', viewPacks: '查看能力包',
         about: '关于', runtime: '运行方式', runtimeHint: '基于 DeepSeek Harness（DSH）构建的本机单用户工作台。', connected: '已连接', connecting: '连接中', disconnected: '连接已断开', basicConfiguration: '基础配置', systemSettings: '系统设置', systemSettingsHint: '配置语言与外观、模型服务、权限、插件及 Agent 预设。', openRuntimeSettings: '打开设置',
-        lwbAccount: 'LWB 账号', lwbAccountHint: '管理 LWB 服务账号、会员权益和可用积分。', lwbLogin: '登录', lwbRegister: '注册', lwbLogout: '退出登录', lwbEmail: '账号或邮箱', lwbPassword: '密码', lwbConfirmPassword: '确认密码', lwbActivationCode: '激活码（可选）', lwbNotLoggedIn: '尚未登录 LWB 账号。', lwbAccountLoading: '正在读取账号状态…', lwbAccountFailed: '账号状态暂时不可用。', lwbLoginSuccess: '登录成功。', lwbRegisterSuccess: '注册成功。', lwbMembership: '会员套餐', lwbPoints: '可用积分', lwbFrozenPoints: '冻结积分', lwbNoMembership: '免费版', lwbEntitlementsUnavailable: '能力包权益将在服务端接入后显示。', lwbSwitchToRegister: '注册新账号', lwbSwitchToLogin: '已有账号，去登录', lwbSubmit: '提交',
+        lwbAccount: 'LWB 账号', lwbAccountHint: '管理 LWB 服务账号、会员权益和可用积分。', lwbLogin: '登录', lwbRegister: '注册', lwbLogout: '退出登录', lwbEmail: '账号或邮箱', lwbPassword: '密码', lwbConfirmPassword: '确认密码', lwbActivationCode: '激活码（可选）', lwbNotLoggedIn: '尚未登录 LWB 账号。', lwbAccountLoading: '正在读取账号状态…', lwbAccountFailed: '账号状态暂时不可用。', lwbLoginSuccess: '登录成功。', lwbRegisterSuccess: '注册成功。', lwbMembership: '会员套餐', lwbPoints: '可用积分', lwbFrozenPoints: '冻结积分', lwbNoMembership: '免费版', lwbEntitlementsUnavailable: '能力包权益将在服务端接入后显示。', lwbSwitchToRegister: '注册新账号', lwbSwitchToLogin: '已有账号，去登录', lwbSubmit: '提交', lwbPurchase: '购买积分与会员', lwbPurchaseHint: '选择套餐后打开支付宝收银台，支付成功后自动同步账户状态。', lwbRefreshPackages: '刷新套餐', lwbRechargePackages: '积分包', lwbMembershipPlans: '会员套餐', lwbNoPackages: '暂无可购买套餐。', lwbLoginToPurchase: '登录 LWB 账号后可查看和购买套餐。', lwbPointsAmount: '到账积分', lwbBonusPoints: '赠送积分', lwbMonthlyPoints: '每月赠送', lwbMonthlyPrice: '月费', lwbPriceDiscount: '模型折扣', lwbRpmLimit: '请求限制', lwbMaxApiKeys: 'API Key 数量', lwbCurrentPlan: '当前套餐', lwbPayAlipay: '支付宝支付', lwbOpenPayment: '打开收银台', lwbCheckPayment: '检查支付状态', lwbClearOrder: '清除订单', lwbCreatingOrder: '创建订单中…', lwbOrderCreated: (orderNo) => `订单 ${orderNo} 已创建，支付成功后将自动同步积分和会员状态。`, lwbOrderCreatedBlocked: (orderNo) => `订单 ${orderNo} 已创建，但收银台未打开，请重新打开。`, lwbOrderPending: '订单待支付，到账后将自动同步。', lwbPaymentSuccess: '支付成功，积分和会员状态已同步。', lwbPaymentCancelled: '订单已取消，未扣款。', lwbPaymentFailed: '订单支付失败，请重新创建订单。', lwbPaymentExpired: '订单已结束，请刷新账户确认到账状态。', lwbPaymentTimeout: '支付状态查询已超时，请稍后刷新账户状态。', lwbPackageLoadFailed: '套餐信息暂时不可用。',
         packsIntro: '基础版暂未预装场景能力包；加载后的能力包会实时注入左侧菜单。', settingsIntro: '管理工作台的系统配置与偏好。', capabilityIntro: '已加载能力包的页面入口。',
       },
       en: {
@@ -229,7 +229,7 @@ window.__ModuleLoader__.load({
         capabilityPageFailed: 'Capability page is temporarily unavailable', capabilityPageFailedCopy: 'This page could not render. Workbench navigation remains available, so you can return to the conversation or open capability packs.',
         returnToConversation: 'Back to conversation', viewPacks: 'View capability packs',
         about: 'ABOUT', runtime: 'Runtime', runtimeHint: 'A local single-user workbench built on DeepSeek Harness (DSH).', connected: 'Connected', connecting: 'Connecting', disconnected: 'Disconnected', basicConfiguration: 'BASIC CONFIGURATION', systemSettings: 'System settings', systemSettingsHint: 'Configure language, appearance, model providers, permissions, plugins, and agent presets.', openRuntimeSettings: 'Open settings',
-        lwbAccount: 'LWB account', lwbAccountHint: 'Manage the LWB service account, membership, and available points.', lwbLogin: 'Sign in', lwbRegister: 'Register', lwbLogout: 'Sign out', lwbEmail: 'Account or email', lwbPassword: 'Password', lwbConfirmPassword: 'Confirm password', lwbActivationCode: 'Activation code (optional)', lwbNotLoggedIn: 'No LWB account is signed in.', lwbAccountLoading: 'Loading account status...', lwbAccountFailed: 'Account status is temporarily unavailable.', lwbLoginSuccess: 'Signed in successfully.', lwbRegisterSuccess: 'Account created successfully.', lwbMembership: 'Membership', lwbPoints: 'Available points', lwbFrozenPoints: 'Frozen points', lwbNoMembership: 'Free', lwbEntitlementsUnavailable: 'Capability pack entitlements will appear after the service endpoint is connected.', lwbSwitchToRegister: 'Create an account', lwbSwitchToLogin: 'Already have an account? Sign in', lwbSubmit: 'Submit',
+        lwbAccount: 'LWB account', lwbAccountHint: 'Manage the LWB service account, membership, and available points.', lwbLogin: 'Sign in', lwbRegister: 'Register', lwbLogout: 'Sign out', lwbEmail: 'Account or email', lwbPassword: 'Password', lwbConfirmPassword: 'Confirm password', lwbActivationCode: 'Activation code (optional)', lwbNotLoggedIn: 'No LWB account is signed in.', lwbAccountLoading: 'Loading account status...', lwbAccountFailed: 'Account status is temporarily unavailable.', lwbLoginSuccess: 'Signed in successfully.', lwbRegisterSuccess: 'Account created successfully.', lwbMembership: 'Membership', lwbPoints: 'Available points', lwbFrozenPoints: 'Frozen points', lwbNoMembership: 'Free', lwbEntitlementsUnavailable: 'Capability pack entitlements will appear after the service endpoint is connected.', lwbSwitchToRegister: 'Create an account', lwbSwitchToLogin: 'Already have an account? Sign in', lwbSubmit: 'Submit', lwbPurchase: 'Buy points and membership', lwbPurchaseHint: 'Choose a plan to open the Alipay checkout. Account status syncs after payment.', lwbRefreshPackages: 'Refresh plans', lwbRechargePackages: 'Point packages', lwbMembershipPlans: 'Membership plans', lwbNoPackages: 'No plans are available.', lwbLoginToPurchase: 'Sign in to view and buy plans.', lwbPointsAmount: 'Points', lwbBonusPoints: 'Bonus points', lwbMonthlyPoints: 'Monthly points', lwbMonthlyPrice: 'Monthly price', lwbPriceDiscount: 'Model discount', lwbRpmLimit: 'Request limit', lwbMaxApiKeys: 'API keys', lwbCurrentPlan: 'Current plan', lwbPayAlipay: 'Pay with Alipay', lwbOpenPayment: 'Open checkout', lwbCheckPayment: 'Check payment', lwbClearOrder: 'Clear order', lwbCreatingOrder: 'Creating order...', lwbOrderCreated: (orderNo) => `Order ${orderNo} created. Points and membership will sync after payment.`, lwbOrderCreatedBlocked: (orderNo) => `Order ${orderNo} created, but checkout did not open. Reopen it below.`, lwbOrderPending: 'Order is pending. Account will sync after payment.', lwbPaymentSuccess: 'Payment succeeded. Points and membership are synced.', lwbPaymentCancelled: 'Order cancelled. No charge was made.', lwbPaymentFailed: 'Payment failed. Create a new order and try again.', lwbPaymentExpired: 'Order ended. Refresh the account to confirm the result.', lwbPaymentTimeout: 'Payment status polling timed out. Refresh the account later.', lwbPackageLoadFailed: 'Plans are temporarily unavailable.',
         packsIntro: 'The base release has no scenario capability packs preinstalled; loaded packs will appear in the left menu.', settingsIntro: 'Manage the workbench’s system configuration and preferences.', capabilityIntro: 'Entry point for the loaded capability pack.',
       },
     };
@@ -492,8 +492,9 @@ window.__ModuleLoader__.load({
       .lwb-pack-empty { border:1px dashed #d6dee7; border-radius:7px; color:#82909e; background:#fbfcfd; font-size:var(--lwb-text-base,14px); }
       .lwb-settings-list { display:block; overflow:hidden; } .lwb-settings-section { padding:13px 19px 7px; color:#7a8997; background:#fbfcfd; font-size:var(--lwb-text-xs,12px); font-weight:800; letter-spacing:.08em; } .lwb-setting-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:17px 19px; border-bottom:1px solid var(--lwb-line); } .lwb-setting-row:last-child { border-bottom:0; } .lwb-setting-copy > strong { display:block; font-size:var(--lwb-text-md,15px); } .lwb-setting-copy > span { display:block; margin-top:5px; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); line-height:1.5; } .lwb-select { min-width:110px; height:32px; padding:0 8px; border:1px solid #d7e0e9; border-radius:6px; color:#4f6071; background:#fff; font-size:var(--lwb-text-base,14px); } .lwb-field { display:grid; gap:6px; } .lwb-field label { color:#566879; font-size:var(--lwb-text-sm,13px); font-weight:700; } .lwb-input { width:100%; height:34px; padding:0 10px; border:1px solid #d8e2ec; border-radius:6px; outline:0; color:#40505f; background:#fff; font-size:var(--lwb-text-base,14px); } .lwb-input:focus,.lwb-select:focus { border-color:#9fc0f4; box-shadow:0 0 0 2px #eef5ff; } .lwb-form { display:grid; gap:14px; } .lwb-modal-title { margin:0; color:#253646; font-size:var(--lwb-text-heading,20px); } .lwb-modal-copy { margin:6px 0 0; color:#7a8997; font-size:var(--lwb-text-sm,13px); line-height:1.55; } .lwb-dialog-error { margin:0; padding:9px 10px; border:1px solid #efcfcf; border-radius:6px; color:#a54848; background:#fff7f7; font-size:var(--lwb-text-sm,13px); line-height:1.45; }
       .lwb-account-setting-body { padding:0 19px 20px; } .lwb-account-panel { display:grid; gap:15px; padding:16px; border:1px solid var(--lwb-line); border-radius:7px; background:var(--lwb-page); } .lwb-account-meta { display:flex; min-width:0; align-items:baseline; justify-content:space-between; gap:12px; } .lwb-account-meta strong { overflow:hidden; color:var(--lwb-ink); font-size:var(--lwb-text-md,15px); text-overflow:ellipsis; white-space:nowrap; } .lwb-account-meta span,.lwb-account-muted { color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-account-stat-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .lwb-account-stat-grid > div { display:grid; gap:4px; min-width:0; padding:11px 12px; border:1px solid var(--lwb-line); border-radius:6px; background:var(--lwb-surface); } .lwb-account-stat-grid span,.lwb-account-stat-grid small { color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); } .lwb-account-stat-grid strong { overflow:hidden; color:var(--lwb-ink); font-size:var(--lwb-text-md,15px); text-overflow:ellipsis; white-space:nowrap; } .lwb-account-form { max-width:520px; } .lwb-account-mode { display:flex; align-items:center; justify-content:space-between; gap:12px; } .lwb-link-button { padding:0; border:0; color:var(--lwb-blue); background:transparent; font:inherit; font-size:var(--lwb-text-sm,13px); cursor:pointer; } .lwb-link-button:hover { text-decoration:underline; } .lwb-account-notice { margin:0; padding:9px 10px; border:1px solid #b9dfca; border-radius:6px; color:#24714f; background:#f1fbf5; font-size:var(--lwb-text-sm,13px); line-height:1.45; }
+      .lwb-purchase-section { display:grid; gap:13px; padding-top:2px; border-top:1px solid var(--lwb-line); } .lwb-purchase-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; } .lwb-purchase-heading strong { display:block; color:var(--lwb-ink); font-size:var(--lwb-text-md,15px); } .lwb-purchase-heading p { margin:4px 0 0; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); line-height:1.45; } .lwb-purchase-tabs { display:flex; gap:4px; border-bottom:1px solid var(--lwb-line); } .lwb-purchase-tabs button { min-height:34px; padding:0 11px; border:0; border-bottom:2px solid transparent; color:var(--lwb-muted); background:transparent; font:inherit; font-size:var(--lwb-text-sm,13px); cursor:pointer; } .lwb-purchase-tabs button:hover { color:var(--lwb-blue); } .lwb-purchase-tabs button.active { border-bottom-color:var(--lwb-blue); color:var(--lwb-blue); font-weight:700; } .lwb-purchase-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:9px; } .lwb-purchase-card { display:grid; min-width:0; gap:7px; padding:12px; border:1px solid var(--lwb-line); border-radius:6px; background:var(--lwb-surface); } .lwb-purchase-card strong { overflow:hidden; color:var(--lwb-ink); font-size:var(--lwb-text-base,14px); text-overflow:ellipsis; white-space:nowrap; } .lwb-purchase-card b { color:var(--lwb-blue); font-size:var(--lwb-text-lg,16px); font-variant-numeric:tabular-nums; } .lwb-purchase-card span { color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); line-height:1.4; } .lwb-purchase-card .lwb-primary-button { width:100%; margin-top:3px; } .lwb-payment-status { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 11px; border:1px solid #c7d9ef; border-radius:6px; color:var(--lwb-ink); background:var(--lwb-blue-soft); } .lwb-payment-status > div:first-child { display:grid; min-width:0; gap:2px; } .lwb-payment-status strong { overflow:hidden; font-size:var(--lwb-text-sm,13px); text-overflow:ellipsis; white-space:nowrap; } .lwb-payment-status span { color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); } .lwb-payment-status[data-status="paid"] { border-color:#b9dfca; background:var(--lwb-green-soft); } .lwb-payment-status[data-status="cancelled"],.lwb-payment-status[data-status="canceled"],.lwb-payment-status[data-status="failed"],.lwb-payment-status[data-status="expired"] { border-color:#e7c6c6; background:#fff6f6; } .lwb-payment-status .lwb-row-actions { flex:none; }
       .lwb-account-setting-row { align-items:flex-start; } .lwb-account-setting-row > .lwb-status { flex:none; }
-      body[data-ds-dark-theme] .lwb-account-panel { border-color:var(--lwb-line); background:#1b2733; } body[data-ds-dark-theme] .lwb-account-stat-grid > div { border-color:var(--lwb-line); background:#23313f; } body[data-ds-dark-theme] .lwb-account-notice { border-color:#376b56; color:#8fe0b5; background:#17372d; }
+      body[data-ds-dark-theme] .lwb-account-panel { border-color:var(--lwb-line); background:#1b2733; } body[data-ds-dark-theme] .lwb-account-stat-grid > div { border-color:var(--lwb-line); background:#23313f; } body[data-ds-dark-theme] .lwb-account-notice { border-color:#376b56; color:#8fe0b5; background:#17372d; } body[data-ds-dark-theme] .lwb-purchase-card { border-color:var(--lwb-line); background:#23313f; } body[data-ds-dark-theme] .lwb-payment-status[data-status="cancelled"],body[data-ds-dark-theme] .lwb-payment-status[data-status="canceled"],body[data-ds-dark-theme] .lwb-payment-status[data-status="failed"],body[data-ds-dark-theme] .lwb-payment-status[data-status="expired"] { border-color:#754b4b; background:#3f292b; }
       .lwb-modal-backdrop { position:fixed; z-index:20; inset:0; display:grid; place-items:center; padding:24px; background:rgba(27,39,53,.28); pointer-events:auto; } .lwb-pack-drawer-backdrop { position:fixed; z-index:20; inset:0; display:flex; justify-content:flex-end; background:rgba(27,39,53,.28); pointer-events:auto; } .lwb-pack-detail { width:min(560px,100%); max-height:min(720px,calc(100vh - 48px)); overflow:auto; padding:21px; } .lwb-pack-drawer { width:min(510px,100%); height:100%; max-height:none; padding:24px; border-radius:0; box-shadow:-12px 0 32px rgba(20,34,49,.13); } .lwb-pack-detail-head { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; margin-bottom:17px; } .lwb-pack-detail-head h2 { margin:0; font-size:var(--lwb-text-heading,20px); } .lwb-pack-detail-head p { margin:5px 0 0; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-detail-close { width:30px; height:30px; border:1px solid #d7e0e9; border-radius:6px; color:#647487; background:#fff; cursor:pointer; } .lwb-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin-bottom:17px; } .lwb-detail-fact { padding:12px; border:1px solid #e5e9ee; border-radius:6px; background:#fbfcfd; } .lwb-detail-fact small { display:block; color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); } .lwb-detail-fact strong { display:block; margin-top:5px; color:#334456; font-size:var(--lwb-text-base,14px); } .lwb-detail-section { padding:14px 0; border-top:1px solid var(--lwb-line); } .lwb-detail-section h3 { margin:0 0 10px; color:#5d6d7d; font-size:var(--lwb-text-sm,13px); letter-spacing:.04em; } .lwb-detail-menu { display:grid; gap:7px; } .lwb-detail-menu-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #e7ebef; border-radius:6px; color:#4d5e6f; background:#fff; font-size:var(--lwb-text-sm,13px); } .lwb-detail-menu-row b { color:var(--lwb-blue); font-size:var(--lwb-text-md,15px); } .lwb-workflow-list { display:grid; gap:7px; padding:0; margin:0; list-style:none; } .lwb-workflow-list li { display:flex; gap:8px; align-items:flex-start; color:var(--lwb-ink); font-size:var(--lwb-text-base,14px); line-height:1.5; } .lwb-workflow-list i { color:var(--lwb-blue); font-style:normal; }
       .lwb-mobile-nav-trigger,.lwb-mobile-conversation-trigger,.lwb-mobile-nav-backdrop { display:none; }
       @media (max-width:680px) { :root { --lwb-sidebar-width:0px !important; } .lwb-sidebar { position:fixed; z-index:80; top:0; bottom:0; left:0; width:248px; transform:translateX(-105%); transition:transform .18s ease; box-shadow:10px 0 30px rgba(24,39,56,.18); } .lwb-sidebar[data-mobile-open="true"] { transform:translateX(0); } .lwb-conversation-overlay,.lwb-overlay { inset:0; } .lwb-conversation-pane { position:fixed; z-index:60; top:0; bottom:0; left:0; transform:translateX(-105%); transition:transform .18s ease; box-shadow:8px 0 26px rgba(24,39,56,.18); } .lwb-conversation-overlay[data-open="true"] .lwb-conversation-pane { transform:translateX(0); } .lwb-conversation-backdrop { position:fixed; z-index:55; inset:0; border:0; background:rgba(24,39,56,.24); } .lwb-conversation-overlay[data-open="true"] .lwb-conversation-backdrop,.lwb-conversation-close { display:block; } .lwb-mobile-nav-trigger,.lwb-mobile-conversation-trigger { position:fixed; z-index:70; top:13px; display:grid; width:32px; height:32px; place-items:center; border:1px solid #dbe4ec; border-radius:6px; background:#fff; cursor:pointer; } .lwb-mobile-nav-trigger { left:12px; } .lwb-mobile-conversation-trigger { left:52px; } .lwb-mobile-nav-backdrop { position:fixed; z-index:75; inset:0; border:0; background:rgba(24,39,56,.24); } .lwb-overlay-head { padding-left:96px; } .lwb-page { padding:24px 16px 40px; } .lwb-page-intro,.lwb-setting-row { display:block; } .lwb-page-intro .lwb-row-actions { margin-top:14px; } .lwb-history-row-actions { opacity:1; pointer-events:auto; } .lwb-market-controls { grid-template-columns:1fr; } .lwb-pack-drawer { width:min(100%,430px); padding:20px; } }
@@ -531,6 +532,9 @@ window.__ModuleLoader__.load({
         .lwb-market-controls { grid-template-columns:1fr; }
         .lwb-sidebar .lwb-nav-item,.lwb-plain-button,.lwb-primary-button,.lwb-danger-button { min-height:44px; }
         .lwb-input,.lwb-select,.lwb-market-search,.lwb-conversation-search { font-size:16px; }
+        .lwb-purchase-heading,.lwb-payment-status { display:grid; }
+        .lwb-payment-status .lwb-row-actions { justify-content:flex-start; }
+        .lwb-purchase-grid { grid-template-columns:1fr; }
       }
       /* Pack details: a native modal keeps background controls inert and traps focus. */
       .lwb-pack-dialog { box-sizing:border-box; position:fixed; inset:0 0 0 auto; margin:0; width:min(760px,100vw); max-width:100vw; height:100dvh; max-height:100dvh; padding:0; border:0; border-left:1px solid var(--lwb-line); border-radius:0; background:var(--lwb-surface); color:var(--lwb-ink); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; font-size:14px; line-height:1.6; box-shadow:-16px 0 60px rgba(20,34,49,.14); overflow:hidden; }
@@ -1293,10 +1297,86 @@ window.__ModuleLoader__.load({
       const [activationCode, setActivationCode] = React.useState('');
       const [formError, setFormError] = React.useState('');
       const [notice, setNotice] = React.useState('');
+      const [purchaseTab, setPurchaseTab] = React.useState('recharge');
+      const [purchaseOptions, setPurchaseOptions] = React.useState({ phase: 'idle', packages: [], plans: [], error: null });
+      const [pendingPayment, setPendingPayment] = React.useState(null);
+      const [purchasingCode, setPurchasingCode] = React.useState('');
       const connectionLabel = connectionState === 'connected' ? copy.connected : connectionState === 'disconnected' ? copy.disconnected : copy.connecting;
       React.useEffect(() => {
         if (connectionState === 'connected') void refreshLwbAccount();
       }, [connectionState]);
+      React.useEffect(() => {
+        if (account.phase === 'authenticated') void loadPurchaseOptions(false);
+        else setPurchaseOptions({ phase: 'idle', packages: [], plans: [], error: null });
+      }, [account.phase]);
+      React.useEffect(() => {
+        if (!pendingPayment || pendingPayment.status !== 'pending') return undefined;
+        let cancelled = false;
+        let timer;
+        const poll = async () => {
+          try {
+            const result = await lwbAccountRpc('orderStatus', { request: { orderId: pendingPayment.orderId } });
+            if (cancelled) return;
+            const status = String(result?.status || result?.orderStatus || '').toLowerCase();
+            if (status === 'paid' || status === 'success' || result?.paid === true) {
+              setPendingPayment((current) => current?.orderId === pendingPayment.orderId ? { ...current, status: 'paid' } : current);
+              await refreshLwbAccount();
+              setNotice(copy.lwbPaymentSuccess);
+              return;
+            }
+            if (['cancelled', 'canceled', 'failed', 'expired'].includes(status)) {
+              setPendingPayment((current) => current?.orderId === pendingPayment.orderId ? { ...current, status } : current);
+              setNotice(status === 'cancelled' || status === 'canceled' ? copy.lwbPaymentCancelled : status === 'failed' ? copy.lwbPaymentFailed : copy.lwbPaymentExpired);
+              return;
+            }
+          } catch (_) {}
+          if (!cancelled) timer = window.setTimeout(() => void poll(), 2500);
+        };
+        timer = window.setTimeout(() => void poll(), 1200);
+        return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+      }, [pendingPayment?.orderId, pendingPayment?.status]);
+      async function loadPurchaseOptions(showNotice = true) {
+        if (account.phase !== 'authenticated') return;
+        setPurchaseOptions((current) => Object.assign({}, current, { phase: 'loading', error: null }));
+        try {
+          const [packages, plans] = await Promise.all([
+            lwbAccountRpc('rechargePackages'),
+            lwbAccountRpc('membershipPlans'),
+          ]);
+          setPurchaseOptions({ phase: 'ready', packages: Array.isArray(packages) ? packages : [], plans: Array.isArray(plans) ? plans : [], error: null });
+        } catch (error) {
+          setPurchaseOptions({ phase: 'error', packages: [], plans: [], error: error?.message || copy.lwbPackageLoadFailed });
+          if (showNotice) setNotice(error?.message || copy.lwbPackageLoadFailed);
+        }
+      }
+      async function openPayment(payment) {
+        const opened = window.open(payment.paymentPageUrl, '_blank', 'noopener,noreferrer');
+        return Boolean(opened);
+      }
+      async function createPurchase(type, code) {
+        if (account.phase !== 'authenticated') { setNotice(copy.lwbLoginToPurchase); return; }
+        setPurchasingCode(`${type}:${code}`); setNotice('');
+        try {
+          const payment = await lwbAccountRpc('createPayment', { request: { type, code } });
+          const pending = { orderId: payment.orderId, orderNo: payment.orderNo, paymentPageUrl: payment.paymentPageUrl, type, status: 'pending' };
+          const opened = await openPayment(pending);
+          setPendingPayment(pending);
+          setNotice(opened ? copy.lwbOrderCreated(payment.orderNo) : copy.lwbOrderCreatedBlocked(payment.orderNo));
+        } catch (error) { setNotice(error?.message || copy.lwbPaymentFailed); }
+        finally { setPurchasingCode(''); }
+      }
+      async function checkPendingPayment() {
+        if (!pendingPayment || pendingPayment.status !== 'pending') return;
+        try {
+          const result = await lwbAccountRpc('orderStatus', { request: { orderId: pendingPayment.orderId } });
+          const status = String(result?.status || result?.orderStatus || '').toLowerCase();
+          if (status === 'paid' || status === 'success' || result?.paid === true) {
+            setPendingPayment((current) => current ? Object.assign({}, current, { status: 'paid' }) : current);
+            await refreshLwbAccount(); setNotice(copy.lwbPaymentSuccess); return;
+          }
+          setNotice(copy.lwbOrderPending);
+        } catch (error) { setNotice(error?.message || copy.lwbPaymentTimeout); }
+      }
       const submitAccount = async (event) => {
         event.preventDefault();
         if (account.phase === 'loading') return;
@@ -1324,6 +1404,24 @@ window.__ModuleLoader__.load({
             h('div', null, h('span', null, copy.lwbPoints), h('strong', null, String(points.availablePoints ?? 0)), points.frozenPoints ? h('small', null, `${copy.lwbFrozenPoints}: ${points.frozenPoints}`) : null),
           ),
           h('p', { className: 'lwb-account-muted' }, copy.lwbEntitlementsUnavailable),
+          h('section', { className: 'lwb-purchase-section' },
+            h('div', { className: 'lwb-purchase-heading' },
+              h('div', null, h('strong', null, copy.lwbPurchase), h('p', null, copy.lwbPurchaseHint)),
+              button('lwb-plain-button', purchaseOptions.phase === 'loading' ? copy.lwbAccountLoading : copy.lwbRefreshPackages, () => { void loadPurchaseOptions(true); }, { disabled: purchaseOptions.phase === 'loading' }),
+            ),
+            pendingPayment && h('div', { className: 'lwb-payment-status', 'data-status': pendingPayment.status },
+              h('div', null, h('strong', null, pendingPayment.orderNo), h('span', null, pendingPayment.status === 'pending' ? copy.lwbOrderPending : pendingPayment.status === 'paid' ? copy.lwbPaymentSuccess : copy.lwbPaymentExpired)),
+              h('div', { className: 'lwb-row-actions' }, pendingPayment.status === 'pending' && button('lwb-plain-button', copy.lwbOpenPayment, () => { void openPayment(pendingPayment); }), pendingPayment.status === 'pending' && button('lwb-primary-button', copy.lwbCheckPayment, () => { void checkPendingPayment(); }), button('lwb-plain-button', copy.lwbClearOrder, () => setPendingPayment(null))),
+            ),
+            purchaseOptions.error && h('p', { className: 'lwb-dialog-error', role: 'alert' }, purchaseOptions.error),
+            h('div', { className: 'lwb-purchase-tabs', role: 'tablist' },
+              h('button', { type: 'button', role: 'tab', 'aria-selected': purchaseTab === 'recharge', className: purchaseTab === 'recharge' ? 'active' : '', onClick: () => setPurchaseTab('recharge') }, copy.lwbRechargePackages),
+              h('button', { type: 'button', role: 'tab', 'aria-selected': purchaseTab === 'membership', className: purchaseTab === 'membership' ? 'active' : '', onClick: () => setPurchaseTab('membership') }, copy.lwbMembershipPlans),
+            ),
+            purchaseTab === 'recharge'
+              ? h('div', { className: 'lwb-purchase-grid' }, purchaseOptions.packages.length ? purchaseOptions.packages.map((item) => h('article', { className: 'lwb-purchase-card', key: item.code }, h('strong', null, item.name), h('b', null, `¥${(Number(item.amountCents || 0) / 100).toFixed(2)}`), h('span', null, `${copy.lwbPointsAmount}: ${item.totalPoints || item.pointsAmount || 0}`), item.bonusPoints ? h('span', null, `${copy.lwbBonusPoints}: ${item.bonusPoints}`) : null, h('button', { type: 'button', className: 'lwb-primary-button', disabled: Boolean(purchasingCode), onClick: () => { void createPurchase('recharge', item.code); } }, purchasingCode === `recharge:${item.code}` ? copy.lwbCreatingOrder : copy.lwbPayAlipay))) : h('p', { className: 'lwb-account-muted' }, copy.lwbNoPackages))
+              : h('div', { className: 'lwb-purchase-grid' }, purchaseOptions.plans.length ? purchaseOptions.plans.map((item) => h('article', { className: 'lwb-purchase-card', key: item.code }, h('strong', null, item.name), h('b', null, `¥${(Number(item.monthlyPriceCents || 0) / 100).toFixed(2)} / 月`), h('span', null, `${copy.lwbMonthlyPoints}: ${item.monthlyPointsGrant || 0}`), item.priceDiscount < 1 ? h('span', null, `${copy.lwbPriceDiscount}: ${Math.round(item.priceDiscount * 100)}%`) : null, item.rpmLimit ? h('span', null, `${copy.lwbRpmLimit}: ${item.rpmLimit}`) : null, h('button', { type: 'button', className: 'lwb-primary-button', disabled: Boolean(purchasingCode), onClick: () => { void createPurchase('membership', item.code); } }, purchasingCode === `membership:${item.code}` ? copy.lwbCreatingOrder : copy.lwbPayAlipay))) : h('p', { className: 'lwb-account-muted' }, copy.lwbNoPackages)),
+          ),
           h('div', { className: 'lwb-row-actions' }, button('lwb-plain-button', copy.lwbLogout, () => { void lwbAccountAction('logout').catch(() => {}); }, { disabled: account.phase === 'loading' })),
         )
         : h('form', { className: 'lwb-account-panel lwb-account-form', onSubmit: submitAccount },
