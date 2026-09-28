@@ -2,6 +2,7 @@
   "name": "@scitiger-ai/lwb-pack-sdk",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Public manifest and host registration contract for Laofu Workbench capability packs",
   "type": "module",
   "main": "index.mjs",

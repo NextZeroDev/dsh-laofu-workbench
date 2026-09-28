@@ -2,6 +2,7 @@
   "name": "@scitiger-ai/lwb-spoken-video",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Standalone spoken-video content creation capability pack for Laofu Workbench",
   "type": "module",
   "main": "index.mjs",

@@ -2,6 +2,7 @@
   "name": "@scitiger-ai/lwb-dsh-bundle",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Laofu Workbench product bundle for the DeepSeek Harness profile",
   "type": "module",
   "main": "index.mjs",

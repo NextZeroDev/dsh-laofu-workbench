@@ -7,9 +7,11 @@
 | 文档 | 内容 |
 |---|---|
 | [项目首页](../README.md) | 产品定位、扩展机制、安装与当前能力 |
-| [快速开始](quickstart.md) | 从安装、模型配置到第一条口播视频 |
+| [快速开始](quickstart.md) | 从双端启动、LWB/BYOK 模型配置到第一条口播视频 |
+| [Desktop 与 Web](37-desktop-parity.md) | 双端启动、共享数据、打包方式与当前验收范围 |
 | [故障排查](troubleshooting.md) | 安装、鉴权、包加载、模型和媒体问题 |
 | [运行数据目录](31-runtime-data-layout.md) | 状态、凭据、附件、业务产物及可恢复副本 |
+| [许可证与商业使用](licensing-and-commercial-use.md) | 当前许可、非商业边界、LWB 服务和第三方组件范围 |
 | [第三方组件与资源](../THIRD_PARTY_NOTICES.md) | 来源、许可边界及待补充的出处记录 |
 
 ## 开发与扩展
