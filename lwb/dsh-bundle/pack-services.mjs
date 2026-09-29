@@ -1,17 +1,19 @@
 import { randomUUID } from 'node:crypto'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { packCredentialRef } from './pack-workspaces.mjs'
 import { PackTaskScope } from './pack-task-scope.mjs'
 import { openPackSettings } from './pack-settings.mjs'
 
 /** Scoped services issued by the host to one actually mounted package. */
 export class LwbPackServices {
-  constructor(ctx, workspaces, { account, taskModel } = {}) { this.ctx = ctx; this.workspaces = workspaces; this.scopes = new Map(); this.account = account; this.taskModel = taskModel }
+  constructor(ctx, workspaces, { account, taskModel, entitlements } = {}) { this.ctx = ctx; this.workspaces = workspaces; this.scopes = new Map(); this.account = account; this.taskModel = taskModel; this.entitlements = entitlements }
 
   async mount(manifest) {
     await this.workspaces.activate(manifest)
     if (this.scopes.has(manifest.id)) return this.scopes.get(manifest.id)
     const { id } = manifest
     const tasks = new PackTaskScope()
+    const sessions = new Map()
     const settings = new Map()
     const credentialRef = (purpose) => packCredentialRef(id, purpose)
     const credentials = Object.fromEntries(['resolve', 'describe', 'set', 'unset'].map((method) => [method, (ref, ...args) => {
@@ -20,7 +22,14 @@ export class LwbPackServices {
     }]))
     const facade = Object.freeze({
       id, credentialRef, credentials, signal: tasks.signal,
+      assertAccess: () => this.assertAccess(manifest),
       modelSelection: () => this.defaultSelection(),
+      models: Object.freeze({
+        list: async () => Promise.all((this.ctx.llm?.listProviders?.() || []).map(async (provider) => ({
+          ...provider,
+          models: await this.ctx.llm.listModels(provider.id).catch(() => []),
+        }))),
+      }),
       account: Object.freeze({
         status: (service) => this.account?.serviceStatus(service) || Promise.resolve({ configured: false, authenticated: false, reason: 'LWB 账号服务不可用。' }),
         open: (service, options = {}) => {
@@ -44,13 +53,24 @@ export class LwbPackServices {
         return globalThis.fetch(url, { ...options, signal: options.signal ? AbortSignal.any([options.signal, tasks.signal]) : tasks.signal })
       },
       withAgent: (operation, signal = tasks.signal) => tasks.track(this.withAgent(id, operation, AbortSignal.any([signal, tasks.signal]))),
+      // Long-lived, pack-owned DSH sessions. The pack chooses the model route
+      // explicitly and owns the returned handle until it disposes the session.
+      sessions: Object.freeze({
+        create: (options = {}) => tasks.track(this.createSession(id, options, tasks.signal, sessions)),
+        resume: (sessionId, options = {}) => tasks.track(this.resumeSession(id, sessionId, options, tasks.signal, sessions)),
+        get: (sessionId) => sessions.get(sessionId)?.public || null,
+      }),
       assertAgent: async (agent) => {
         const context = await this.workspaces.context(id)
         if (agent?.session?.header?.cwd !== context.workspacePath) throw new Error('此工具只供该能力包的内部任务使用。')
         return context
       },
     })
-    this.workspaces.onStop(id, () => tasks.stop())
+    this.workspaces.onStop(id, async () => {
+      await tasks.stop()
+      await Promise.allSettled([...sessions.values()].map((session) => session.dispose()))
+      sessions.clear()
+    })
     this.scopes.set(id, facade)
     return facade
   }
@@ -83,6 +103,10 @@ export class LwbPackServices {
     return { configured: this.defaultSelection() !== null }
   }
 
+  async assertAccess(manifest) {
+    return this.entitlements?.assertAllowed(manifest) || { allowed: true, required: false, reason: null }
+  }
+
   async withAgent(id, operation, signal) {
     signal.throwIfAborted()
     const scope = this.forPack(id)
@@ -106,5 +130,99 @@ export class LwbPackServices {
       this.ctx.permissionPresets.set(handle.agent.session, 'workspace-write')
       return await operation(handle.agent)
     } finally { await handle.dispose() }
+  }
+
+  async createSession(id, options = {}, signal, sessions) {
+    const scope = this.forPack(id)
+    const context = await scope.context()
+    const selection = this.normalizeSelection(options, this.defaultSelection())
+    const sessionId = typeof options.sessionId === 'string' && options.sessionId.trim()
+      ? options.sessionId.trim() : `lwb-pack-${id}-${randomUUID()}`
+    return this.openSession(id, { sessionId, context, selection, signal, sessions, resume: false })
+  }
+
+  async resumeSession(id, sessionId, options = {}, signal, sessions) {
+    if (typeof sessionId !== 'string' || !sessionId.trim()) throw new Error('能力包会话标识无效。')
+    const scope = this.forPack(id)
+    const context = await scope.context()
+    const selection = this.normalizeSelection(options, this.defaultSelection())
+    return this.openSession(id, { sessionId: sessionId.trim(), context, selection, signal, sessions, resume: true })
+  }
+
+  normalizeSelection(options, fallback) {
+    const candidate = options && typeof options === 'object' && (options.provider || options.model)
+      ? options : fallback
+    if (typeof candidate?.provider !== 'string' || !candidate.provider.trim()
+      || typeof candidate?.model !== 'string' || !candidate.model.trim()) {
+      throw new Error('尚未选择可用的模型，请先完成模型配置。')
+    }
+    return { provider: candidate.provider.trim(), model: candidate.model.trim(),
+      ...(candidate.reasoningEffort === undefined ? {} : { reasoningEffort: candidate.reasoningEffort }) }
+  }
+
+  async openSession(id, { sessionId, context, selection, signal, sessions, resume }) {
+    if (sessions.has(sessionId)) return sessions.get(sessionId).public
+    await this.workspaces.recordSession(id, sessionId)
+    const preset = await this.ctx.agentPresets.resolve('standard')
+    const setup = async (agentCtx) => { await this.ctx.agentPresets.mount(agentCtx, preset.id) }
+    let handle
+    try {
+      handle = resume
+        ? await this.ctx.agents.resume({ resumeSessionId: sessionId, agentOptions: selection, setup, signal })
+        : await this.ctx.agents.create({ sessionId, meta: { cwd: context.workspacePath, agentPreset: preset.id }, agentOptions: selection, setup, signal })
+      this.ctx.permissionPresets.set(handle.agent.session, 'workspace-write')
+    } catch (error) {
+      if (resume) throw error
+      throw error
+    }
+    const session = {
+      handle,
+      public: null,
+      async dispose() {
+        if (sessions.get(sessionId) !== session) return
+        sessions.delete(sessionId)
+        await handle.dispose()
+      },
+    }
+    const address = Object.freeze({ kind: 'session', sessionId })
+    session.public = Object.freeze({
+      id: sessionId,
+      address,
+      provider: selection.provider,
+      model: selection.model,
+      followup: (text) => {
+        if (typeof text !== 'string' || !text.trim()) throw new Error('会话消息不能为空。')
+        handle.agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: id } }))
+      },
+      whenIdle: () => handle.agent.whenIdle(),
+      cancel: () => handle.agent.cancel({ kind: 'parent' }),
+      dispose: () => session.dispose(),
+      page: (request = {}, pageSignal = signal) => this.sessionPage(id, address, request, pageSignal),
+      follow: (request = {}, followSignal = signal) => this.sessionFollow(id, address, request, followSignal),
+    })
+    sessions.set(sessionId, session)
+    return session.public
+  }
+
+  assertSession(id, address) {
+    if (!address || address.kind !== 'session' || typeof address.sessionId !== 'string') throw new Error('能力包会话地址无效。')
+    const owned = this.workspaces.visibility(id)
+    return owned.then((value) => {
+      if (!value.sessionIds.includes(address.sessionId)) throw new Error('该会话不属于此能力包。')
+      return address
+    })
+  }
+
+  async sessionPage(id, address, request, signal) {
+    await this.assertSession(id, address)
+    if (!this.ctx.sessionController?.page) throw new Error('当前环境不提供会话读取服务。')
+    return this.ctx.sessionController.page({ ...request, address }, signal)
+  }
+
+  async *sessionFollow(id, address, request, signal) {
+    await this.assertSession(id, address)
+    if (!this.ctx.sessionController?.follow) throw new Error('当前环境不提供会话流服务。')
+    const observing = AbortSignal.any([signal, this.forPack(id).signal])
+    yield* this.ctx.sessionController.follow({ ...request, address, assistantStream: true }, observing)
   }
 }

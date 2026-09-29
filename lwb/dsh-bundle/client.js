@@ -470,6 +470,9 @@ window.__ModuleLoader__.load({
           }),
           icon: normalizePackText(market.icon, pack.menus[0]?.glyph || '▦', 8),
           error: typeof candidate.error === 'string' ? candidate.error.slice(0, 500) : null,
+          accessRequired: candidate.required === true,
+          accessAllowed: candidate.allowed !== false,
+          accessReason: typeof candidate.reason === 'string' ? candidate.reason.slice(0, 240) : null,
         });
       });
       return { phase: 'ready', packs, error: null };
@@ -1414,7 +1417,7 @@ window.__ModuleLoader__.load({
           );
         }
         return h('div', { className: 'lwb-row-actions' },
-          h('button', { type: 'button', className: 'lwb-primary-button', disabled: busy || pack.status === 'unavailable', title: pack.status === 'unavailable' ? copy.unavailablePack : undefined, onClick: (event) => { event.stopPropagation(); void switchPack(pack, 'load'); } }, busy ? copy.loadingPack : drawer ? copy.packLoadAction : copy.load),
+          h('button', { type: 'button', className: 'lwb-primary-button', disabled: busy || pack.status === 'unavailable' || pack.accessAllowed === false, title: pack.status === 'unavailable' ? copy.unavailablePack : pack.accessAllowed === false ? (pack.accessReason || '当前账号无权使用此能力包。') : undefined, onClick: (event) => { event.stopPropagation(); void switchPack(pack, 'load'); } }, busy ? copy.loadingPack : pack.accessAllowed === false ? '需要会员' : drawer ? copy.packLoadAction : copy.load),
           !drawer && h('button', { type: 'button', className: 'lwb-plain-button', onClick: (event) => { event.stopPropagation(); setNotice(null); setDetailPack(pack); }, title: copy.packDetails(pack.name) }, copy.details),
         );
       };

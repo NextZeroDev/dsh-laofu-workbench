@@ -64,6 +64,24 @@ function optionalProviders(value) {
   return providers
 }
 
+function optionalAccess(value) {
+  if (value === undefined) return undefined
+  const input = record(value, 'access')
+  if (input.account !== undefined && input.account !== 'lwb') {
+    throw new LwbPackManifestError('access.account must be "lwb"')
+  }
+  if (input.membershipRequired !== undefined && typeof input.membershipRequired !== 'boolean') {
+    throw new LwbPackManifestError('access.membershipRequired must be boolean')
+  }
+  if (input.membershipRequired === true && input.account !== 'lwb') {
+    throw new LwbPackManifestError('access.account must be "lwb" when membershipRequired is true')
+  }
+  return {
+    ...(input.account === undefined ? {} : { account: input.account }),
+    ...(input.membershipRequired === undefined ? {} : { membershipRequired: input.membershipRequired }),
+  }
+}
+
 function optionalMarket(value) {
   if (value === undefined) return undefined
   const input = record(value, 'market')
@@ -139,6 +157,7 @@ export function validateLwbPackManifest(value) {
   const requiredServices = optionalDeclarationList(input.requiredServices, 'requiredServices', 32, 64)
   const providers = optionalProviders(input.providers)
   const entitlements = optionalDeclarationList(input.entitlements, 'entitlements', 32, 96)
+  const access = optionalAccess(input.access)
   const market = optionalMarket(input.market)
   if (!Array.isArray(input.menus) || input.menus.length === 0 || input.menus.length > 16) {
     throw new LwbPackManifestError('menus must contain 1-16 entries')
@@ -177,6 +196,7 @@ export function validateLwbPackManifest(value) {
     ...(requiredServices === undefined ? {} : { requiredServices }),
     ...(providers === undefined ? {} : { providers }),
     ...(entitlements === undefined ? {} : { entitlements }),
+    ...(access === undefined ? {} : { access }),
     ...(market === undefined ? {} : { market }),
     menus,
   })

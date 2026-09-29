@@ -9,6 +9,7 @@ export const inject = ['loader', 'clientModules', 'agents', 'agentPresets', 'per
 
 import { LwbPackWorkspaces } from './pack-workspaces.mjs'
 import { LwbPackServices } from './pack-services.mjs'
+import { LwbPackEntitlements } from './pack-entitlements.mjs'
 
 import LwbArchiveGateway from './archive-gateway.mjs'
 import LwbPackGateway from './pack-gateway.mjs'
@@ -42,10 +43,12 @@ export async function apply(ctx, config = {}) {
   const workspaces = new LwbPackWorkspaces({ root: LWB_RUNTIME.packStateDir })
   ctx.provide('lwbPackWorkspaces', workspaces)
   const account = new LwbAtsClient({ credentials: ctx.credentials, baseUrl: LWB_RUNTIME.atsBaseUrl })
+  const entitlements = new LwbPackEntitlements(account)
   const taskModel = await openTaskModel(LWB_RUNTIME.productHome, ctx)
   ctx.provide('lwbAtsClient', account)
+  ctx.provide('lwbPackEntitlements', entitlements)
   ctx.provide('lwbTaskModel', taskModel)
-  ctx.provide('lwbPackServices', new LwbPackServices(ctx, workspaces, { account, taskModel }))
+  ctx.provide('lwbPackServices', new LwbPackServices(ctx, workspaces, { account, taskModel, entitlements }))
   registerLwbModels(ctx, account)
   const packGroup = await createPackGroup(ctx)
   const packRuntime = new LwbPackRuntime(ctx, { group: packGroup })

@@ -49,6 +49,7 @@ export class LwbPackRegistry {
       ...(manifest.requiredServices === undefined ? {} : { requiredServices: [...manifest.requiredServices] }),
       ...(manifest.providers === undefined ? {} : { providers: [...manifest.providers] }),
       ...(manifest.entitlements === undefined ? {} : { entitlements: [...manifest.entitlements] }),
+      ...(manifest.access === undefined ? {} : { access: { ...manifest.access } }),
       menus: manifest.menus.map((menu) => ({ ...menu })),
     }))
   }

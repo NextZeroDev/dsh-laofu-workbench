@@ -26,7 +26,7 @@ export { projectClientBundle } from './dsh-adapter/loader.mjs'
  * restoring a previously enabled package at startup.
  */
 export class LwbPackRuntime {
-  static inject = ['lwbPackRegistry', 'clientModules', 'lwbPackServices', 'lwbPackWorkspaces']
+  static inject = ['lwbPackRegistry', 'clientModules', 'lwbPackServices', 'lwbPackWorkspaces', 'lwbPackEntitlements']
 
   constructor(ctx, options = {}) {
     this.ctx = ctx
@@ -66,6 +66,7 @@ export class LwbPackRuntime {
     if (!pack.available) {
       throw new Error(`LWB pack ${JSON.stringify(id)} is unavailable: ${pack.error || 'source cannot be inspected'}`)
     }
+    await this.ctx.lwbPackEntitlements?.assertAllowed(pack.manifest)
     if (this.isMounted(id)) {
       return {
         id,
@@ -143,16 +144,18 @@ export class LwbPackRuntime {
   async market() {
     const mounted = new Set(this.ctx.lwbPackRegistry.list().map((pack) => pack.id))
     const packs = await marketplaceLwbPacks()
+    const projected = await Promise.all(packs.map(async (pack) => ({
+      ...pack.manifest,
+      status: mounted.has(pack.manifest.id) ? 'loaded' : pack.available ? 'available' : 'unavailable',
+      origin: pack.origin,
+      installedAt: pack.installedAt,
+      enabled: pack.enabled,
+      ...(await this.ctx.lwbPackEntitlements?.check(pack.manifest) || { allowed: true, required: false }),
+      ...((pack.error || this.restoreFailures.get(pack.manifest.id)) ? { error: pack.error || this.restoreFailures.get(pack.manifest.id) } : {}),
+    })))
     return {
       schemaVersion: 1,
-      packs: packs.map((pack) => ({
-        ...pack.manifest,
-        status: mounted.has(pack.manifest.id) ? 'loaded' : pack.available ? 'available' : 'unavailable',
-        origin: pack.origin,
-        installedAt: pack.installedAt,
-        enabled: pack.enabled,
-        ...((pack.error || this.restoreFailures.get(pack.manifest.id)) ? { error: pack.error || this.restoreFailures.get(pack.manifest.id) } : {}),
-      })),
+      packs: projected,
     }
   }
 

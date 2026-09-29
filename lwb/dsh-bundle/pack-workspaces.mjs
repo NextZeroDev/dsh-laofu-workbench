@@ -311,9 +311,17 @@ export class LwbPackWorkspaces {
   }
 
   /** Host-owned facts for all ordinary conversation projections, including archives. */
-  visibility() {
+  visibility(id) {
     return this.serial(async () => {
       const state = await this.state()
+      if (id !== undefined) {
+        const record = this.requireRecord(state, id)
+        return {
+          workspaceIds: record.workspaceId ? [record.workspaceId] : [],
+          workspacePaths: [this.path(id)],
+          sessionIds: [...record.sessionIds],
+        }
+      }
       return {
         workspaceIds: Object.values(state.packs).map((item) => item.workspaceId).filter(Boolean),
         workspacePaths: Object.keys(state.packs).map((id) => this.path(id)),

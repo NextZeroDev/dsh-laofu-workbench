@@ -85,6 +85,13 @@ test('normalizes optional service and entitlement declarations', () => {
   assert.equal(Object.isFrozen(result.entitlements), true)
 })
 
+test('normalizes the host-enforced LWB membership access policy', () => {
+  const result = validateLwbPackManifest({ ...manifest, access: { account: 'lwb', membershipRequired: true } })
+  assert.deepEqual(result.access, { account: 'lwb', membershipRequired: true })
+  assert.throws(() => validateLwbPackManifest({ ...manifest, access: { membershipRequired: true } }), /access\.account/u)
+  assert.throws(() => validateLwbPackManifest({ ...manifest, access: { account: 'other' } }), /access\.account/u)
+})
+
 test('rejects invalid service declarations and provider names', () => {
   for (const candidate of [
     { minHostVersion: '1.0' },
