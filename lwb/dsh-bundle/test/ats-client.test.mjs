@@ -61,7 +61,7 @@ test('refresh network failures preserve login; revoked refresh tokens clear it',
   const { client, values } = setup(async url => response(url.endsWith('/refresh') ? status : 401, { message: 'test failure' }))
   await client.writeSession(sessionFor('7'))
   await assert.rejects(client.request('/api/auth/me'), { status: 503 })
-  assert.ok(values.has('lwb-ats-session'))
+  assert.ok(values.has('lwb_ats_session'))
   status = 401
   await assert.rejects(client.request('/api/auth/me'), { status: 401 })
   assert.equal(values.size, 0)
@@ -96,7 +96,7 @@ test('managed-key rejection does not retry a paid POST and recreates the key nex
   await client.writeSession(sessionFor('7'))
   const handle = await client.openService('tts')
   await assert.rejects(handle.request('/api/v1/tts/jobs', { method: 'POST', body: '{}' }), { status: 401 })
-  assert.equal(posts, 1); assert.equal(values.has('lwb-ats-service'), false)
+  assert.equal(posts, 1); assert.equal(values.has('lwb_ats_service'), false)
   await client.openService('tts')
   assert.equal(bootstraps, 2)
 })
@@ -112,7 +112,7 @@ test('login stores opaque session in host credentials and status projects accoun
   })
   const session = await client.login({ account: 'a@example.com', password: 'password123' })
   assert.equal(session.user.email, 'a@example.com')
-  assert.match(values.get('lwb-ats-session'), /access/)
+  assert.match(values.get('lwb_ats_session'), /access/)
   assert.deepEqual(await client.status(), { user: { id: '7', email: 'a@example.com' }, membership: { planCode: 'free' }, points: { availablePoints: 12 }, entitlements: null })
   assert.equal(calls[0][1].body.includes('password123'), true)
 })
@@ -137,7 +137,7 @@ test('refresh failure clears credentials and unauthenticated calls do not touch 
   await assert.rejects(client.status(), { code: 'LWB_ATS_NOT_AUTHENTICATED' })
   assert.equal(calls, 0)
   await client.login({ account: 'user', password: 'password123' }).catch(() => {})
-  assert.equal(values.has('lwb-ats-session'), false)
+  assert.equal(values.has('lwb_ats_session'), false)
 })
 
 test('purchase catalogs use authenticated requests and normalize public DTOs', async () => {

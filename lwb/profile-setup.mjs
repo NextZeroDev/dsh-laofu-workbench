@@ -1,10 +1,29 @@
-import { mkdir, readFile, lstat, readlink, symlink, unlink } from 'node:fs/promises'
+import { chmod, mkdir, readFile, lstat, readlink, stat, symlink, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { LWB_RUNTIME } from './dsh-bundle/runtime-config.mjs'
 import { dshPackageDirectory } from './dsh-bundle/dsh-adapter/package-paths.mjs'
 
 export const PRODUCT_BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@scitiger-ai/lwb-dsh-bundle']
+
+// DSH credential references are POSIX identifiers. Older LWB builds used
+// hyphens, so migrate only those two known keys before DSH reads the file.
+export async function migrateLwbCredentialReferences(dshHome = LWB_RUNTIME.dshHome) {
+  const filename = join(dshHome, '.credentials.yaml')
+  const original = await readFile(filename, 'utf8').catch(error => {
+    if (error.code === 'ENOENT') return undefined
+    throw error
+  })
+  if (original === undefined) return false
+  const migrated = original
+    .replace(/(^|\n)([ \t]*)lwb-ats-session(?=\s*:)/gu, '$1$2lwb_ats_session')
+    .replace(/(^|\n)([ \t]*)lwb-ats-service(?=\s*:)/gu, '$1$2lwb_ats_service')
+  if (migrated === original) return false
+  const permissions = (await stat(filename)).mode & 0o777
+  await writeFile(filename, migrated, { mode: permissions })
+  await chmod(filename, permissions)
+  return true
+}
 
 export async function ensureLink(link, target) {
   await mkdir(dirname(link), { recursive: true })
@@ -30,6 +49,7 @@ export async function linkProductPeers(directory) {
 
 /** Compose LWB through the public Profile API used by both official carriers. */
 export async function prepareLwbProfile(profileDir = LWB_RUNTIME.profileHome) {
+  await migrateLwbCredentialReferences()
   const { initProfile } = await import(pathToFileURL(join(dshPackageDirectory('@deepseek-ai/dsh-app-boot'), 'lib', 'index.js')))
   initProfile(profileDir, PRODUCT_BUNDLES)
   const manifestPath = join(profileDir, 'package.json')

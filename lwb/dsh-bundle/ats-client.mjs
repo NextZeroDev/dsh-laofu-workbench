@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
-const SESSION_REF = 'lwb-ats-session'
-const SERVICE_REF = 'lwb-ats-service'
+const SESSION_REF = 'lwb_ats_session'
+const SERVICE_REF = 'lwb_ats_service'
 const DEFAULT_BASE_URL = 'https://link.scitiger.cn'
 function text(value) { return typeof value === 'string' && value.trim() ? value.trim() : undefined }
 function normalizeBaseUrl(value) {
