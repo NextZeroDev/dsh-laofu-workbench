@@ -584,7 +584,7 @@ window.__ModuleLoader__.load({
       if (page !== 'conversation') persist(productState);
     }
     function showConversation(sessionId) {
-      if (sessionId) services?.sessions?.open?.(sessionId);
+      if (sessionId) services?.uiWorkspace?.openSession?.(sessionId);
       updateProduct({ page: 'conversation', accountReturnRoute: null, capabilityPage: null, mobileNavOpen: false, conversationPanelOpen: false }, false);
     }
     const css = `
@@ -986,7 +986,7 @@ window.__ModuleLoader__.load({
           if (typeof services?.sessions?.fork !== 'function') throw new Error('当前 DSH 运行时不支持分叉会话');
           const childSessionId = await services.sessions.fork({ sessionId, increaseTitle: true });
           if (!childSessionId) throw new Error('DSH 未返回分叉会话');
-          services.sessions.open?.(childSessionId);
+          services.uiWorkspace.openSession?.(childSessionId);
           showConversation();
         } catch (error) {
           window.alert(error?.message || '无法分叉会话');

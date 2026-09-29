@@ -200,3 +200,20 @@ test('new conversation delegates workspace selection to the DSH navigation servi
   assert.match(source, /onClick: \(\) => createConversation\(workspace\.workspaceId\)/u)
   assert.match(source, /onClick: \(\) => ordinaryWorkspaces\.length \? createConversation\(\) : addWorkspace\(\)/u)
 })
+
+test('history and fork navigation open sessions through the DSH workspace service', async () => {
+  const source = await readFile(clientPath, 'utf8')
+  const showStart = source.indexOf('function showConversation(sessionId)')
+  const showEnd = source.indexOf('\n    const css =', showStart)
+  assert.ok(showStart >= 0 && showEnd > showStart, 'client must define the history navigation action')
+  const showConversation = source.slice(showStart, showEnd)
+  assert.match(showConversation, /services\?\.uiWorkspace\?\.openSession\?\.\(sessionId\)/u)
+  assert.doesNotMatch(showConversation, /sessions\?\.open/u)
+
+  const forkStart = source.indexOf('const forkSession = async (sessionId) =>')
+  const forkEnd = source.indexOf('\n      const repairSessionWorkspace', forkStart)
+  assert.ok(forkStart >= 0 && forkEnd > forkStart, 'client must define the fork navigation action')
+  const forkSession = source.slice(forkStart, forkEnd)
+  assert.match(forkSession, /services\.uiWorkspace\.openSession\?\.\(childSessionId\)/u)
+  assert.doesNotMatch(forkSession, /services\.sessions\.open/u)
+})
