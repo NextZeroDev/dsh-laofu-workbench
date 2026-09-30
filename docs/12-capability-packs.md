@@ -55,7 +55,25 @@ ctx.effect(() => ctx.lwbPackClient.register({
 
 核心只向页面传入公开的 pack/menu 信息、`packId` 与基础导航回调。包不能 import `lwb/dsh-bundle/client.js`，也不能假定核心了解它的业务路由或数据模型。加载时宿主自动创建该包专属工作区；数据 RPC 使用宿主分配的上下文，不依赖普通 DSH 对话。Host 声明 `lwbPackServices` 依赖，通过 SDK `getLwbPackScope(ctx, manifest)` 获取包级目录、任务与凭据服务。完整契约见 [29 能力包专属工作区](29-pack-owned-workspaces.md)。
 
-包应在 `peerDependencies` 或 `dependencies` 中声明所需 DSH 运行时包。装载器会为声明的受控 DSH peer 建立同版本本机链接；其他第三方依赖仍由包自己的包管理流程负责。
+### 会话与产物
+
+包的业务页面是宿主 overlay 里的整页界面，**不包含**官方对话区与官方右栏。需要展示原生会话时，页面使用宿主下发的两个能力，自己决定摆在哪里：
+
+```js
+h('article', { onPointerDownCapture: () => focusSession(run.sessionId) },
+  h('div', { className: 'example-conversation' }, renderConversation({ sessionId: run.sessionId })),
+)
+```
+
+- `renderConversation({ sessionId })` 渲染该会话的官方对话：原始回答、工具调用、文件 chip，以及可直接继续对话的官方输入框。它使用官方 `conversation.content` Factory 与该会话自己的作用域，**不改变 frame 的当前会话**，也不进入对话模块的历史。
+- `focusSession(sessionId)` 把 frame 的当前会话指向该会话，于是**官方右栏**（文档预览、文件、终端、浏览器、改动评审、插件注册的 tab 类型、快捷键、开合与全屏）以及 frame 为当前会话渲染的一切，原样适用于这条会话。宿主只在会话确实由本页面渲染时接受聚焦，并在页面卸载后恢复进入前的会话。
+- 页面所在的 overlay 会从右边缘让出右栏列宽，因此右栏打开时页面自动让位（多列布局会随之收窄）。
+
+因此包页面**不重画**任何官方内容：右栏的每一项能力都由官方提供，官方升级即自动获得。宿主侧还有一层窄路由：嵌入对话里的文件 chip 会先聚焦该会话，再走官方 `sidebarRight.openResource`，文件在官方预览里打开。
+
+完整背景、边界与被否掉的替代路线见 [41 能力包内的会话与官方右栏](41-capability-session-surface.md)。
+
+Host 侧的会话目录：`sessions.create({ provider, model, cwd })` 的 `cwd` 是能力包工作区内的 `/` 分隔相对路径（例如 `runs/<taskId>/<runId>`），宿主逐段创建并拒绝符号链接与越界路径。省略时仍使用包工作区根目录。`resume` 必须传入该会话创建时使用的同一个 `cwd`，因为 DSH 只在创建时决定会话位置。
 
 ## 首个包：口播视频内容创作
 

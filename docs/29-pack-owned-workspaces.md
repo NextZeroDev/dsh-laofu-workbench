@@ -33,7 +33,7 @@ retained/<pack-id>-<reset-id>/...
 
 业务读写使用 `{ packId, workspaceId, workspacePath, generation, status }` 上下文，不构造伪 Agent。AI 执行时按需创建内部根 Agent，复用 DSH 原生预设和子代理；一个专属工作区可有多个内部执行会话。
 
-根会话 id 在发布前写入归属索引。LWB 普通列表、搜索、归档和计数按归属 id 与 cwd 过滤根会话；子代理沿用已有 `origin: subagent` 过滤。归属信息尚未读取时不展示会话，避免闪现。解除注册和清空后仍保留历史归属，不改写 DSH Session 格式。
+根会话 id 在发布前写入归属索引。普通对话左栏是官方 Workspace 浏览器，它按 LWB 传给该座位的 owner props 收到一份投影过的 `useSessions` / `useWorkspaces`：投影按归属 id 与 cwd 剔除根会话与包工作区。官方浏览器自身已经过滤 `origin: subagent`，并只保留当前空会话，LWB 不重复实现。归属信息尚未读取时不渲染座位，避免闪现。解除注册和清空后仍保留历史归属，不改写 DSH Session 格式。机制与接缝见[对话模块使用官方左栏](42-conversation-history-official.md)。
 
 ## 能力包接入契约
 

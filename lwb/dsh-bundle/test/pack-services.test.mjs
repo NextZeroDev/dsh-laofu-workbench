@@ -214,6 +214,44 @@ test('pack sessions use the official controller and remain resumable after facad
   await resumed.whenIdle()
 })
 
+test('pack sessions can own one directory each below the pack workspace', async (t) => {
+  const { first, calls } = await setup(t)
+  const workspacePath = (await first.context()).workspacePath
+  const session = await first.sessions.create({
+    provider: 'deepseek-account', model: 'deepseek-flash', cwd: 'runs/task-1/run-1',
+  })
+  const created = calls.find(([kind]) => kind === 'session.create')[1]
+  assert.equal(created.cwd, join(workspacePath, 'runs', 'task-1', 'run-1'))
+  assert.equal(session.cwd, created.cwd)
+  await writeFile(join(created.cwd, 'answer.txt'), 'run one')
+  assert.equal(await readFile(join(created.cwd, 'answer.txt'), 'utf8'), 'run one')
+
+  const second = await first.sessions.create({
+    provider: 'deepseek-account', model: 'deepseek-flash', cwd: 'runs/task-1/run-2',
+  })
+  assert.equal(second.cwd, join(workspacePath, 'runs', 'task-1', 'run-2'))
+  await assert.rejects(readFile(join(second.cwd, 'answer.txt'), 'utf8'), { code: 'ENOENT' })
+
+  const resumed = await first.sessions.resume(second.id, {
+    provider: 'deepseek-account', model: 'deepseek-flash', cwd: 'runs/task-1/run-2',
+  })
+  assert.equal(calls.filter(([kind]) => kind === 'session.create').at(-1)[1].cwd, second.cwd)
+  assert.equal(resumed.cwd, second.cwd)
+
+  const escaped = []
+  for (const cwd of ['..', '../outside', '/tmp/lwb-escape', 'runs/../../outside', 'runs/./inner', 'runs/', 'runs//inner', '.hidden', 'a\\b']) {
+    escaped.push(await first.sessions.create({ provider: 'deepseek-account', model: 'deepseek-flash', cwd })
+      .then(() => undefined, (error) => error))
+  }
+  const outside = await import('node:fs/promises').then((module) => module.lstat(join(workspacePath, '..', 'outside')).then(() => true, () => false))
+  assert.equal(outside, false, 'a rejected cwd must never create a directory outside the pack workspace')
+  for (const [index, error] of escaped.entries()) {
+    assert.ok(error, `cwd ${index} must be rejected`)
+    assert.match(String(error.code || error.message), /PACK_WORKSPACE_INVALID|PACK_WORKSPACE_UNSAFE/, `cwd ${index} reported ${error.message}`)
+  }
+  await assert.rejects(first.sessions.create({ provider: 'deepseek-account', model: 'deepseek-flash', cwd: 7 }), /会话工作目录必须是能力包工作区内的相对路径/u)
+})
+
 test('unload waits for late background final writes admitted by an in-flight request', async (t) => {
   const { first, second, services, workspaces } = await setup(t)
   const entered = deferred(), release = deferred(), backgroundStarted = deferred(), finish = deferred()

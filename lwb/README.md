@@ -10,7 +10,7 @@
 - DSH 原生文件附件与 LWB 会话归档扩展；
 - LWB 三模块浏览器壳；
 
-用户可见导航只有“对话”“场景能力包”和“设置”。普通对话仍是 DSH Session；场景能力包由市场目录和本机安装表组合。“设置 → 系统设置”打开完整的 DSH 原生设置面板，管理语言、外观、模型服务、权限、插件和 Agent 预设等；能力包内部会话复用 DSH 默认模型及认证，无需单独配置 AI 模型连接。
+用户可见导航只有“对话”“场景能力包”和“设置”。普通对话仍是 DSH Session；场景能力包由市场目录和本机安装表组合。“设置 → 系统设置”打开完整的 DSH 原生设置面板，管理语言、外观、模型服务、权限、插件和 Agent 预设等；能力包内部会话复用 DSH 默认模型及认证，无需单独配置 AI 模型连接。能力包需要展示原生会话时，页面通过宿主下发的 `renderConversation` 在包内渲染该会话的官方对话，并用 `focusSession` 让 frame 的当前会话指向正在操作的卡片，从而原样获得官方右栏（产物、文件、终端、插件 tab 等）；退出页面时恢复用户原来的会话。见[能力包内的会话与官方右栏](../docs/41-capability-session-surface.md)。
 
 | 路径 | 职责 |
 |---|---|
@@ -18,7 +18,7 @@
 | `profile/` | 受跟踪的 DSH Profile manifest |
 | `dsh-bundle/archive-gateway.mjs` | DSH 公开归档模型未覆盖的窄恢复接缝 |
 | `dsh-bundle/dsh-adapter/` | 当前 DSH 版本的 Loader 和包解析边界 |
-| `dsh-bundle/client.js` | 对话、场景能力包和设置的浏览器壳 |
+| `dsh-bundle/client.js` | 对话、场景能力包（含包内会话与产物面孔）、设置的浏览器壳；对话左栏是官方 `sidebar.workspaces` 浏览区，不接管官方对话与右栏 |
 | `pack-sdk/` | 第三方场景能力包的 manifest 与 host 注册契约 |
 | `pack-manager.mjs` | 本机能力包目录、安装状态与命令 |
 | `packs/` | 可独立安装的场景能力包源码 |

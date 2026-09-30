@@ -150,13 +150,31 @@ export class LwbPackServices {
     } finally { await handle.dispose() }
   }
 
+  /**
+   * Resolve the working directory one requested Session runs in.
+   *
+   * Internal Sessions default to the pack workspace. A pack may name a
+   * workspace-relative directory instead — one run per model, for example — so
+   * parallel runs of one pack never overwrite each other's files.
+   * @param id - capability pack id.
+   * @param context - active pack workspace projection.
+   * @param cwd - optional `/`-separated directory below the pack workspace.
+   * @returns the absolute Session cwd.
+   */
+  async sessionCwd(id, context, cwd) {
+    if (cwd === undefined || cwd === null || cwd === '') return context.workspacePath
+    if (typeof cwd !== 'string') throw new Error('会话工作目录必须是能力包工作区内的相对路径。')
+    return this.workspaces.ownedDirectory(id, cwd)
+  }
+
   async createSession(id, options = {}, signal, sessions) {
     const scope = this.forPack(id)
     const context = await scope.context()
     const selection = this.normalizeSelection(options, this.defaultSelection())
+    const cwd = await this.sessionCwd(id, context, options?.cwd)
     const sessionId = typeof options.sessionId === 'string' && options.sessionId.trim()
       ? options.sessionId.trim() : `lwb-pack-${id}-${randomUUID()}`
-    return this.openSession(id, { sessionId, context, selection, signal, sessions, resume: false })
+    return this.openSession(id, { sessionId, context, cwd, selection, signal, sessions, resume: false })
   }
 
   async resumeSession(id, sessionId, options = {}, signal, sessions) {
@@ -164,7 +182,8 @@ export class LwbPackServices {
     const scope = this.forPack(id)
     const context = await scope.context()
     const selection = this.normalizeSelection(options, this.defaultSelection())
-    return this.openSession(id, { sessionId: sessionId.trim(), context, selection, signal, sessions, resume: true })
+    const cwd = await this.sessionCwd(id, context, options?.cwd)
+    return this.openSession(id, { sessionId: sessionId.trim(), context, cwd, selection, signal, sessions, resume: true })
   }
 
   normalizeSelection(options, fallback) {
@@ -178,12 +197,15 @@ export class LwbPackServices {
       ...(candidate.reasoningEffort === undefined ? {} : { reasoningEffort: candidate.reasoningEffort }) }
   }
 
-  async openSession(id, { sessionId, context, selection, signal, sessions, resume }) {
+  async openSession(id, { sessionId, context, cwd, selection, signal, sessions, resume }) {
     if (sessions.has(sessionId)) return sessions.get(sessionId).public
     await this.workspaces.recordSession(id, sessionId)
     const preset = await this.ctx.agentPresets.resolve('standard')
     signal.throwIfAborted()
-    await this.ctx.sessionController.create({ sessionId, cwd: context.workspacePath, agentPreset: preset.id })
+    // DSH resolves a Session's location once: a resume must name the same cwd the
+    // Session was created with, so the caller passes it back for both paths.
+    const sessionCwd = cwd ?? context.workspacePath
+    await this.ctx.sessionController.create({ sessionId, cwd: sessionCwd, agentPreset: preset.id })
     await this.ctx.sessionController.selectModel({ sessionId, ...selection })
     const agent = this.ctx.agents.get(sessionId)
     if (!agent) throw new Error(`会话 "${sessionId}" 创建后不可用。`)
@@ -201,6 +223,7 @@ export class LwbPackServices {
       address,
       provider: selection.provider,
       model: selection.model,
+      cwd: sessionCwd,
       followup: async (text) => {
         if (typeof text !== 'string' || !text.trim()) throw new Error('会话消息不能为空。')
         signal.throwIfAborted()

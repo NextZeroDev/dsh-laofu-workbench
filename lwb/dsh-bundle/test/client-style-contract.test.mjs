@@ -63,6 +63,29 @@ test('settings exposes an optional LWB account without forcing sign-in at startu
   assert.match(source, /lwbLogin: 'Sign in'/u)
 })
 
+test('settings groups every configuration area into its own separated card', async () => {
+  const source = await readFile(clientPath, 'utf8')
+  const css = source.match(/const css = `([\s\S]*?)`;/u)?.[1]
+  assert.ok(css, 'client must define its product CSS')
+  assert.match(css, /\.lwb-settings \{ display:grid; gap:18px; \}/u)
+  assert.match(css, /\.lwb-settings-group-head \{[^}]*border-bottom:1px solid var\(--lwb-line\)/u)
+
+  const start = source.indexOf('function SettingsPage({ renderSlot })')
+  const end = source.indexOf('\n    class CapabilityPageBoundary', start)
+  assert.ok(start >= 0 && end > start, 'client must define the settings page')
+  const page = source.slice(start, end)
+  assert.match(page, /className: 'lwb-settings'/u)
+  assert.equal((page.match(/className: 'lwb-card lwb-settings-group'/gu) || []).length, 3, 'basic configuration, LWB account, and about are separate cards')
+  assert.doesNotMatch(page, /lwb-settings-list|lwb-settings-section/u)
+  assert.match(page, /className: 'lwb-account-note'[\s\S]*?copy\.lwbAccountNote/u)
+})
+
+test('the LWB account states that signing in stays optional', async () => {
+  const source = await readFile(clientPath, 'utf8')
+  assert.match(source, /lwbAccountNote: '不登录 LWB 账号也可以正常使用工作台/u)
+  assert.match(source, /lwbAccountNote: 'The Workbench works without an LWB account/u)
+})
+
 test('settings is the only primary navigation entry to native DSH runtime settings', async () => {
   const source = await readFile(clientPath, 'utf8')
   assert.match(source, /function LwbRuntimeSettingsTrigger\(\{ openSettings \}\)/u)
@@ -140,7 +163,7 @@ test('capability routes carry the current pack and menu identity into shell chro
   const source = await readFile(clientPath, 'utf8')
   assert.match(source, /function pageChrome\(page, selected, copy = currentLwbCopy\(\)\) \{[\s\S]*?title: selected\.pack\.name,[\s\S]*?hint: selected\.menu\.label,[\s\S]*?intro: selected\.pack\.description \|\| copy\.capabilityHint,[\s\S]*?ariaLabel: `\$\{selected\.pack\.name\} · \$\{selected\.menu\.label\}`/u)
 
-  const start = source.indexOf('function WorkbenchOverlay({ renderSlot, renderFactorySlot, SessionProvider })')
+  const start = source.indexOf('function WorkbenchOverlay({ renderSlot, renderFactorySlot, SessionProvider, useSessions, useWorkspaces })')
   const end = source.indexOf('\n    function apply(ctx)', start)
   assert.ok(start >= 0 && end > start, 'workbench overlay must remain a standalone component')
   const overlay = source.slice(start, end)
@@ -189,7 +212,7 @@ test('capability pages use the available workbench canvas', async () => {
 test('new conversation delegates workspace selection to the DSH navigation service', async () => {
   const source = await readFile(clientPath, 'utf8')
   const start = source.indexOf('function createConversation(workspaceId)')
-  const end = source.indexOf('\n    function ConversationOverlay({ renderSlot })', start)
+  const end = source.indexOf('\n    /**\n     * Bind one root selector Hook', start)
   assert.ok(start >= 0 && end > start, 'client must define the conversation creation action')
 
   const action = source.slice(start, end)
@@ -197,8 +220,9 @@ test('new conversation delegates workspace selection to the DSH navigation servi
   assert.match(action, /services\.uiWorkspace\.startSession\(workspaceId\);/u)
   assert.doesNotMatch(action, /resolveWorkspaceForNewSession/u)
   assert.doesNotMatch(action, /sessions\?\.create/u)
-  assert.match(source, /onClick: \(\) => createConversation\(workspace\.workspaceId\)/u)
-  assert.match(source, /onClick: \(\) => ordinaryWorkspaces\.length \? createConversation\(\) : addWorkspace\(\)/u)
+  // One entry point remains: the column header. Per-workspace creation and
+  // workspace management belong to the official browser this module hosts.
+  assert.match(source, /onClick: \(\) => createConversation\(\) \}/u)
 })
 
 test('history and fork navigation open sessions through the DSH workspace service', async () => {
@@ -209,23 +233,65 @@ test('history and fork navigation open sessions through the DSH workspace servic
   const showConversation = source.slice(showStart, showEnd)
   assert.match(showConversation, /services\?\.uiWorkspace\?\.openSession\?\.\(sessionId\)/u)
   assert.doesNotMatch(showConversation, /sessions\?\.open/u)
-
-  const forkStart = source.indexOf('const forkSession = async (sessionId) =>')
-  const forkEnd = source.indexOf('\n      const repairSessionWorkspace', forkStart)
-  assert.ok(forkStart >= 0 && forkEnd > forkStart, 'client must define the fork navigation action')
-  const forkSession = source.slice(forkStart, forkEnd)
-  assert.match(forkSession, /services\.uiWorkspace\.openSession\?\.\(childSessionId\)/u)
-  assert.doesNotMatch(forkSession, /services\.sessions\.open/u)
 })
 
-test('capability pages embed the official DSH conversation without the history sidebar', async () => {
+test('the conversation module hosts the official Workspace browser', async () => {
   const source = await readFile(clientPath, 'utf8')
-  assert.ok(source.includes('function EmbeddedConversationHost({ sessionId, SessionProvider, renderFactorySlot })'))
-  assert.ok(source.includes("services.sessions.retain(sessionId, { source: 'gateway' })"))
-  assert.ok(source.includes('h(SessionProvider, { session: state.reference }'))
-  assert.ok(source.includes("renderFactorySlot('conversation.content', {"))
+  const start = source.indexOf('function ConversationOverlay({ renderSlot, useSessions, useWorkspaces })')
+  const end = source.indexOf('\n    function LwbRuntimeSettingsTrigger', start)
+  assert.ok(start >= 0 && end > start, 'client must define the conversation module')
+  const overlay = source.slice(start, end)
+
+  // The column renders the official browsing region instead of a private list.
+  assert.match(overlay, /renderSlot\('sidebar\.workspaces', Object\.assign\(/u)
+  assert.match(overlay, /\{ wide: true, expandSidebar: \(\) => \{\} \}/u)
+  assert.doesNotMatch(overlay, /lwb-session-row|lwb-workspace-row|lwb-conversation-search/u)
+  // It waits for the ownership index rather than letting pack rows flash in.
+  assert.match(overlay, /copy\.readingWorkspaces/u)
+
+  // Owner props win in the renderer's merge order, which is how a filtered
+  // Session and Workspace view reaches the official browser.
+  assert.match(overlay, /useSessions: seatUseSessions/u)
+  assert.match(overlay, /useWorkspaces: seatUseWorkspaces/u)
+  assert.match(source, /function projectedHook\(hook, project\)/u)
+  assert.match(source, /function projectSessionList\(list, isPackSession\)/u)
+  assert.match(source, /function projectWorkspaceList\(snapshot, isPackWorkspace, isPackSession\)/u)
+
+  // LWB declares the seat because this composition disables upstream ui-sidebar,
+  // and the browser owns the directory-flow hole it declares underneath.
+  assert.match(source, /'sidebar\.workspaces': \{ kind: 'single', scope: 'root' \}/u)
+  assert.doesNotMatch(source, /'sidebar\.workspaces\.directoryFlow': \{ kind: 'single', scope: 'root' \}/u)
+})
+
+test('capability packs render their own Sessions without touching the conversation module', async () => {
+  const source = await readFile(clientPath, 'utf8')
+  // A pack page embeds the official conversation content for one of its own
+  // Sessions, and the frame's current Session only moves when the pack focuses
+  // a card. The shell's conversation page keeps rendering the official surfaces.
+  assert.ok(source.includes('function EmbeddedConversationHost({ sessionId, SessionProvider, renderFactorySlot })'), 'the host must offer an embedded conversation')
+  assert.ok(source.includes("services.sessions.retain(sessionId, { source: 'gateway' })"), 'an embedded conversation retains its own Session')
+  assert.ok(source.includes("renderFactorySlot('conversation.content', {"), 'it renders the official conversation factory')
   assert.ok(source.includes("variant: 'embedded', phase: 'active', hero: false"))
   assert.ok(source.includes("renderSlot('conversation.session', { view: 'chat' })"))
-  assert.ok(source.includes("'lwb.embedded.conversation': { kind: 'single', scope: 'session' }"))
-  assert.ok(source.includes('h(CapabilityPage, { renderConversation })'))
+  assert.ok(source.includes("'lwb.embedded.conversation': { kind: 'single', scope: 'session' }"), 'the seat declaration is what supplies the Session scope')
+  assert.ok(source.includes('h(CapabilityPage, { renderConversation, focusSession })'), 'both host faces reach the pack page')
+  assert.doesNotMatch(source, /openSessionSurface|sessionSurface|selectSurfaceSession/u)
+  assert.doesNotMatch(source, /installEmbeddedSidebarRuntime|lwb\.embedded\.rightbar/u)
+})
+
+test('the official right Sidebar follows the pack card in use', async () => {
+  const source = await readFile(clientPath, 'utf8')
+  // The right Sidebar is the frame's own column and serves its current Session,
+  // so a pack page only focuses the card in use and stops covering the column.
+  assert.ok(source.includes('function focusSession(sessionId)'), 'the pack asks the host to focus a Session')
+  assert.ok(source.includes('services?.uiWorkspace?.openSession?.(sessionId)'), 'focusing is official navigation')
+  assert.ok(source.includes('function armPackSession(sessionId)') && source.includes('function releasePackSession(sessionId)'))
+  assert.ok(source.includes('if (count === 0 && !packSessionArmed()) {'), 'the previous Session is captured when the mode arms')
+  assert.ok(source.includes('if (!current || !packSessionRendered.has(current)) return;'), 'a later navigation of the user wins over the restore')
+  assert.ok(source.includes("document.querySelector('[data-sidebar-right-panel]')"), 'the Sidebar column is measured, not reimplemented')
+  assert.ok(source.includes('--lwb-rightbar-inset'), 'the overlay yields the column by width')
+  assert.ok(source.includes('sidebarRight.mounted?.getSnapshot?.()'), 'an official open waits for the mounted seat to publish the focused Session')
+  assert.ok(source.includes('restoreOpenResource?.();'))
+  // No part of the Sidebar or its previews is re-drawn.
+  assert.doesNotMatch(source, /renderArtifacts|ArtifactPanel|artifactRequests|allow-scripts/u)
 })
