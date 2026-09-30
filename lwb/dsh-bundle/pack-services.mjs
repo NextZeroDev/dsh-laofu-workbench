@@ -1,8 +1,25 @@
 import { randomUUID } from 'node:crypto'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { packCredentialRef } from './pack-workspaces.mjs'
 import { PackTaskScope } from './pack-task-scope.mjs'
 import { openPackSettings } from './pack-settings.mjs'
+
+async function modelRouteAvailability(ctx, provider) {
+  if (provider.id !== 'deepseek-official') return {}
+  const unavailableReason = '未配置 DeepSeek API Key，请先在“设置 → 模型”中配置。'
+  try {
+    const route = ctx.llm.listConfigurableProviders().find((item) => item.provider === provider.id)
+    const settings = ctx.get('settings')
+    if (!route || !settings) throw new Error('Model settings unavailable')
+    const namespace = settings.describe({ redactSecrets: true }).find((item) => item.ns === route.settingsNs)
+    if (!namespace) throw new Error('Model route settings unavailable')
+    const profile = route.settingsPath.reduce((value, key) => value?.[key], namespace.value)
+    const ref = profile?.apiKeyEnv || 'DEEPSEEK_API_KEY'
+    const status = await ctx.credentials.describe(ref)
+    return status.configured ? { selectable: true } : { selectable: false, unavailableReason }
+  } catch {
+    return { selectable: false, unavailableReason: '无法确认 DeepSeek API Key 状态，请检查模型设置后刷新。' }
+  }
+}
 
 /** Scoped services issued by the host to one actually mounted package. */
 export class LwbPackServices {
@@ -27,6 +44,7 @@ export class LwbPackServices {
       models: Object.freeze({
         list: async () => Promise.all((this.ctx.llm?.listProviders?.() || []).map(async (provider) => ({
           ...provider,
+          ...await modelRouteAvailability(this.ctx, provider),
           models: await this.ctx.llm.listModels(provider.id).catch(() => []),
         }))),
       }),
@@ -164,24 +182,17 @@ export class LwbPackServices {
     if (sessions.has(sessionId)) return sessions.get(sessionId).public
     await this.workspaces.recordSession(id, sessionId)
     const preset = await this.ctx.agentPresets.resolve('standard')
-    const setup = async (agentCtx) => { await this.ctx.agentPresets.mount(agentCtx, preset.id) }
-    let handle
-    try {
-      handle = resume
-        ? await this.ctx.agents.resume({ resumeSessionId: sessionId, agentOptions: selection, setup, signal })
-        : await this.ctx.agents.create({ sessionId, meta: { cwd: context.workspacePath, agentPreset: preset.id }, agentOptions: selection, setup, signal })
-      this.ctx.permissionPresets.set(handle.agent.session, 'workspace-write')
-    } catch (error) {
-      if (resume) throw error
-      throw error
-    }
+    signal.throwIfAborted()
+    await this.ctx.sessionController.create({ sessionId, cwd: context.workspacePath, agentPreset: preset.id })
+    await this.ctx.sessionController.selectModel({ sessionId, ...selection })
+    const agent = this.ctx.agents.get(sessionId)
+    if (!agent) throw new Error(`会话 "${sessionId}" 创建后不可用。`)
+    this.ctx.permissionPresets.set(agent.session, 'workspace-write')
     const session = {
-      handle,
       public: null,
       async dispose() {
         if (sessions.get(sessionId) !== session) return
         sessions.delete(sessionId)
-        await handle.dispose()
       },
     }
     const address = Object.freeze({ kind: 'session', sessionId })
@@ -190,12 +201,20 @@ export class LwbPackServices {
       address,
       provider: selection.provider,
       model: selection.model,
-      followup: (text) => {
+      followup: async (text) => {
         if (typeof text !== 'string' || !text.trim()) throw new Error('会话消息不能为空。')
-        handle.agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: id } }))
+        signal.throwIfAborted()
+        return this.ctx.sessionController.prompt({
+          requestId: randomUUID(), sessionId, mode: 'queue',
+          content: [{ type: 'text', text: text.trim() }],
+        }, signal)
       },
-      whenIdle: () => handle.agent.whenIdle(),
-      cancel: () => handle.agent.cancel({ kind: 'parent' }),
+      whenIdle: async () => {
+        const current = this.ctx.agents.get(sessionId)
+        if (!current) throw new Error(`会话 "${sessionId}" 不可用。`)
+        await current.whenIdle()
+      },
+      cancel: () => this.ctx.agents.get(sessionId)?.cancel({ kind: 'parent' }),
       dispose: () => session.dispose(),
       page: (request = {}, pageSignal = signal) => this.sessionPage(id, address, request, pageSignal),
       follow: (request = {}, followSignal = signal) => this.sessionFollow(id, address, request, followSignal),

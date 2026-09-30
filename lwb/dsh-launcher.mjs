@@ -3,7 +3,9 @@ import { join } from 'node:path'
 import { LWB_RUNTIME } from './dsh-bundle/runtime-config.mjs'
 import { assertUpstream, DSH_ROOT } from './upstream.mjs'
 import { prepareLwbProfile } from './profile-setup.mjs'
+import { prepareEmbeddedSidebarBundle } from './dsh-bundle/embedded-sidebar-build.mjs'
 
+await prepareEmbeddedSidebarBundle()
 assertUpstream()
 await prepareLwbProfile()
 const ROOT_DIR = LWB_RUNTIME.projectRoot

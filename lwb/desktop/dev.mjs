@@ -7,7 +7,9 @@ import { assertUpstream, DSH_ROOT } from '../upstream.mjs'
 import { prepareLwbProfile } from '../profile-setup.mjs'
 import { desktopPnpmInvocation } from './toolchain.mjs'
 import { desktopDevelopmentEnvironment } from './profile.mjs'
+import { prepareEmbeddedSidebarBundle } from '../dsh-bundle/embedded-sidebar-build.mjs'
 
+await prepareEmbeddedSidebarBundle()
 assertUpstream()
 const appRoot = join(DSH_ROOT, 'apps', 'desktop')
 const profile = join(LWB_RUNTIME.dshHome, 'profiles', 'desktop')

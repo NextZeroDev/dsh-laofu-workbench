@@ -14,6 +14,7 @@ async function setup(t) {
   const keys = new Map([['BAILIAN_API_KEY', 'ordinary-secret']])
   const settings = { providers: { ordinary: { apiKeyEnv: 'BAILIAN_API_KEY' } } }
   const calls = []
+  const sessionAgents = new Map()
   let selection = { provider: 'ordinary', model: 'dsh-default', reasoningEffort: 'high' }
   const ctx = {
     agentDefaultModel: { currentSelection: () => selection },
@@ -29,21 +30,50 @@ async function setup(t) {
     },
     agentPresets: { resolve: async () => ({ id: 'standard' }), mount: async (_, id) => calls.push(['preset', id]) },
     permissionPresets: { set: (_, value) => calls.push(['permission', value]) },
-    agents: { create: async (options) => {
-      const owned = await workspaces.visibility()
-      assert.ok(owned.sessionIds.includes(options.sessionId), 'ownership must be durable before Agent publication')
-      calls.push(['create', options])
-      const agent = { session: { header: { cwd: options.meta.cwd } } }
-      // The real setup Context deliberately does not inject `agent`.
-      await options.setup({})
-      return { agent, dispose: async () => calls.push(['dispose']) }
-    } },
+    agents: {
+      create: async (options) => {
+        const owned = await workspaces.visibility()
+        assert.ok(owned.sessionIds.includes(options.sessionId), 'ownership must be durable before Agent publication')
+        calls.push(['create', options])
+        const agent = { session: { header: { cwd: options.meta.cwd } } }
+        // The real setup Context deliberately does not inject `agent`.
+        await options.setup({})
+        return { agent, dispose: async () => calls.push(['dispose']) }
+      },
+      get: (sessionId) => sessionAgents.get(sessionId),
+    },
+    sessionController: {
+      async create(options) {
+        const owned = await workspaces.visibility()
+        assert.ok(owned.sessionIds.includes(options.sessionId), 'ownership must be durable before Session publication')
+        calls.push(['session.create', options])
+        let agent = sessionAgents.get(options.sessionId)
+        if (!agent) {
+          agent = {
+            id: options.sessionId,
+            session: { header: { cwd: options.cwd } },
+            whenIdle: async () => calls.push(['session.idle', options.sessionId]),
+            cancel: (reason) => calls.push(['session.cancel', options.sessionId, reason]),
+          }
+          sessionAgents.set(options.sessionId, agent)
+        }
+        return { sessionId: options.sessionId, agentPreset: options.agentPreset }
+      },
+      async selectModel(options) {
+        calls.push(['session.selectModel', options])
+        return { selected: options }
+      },
+      async prompt(options) {
+        calls.push(['session.prompt', options])
+        return { accepted: true }
+      },
+    },
   }
   const workspaces = new LwbPackWorkspaces({ root })
   const services = new LwbPackServices(ctx, workspaces)
   const first = await services.mount(manifest('spoken-video'))
   const second = await services.mount(manifest('another-pack'))
-  return { root, ctx, keys, settings, calls, services, workspaces, first, second, setSelection: (value) => { selection = value } }
+  return { root, ctx, keys, settings, calls, sessionAgents, services, workspaces, first, second, setSelection: (value) => { selection = value } }
 }
 
 test('data access needs no Agent; directories, credentials and settings are isolated', async (t) => {
@@ -61,6 +91,33 @@ test('data access needs no Agent; directories, credentials and settings are isol
   await firstSettings.update({ voice: 'first' })
   assert.equal(secondSettings.get().voice, '')
   await assert.rejects(first.assertAgent({ session: { header: { cwd: (await second.context()).workspacePath } } }), /此工具/)
+})
+
+test('model catalog marks only the unconfigured DeepSeek API route unavailable', async (t) => {
+  const { first, ctx, keys } = await setup(t)
+  let ref = 'CUSTOM_DEEPSEEK_KEY'
+  ctx.get = (name) => name === 'settings' ? {
+    describe: () => [{ ns: 'llm-deepseek', value: { apiKeyEnv: ref } }],
+  } : undefined
+  ctx.llm = {
+    listProviders: () => [{ id: 'deepseek-official', name: 'DeepSeek' }, { id: 'deepseek-account', name: 'DeepSeek Account' }],
+    listConfigurableProviders: () => [{ provider: 'deepseek-official', settingsNs: 'llm-deepseek', settingsPath: [] }],
+    listModels: async () => [{ id: 'deepseek-flash', name: 'DeepSeek Flash' }],
+  }
+  let groups = await first.models.list()
+  assert.equal(groups[0].selectable, false)
+  assert.match(groups[0].unavailableReason, /API Key/)
+  assert.equal(groups[1].selectable, undefined)
+  keys.set(ref, 'configured')
+  groups = await first.models.list()
+  assert.equal(groups[0].selectable, true)
+  ref = 'ANOTHER_KEY'
+  groups = await first.models.list()
+  assert.equal(groups[0].selectable, false)
+  ctx.credentials.describe = async () => { throw new Error('credential service unavailable') }
+  groups = await first.models.list()
+  assert.equal(groups[0].selectable, false)
+  assert.match(groups[0].unavailableReason, /无法确认/)
 })
 
 test('AI roots use DSH defaults without pack model credentials and keep owned cwd and permissions', async (t) => {
@@ -120,6 +177,41 @@ test('independent scene model governs all pack roots without modifying DSH defau
   await second.withAgent(() => {})
   assert.deepEqual(calls.filter(([kind]) => kind === 'create').map(([, options]) => options.agentOptions), [{ provider: 'lwb', model: 'lwb-fast' }, { provider: 'lwb', model: 'lwb-fast' }])
   assert.equal(ctx.agentDefaultModel.currentSelection().model, 'dsh-default')
+})
+
+test('pack sessions use the official controller and remain resumable after facade disposal', async t => {
+  const { first, calls, ctx } = await setup(t)
+  const session = await first.sessions.create({ provider: 'deepseek-account', model: 'deepseek-flash' })
+  const create = calls.find(([kind]) => kind === 'session.create')
+  assert.equal(create[1].sessionId, session.id)
+  assert.equal(create[1].cwd, (await first.context()).workspacePath)
+  assert.equal(create[1].agentPreset, 'standard')
+  assert.deepEqual(calls.find(([kind]) => kind === 'session.selectModel')[1], {
+    sessionId: session.id,
+    provider: 'deepseek-account',
+    model: 'deepseek-flash',
+  })
+
+  await session.followup('  test prompt  ')
+  const prompt = calls.find(([kind]) => kind === 'session.prompt')[1]
+  assert.equal(prompt.sessionId, session.id)
+  assert.equal(prompt.mode, 'queue')
+  assert.deepEqual(prompt.content, [{ type: 'text', text: 'test prompt' }])
+  assert.match(prompt.requestId, /^[0-9a-f-]{36}$/u)
+  await session.whenIdle()
+  session.cancel()
+  assert.deepEqual(calls.find(([kind]) => kind === 'session.idle'), ['session.idle', session.id])
+  assert.deepEqual(calls.find(([kind]) => kind === 'session.cancel'), ['session.cancel', session.id, { kind: 'parent' }])
+
+  const officialAgent = ctx.agents.get(session.id)
+  await session.dispose()
+  assert.equal(first.sessions.get(session.id), null)
+  assert.equal(ctx.agents.get(session.id), officialAgent, 'disposing the pack facade must not destroy the official Session')
+
+  const resumed = await first.sessions.resume(session.id, { provider: 'deepseek-account', model: 'deepseek-flash' })
+  assert.equal(resumed.id, session.id)
+  assert.equal(calls.filter(([kind]) => kind === 'session.create').length, 2)
+  await resumed.whenIdle()
 })
 
 test('unload waits for late background final writes admitted by an in-flight request', async (t) => {

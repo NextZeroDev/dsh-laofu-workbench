@@ -4,6 +4,7 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 
 // Use published DSH/pi-ai APIs. No upstream files or user provider settings are edited.
 const ROUTE = 'lwb'
+const INTERACTIVE_MAX_TOKENS = 32768
 const retryPolicy = resolveRetryPolicy({ mode: 'normal', maxRetries: 0 }, 'LWB')
 
 export class LwbModelAdapter extends LlmAdapter {
@@ -15,7 +16,7 @@ export class LwbModelAdapter extends LlmAdapter {
     return (await this.client.catalog()).models.filter(item => item.available).map(item => this.info(item))
   }
   info(item) {
-    return { provider: ROUTE, id: item.id, name: item.name, inputModalities: item.supportsVision ? ['text', 'image'] : ['text'], context: { contextWindow: item.contextWindow }, defaultMaxTokens: item.maxOutputTokens }
+    return { provider: ROUTE, id: item.id, name: item.name, inputModalities: item.supportsVision ? ['text', 'image'] : ['text'], context: { contextWindow: item.contextWindow }, defaultMaxTokens: Math.min(item.maxOutputTokens, INTERACTIVE_MAX_TOKENS) }
   }
   async resolveModel(provider, model) {
     if (provider !== ROUTE) throw new LlmError('无效的 LWB 模型来源。', 'NO_ADAPTER')
@@ -40,10 +41,11 @@ export class LwbModelAdapter extends LlmAdapter {
     const credential = await this.client.serviceCredential()
     assertCurrent()
     const baseUrl = `${this.client.baseUrl}/api/lwb/v1`
-    const model = { id: item.id, name: item.name, api: 'openai-completions', provider: ROUTE, baseUrl, reasoning: false, input: item.supportsVision ? ['text', 'image'] : ['text'], contextWindow: item.contextWindow, maxTokens: item.maxOutputTokens, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, compat: { supportsStore: false, supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' } }
+    const maxTokens = Math.min(item.maxOutputTokens, INTERACTIVE_MAX_TOKENS)
+    const model = { id: item.id, name: item.name, api: 'openai-completions', provider: ROUTE, baseUrl, reasoning: false, input: item.supportsVision ? ['text', 'image'] : ['text'], contextWindow: item.contextWindow, maxTokens, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, compat: { supportsStore: false, supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' } }
     const api = openAICompletionsApi()
     const piProvider = { id: ROUTE, name: 'LWB 模型服务', baseUrl, auth: { apiKey: { name: 'LWB', resolve: async ({ credential: key }) => ({ auth: { apiKey: key?.key }, source: 'LWB' }) } }, getModels: () => [model], stream: (...args) => api.stream(...args), streamSimple: (...args) => api.streamSimple(...args) }
-    const profiles = new Map([[ROUTE, { provider: ROUTE, displayName: 'LWB 模型服务', api: 'openai-completions', baseURL: baseUrl, streamIdleTimeoutMs: 90000, maxRequestImageBytes: 20 * 1024 * 1024, requestImagePixelBudget: 20000000, requestImageMaxBytes: 10 * 1024 * 1024, retryPolicy, piProvider, modelErrors: new Map(), configuredMaxTokens: new Map([[item.id, item.maxOutputTokens]]) }]])
+    const profiles = new Map([[ROUTE, { provider: ROUTE, displayName: 'LWB 模型服务', api: 'openai-completions', baseURL: baseUrl, streamIdleTimeoutMs: 90000, maxRequestImageBytes: 20 * 1024 * 1024, requestImagePixelBudget: 20000000, requestImageMaxBytes: 10 * 1024 * 1024, retryPolicy, piProvider, modelErrors: new Map(), configuredMaxTokens: new Map([[item.id, maxTokens]]) }]])
     const adapter = new PiAiAdapter({
       profiles: () => profiles,
       resolveApiKey: async () => { assertCurrent(); return credential.apiKey },

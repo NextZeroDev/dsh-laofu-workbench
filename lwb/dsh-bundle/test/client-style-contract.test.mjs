@@ -140,7 +140,7 @@ test('capability routes carry the current pack and menu identity into shell chro
   const source = await readFile(clientPath, 'utf8')
   assert.match(source, /function pageChrome\(page, selected, copy = currentLwbCopy\(\)\) \{[\s\S]*?title: selected\.pack\.name,[\s\S]*?hint: selected\.menu\.label,[\s\S]*?intro: selected\.pack\.description \|\| copy\.capabilityHint,[\s\S]*?ariaLabel: `\$\{selected\.pack\.name\} · \$\{selected\.menu\.label\}`/u)
 
-  const start = source.indexOf('function WorkbenchOverlay({ renderSlot })')
+  const start = source.indexOf('function WorkbenchOverlay({ renderSlot, renderFactorySlot, SessionProvider })')
   const end = source.indexOf('\n    function apply(ctx)', start)
   assert.ok(start >= 0 && end > start, 'workbench overlay must remain a standalone component')
   const overlay = source.slice(start, end)
@@ -216,4 +216,16 @@ test('history and fork navigation open sessions through the DSH workspace servic
   const forkSession = source.slice(forkStart, forkEnd)
   assert.match(forkSession, /services\.uiWorkspace\.openSession\?\.\(childSessionId\)/u)
   assert.doesNotMatch(forkSession, /services\.sessions\.open/u)
+})
+
+test('capability pages embed the official DSH conversation without the history sidebar', async () => {
+  const source = await readFile(clientPath, 'utf8')
+  assert.ok(source.includes('function EmbeddedConversationHost({ sessionId, SessionProvider, renderFactorySlot })'))
+  assert.ok(source.includes("services.sessions.retain(sessionId, { source: 'gateway' })"))
+  assert.ok(source.includes('h(SessionProvider, { session: state.reference }'))
+  assert.ok(source.includes("renderFactorySlot('conversation.content', {"))
+  assert.ok(source.includes("variant: 'embedded', phase: 'active', hero: false"))
+  assert.ok(source.includes("renderSlot('conversation.session', { view: 'chat' })"))
+  assert.ok(source.includes("'lwb.embedded.conversation': { kind: 'single', scope: 'session' }"))
+  assert.ok(source.includes('h(CapabilityPage, { renderConversation })'))
 })

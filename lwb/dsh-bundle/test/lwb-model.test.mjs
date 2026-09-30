@@ -17,12 +17,12 @@ test('LWB delegates real SSE and tool calls to the official adapter with managed
     res.end('data: [DONE]\n\n')
   })
   server.listen(0, '127.0.0.1'); await once(server, 'listening'); t.after(() => { server.closeAllConnections(); server.close() })
-  const entry = { id: 'lwb-fast', name: '快速', available: true, supportsTools: true, contextWindow: 128000, maxOutputTokens: 8192 }
+  const entry = { id: 'lwb-fast', name: '快速', available: true, supportsTools: true, contextWindow: 128000, maxOutputTokens: 393216 }
   const client = { baseUrl: `http://127.0.0.1:${server.address().port}`, generation: 0, serviceAbort: new AbortController(), catalog: async () => ({ models: [entry] }), readSession: async () => ({ user: { id: '7' } }), assertGeneration(g) { assert.equal(g, this.generation) }, serviceCredential: async () => ({ apiKey: 'local-test-key' }), changed() {} }
   const adapter = new LwbModelAdapter(client, { get() {} })
   assert.equal((await adapter.listModels())[0].name, '快速')
   const prepared = await adapter.prepareCall('lwb', 'lwb-fast')
-  assert.equal(prepared.model.defaultMaxTokens, 8192)
+  assert.equal(prepared.model.defaultMaxTokens, 32768)
   const options = { provider: 'lwb', model: 'lwb-fast', messages: [createUserMessage({ content: [{ type: 'text', text: '测试' }], source: { kind: 'plugin', plugin: 'test' } })] }
   const textChunks = []; for await (const chunk of prepared.stream(options)) textChunks.push(chunk)
   assert.ok(JSON.stringify(textChunks).includes('你好'), JSON.stringify(textChunks))

@@ -8,7 +8,9 @@ import { parseArgs } from 'node:util'
 import { assertUpstream, DSH_ROOT, UPSTREAM } from '../upstream.mjs'
 import { LWB_RUNTIME } from '../dsh-bundle/runtime-config.mjs'
 import { desktopPnpmInvocation } from './toolchain.mjs'
+import { prepareEmbeddedSidebarBundle } from '../dsh-bundle/embedded-sidebar-build.mjs'
 
+await prepareEmbeddedSidebarBundle()
 assertUpstream()
 const { values } = parseArgs({ options: { dir: { type: 'boolean' }, check: { type: 'boolean' } } })
 if (!['darwin', 'win32'].includes(process.platform)) throw new Error('Official Desktop packaging supports macOS and Windows build hosts.')

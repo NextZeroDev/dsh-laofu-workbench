@@ -619,6 +619,7 @@ window.__ModuleLoader__.load({
       .lwb-plain-button,.lwb-primary-button,.lwb-danger-button { min-height:32px; padding:0 11px; border:1px solid #d7e0e9; border-radius:6px; background:#fff; color:#4f6071; font-size:var(--lwb-text-base,14px); font-weight:600; cursor:pointer; } .lwb-primary-button { border-color:var(--lwb-blue); color:#fff; background:var(--lwb-blue); } .lwb-danger-button { border-color:#dba8a8; color:#a44949; background:#fff7f7; }
       .lwb-pack-tabs { display:flex; gap:4px; margin-bottom:14px; } .lwb-pack-tab { min-height:32px; padding:0 12px; border:1px solid transparent; border-radius:6px; color:#6e7c8a; background:transparent; cursor:pointer; } .lwb-pack-tab[data-active="true"] { border-color:#d6e5f9; color:var(--lwb-blue); background:var(--lwb-blue-soft); } .lwb-market-controls { display:grid; grid-template-columns:minmax(220px,1fr) 142px 142px; gap:9px; margin-bottom:16px; } .lwb-market-search { width:100%; height:34px; padding:0 10px; border:1px solid #d8e2ec; border-radius:6px; outline:0; color:var(--lwb-ink); background:var(--lwb-surface); font-size:var(--lwb-text-base,14px); } .lwb-market-search:focus { border-color:var(--lwb-blue); box-shadow:0 0 0 2px var(--lwb-blue-soft); } .lwb-pack-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(248px,1fr)); gap:13px; } .lwb-pack-card { display:flex; min-height:258px; flex-direction:column; padding:17px; cursor:pointer; } .lwb-pack-card:hover { border-color:#b9d4f4; box-shadow:0 5px 17px rgba(39,78,123,.09); } .lwb-pack-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; } .lwb-pack-title { display:flex; min-width:0; align-items:center; gap:11px; } .lwb-pack-title > div { min-width:0; } .lwb-pack-icon { width:37px; height:37px; flex:none; font-size:var(--lwb-text-heading,20px); } .lwb-pack-title h3 { overflow:hidden; margin:0; font-size:var(--lwb-text-lg,16px); text-overflow:ellipsis; white-space:nowrap; } .lwb-pack-title p { margin:4px 0 0; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-pack-card > p { margin:14px 0; color:#657586; font-size:var(--lwb-text-base,14px); line-height:1.6; } .lwb-pack-menu { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; } .lwb-menu-pill { padding:4px 7px; border-radius:4px; color:#617183; background:#f2f5f8; font-size:var(--lwb-text-xs,12px); } .lwb-pack-actions { margin-top:auto; } .lwb-pack-card-note { min-height:16px; margin:0 0 10px; color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); }
       .lwb-pack-empty { border:1px dashed #d6dee7; border-radius:7px; color:#82909e; background:#fbfcfd; font-size:var(--lwb-text-base,14px); }
+      .lwb-embedded-conversation-shell { position:relative; width:100%; height:100%; min-height:0; overflow:hidden; background:var(--lwb-surface); } .lwb-embedded-conversation-main { width:100%; height:100%; min-height:0; } .lwb-embedded-conversation-main > * { height:100%; min-height:0; } .lwb-embedded-conversation-shell [data-sidebar-right-panel] { z-index:4; } .lwb-embedded-conversation-state { display:grid; min-height:220px; place-items:center; padding:24px; border:1px dashed var(--lwb-line); border-radius:7px; color:var(--lwb-muted); background:var(--lwb-surface); font-size:var(--lwb-text-sm,13px); text-align:center; }
       .lwb-settings-list { display:block; overflow:hidden; } .lwb-settings-section { padding:13px 19px 7px; color:#7a8997; background:#fbfcfd; font-size:var(--lwb-text-xs,12px); font-weight:800; letter-spacing:.08em; } .lwb-setting-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:17px 19px; border-bottom:1px solid var(--lwb-line); } .lwb-setting-row:last-child { border-bottom:0; } .lwb-setting-copy > strong { display:block; font-size:var(--lwb-text-md,15px); } .lwb-setting-copy > span { display:block; margin-top:5px; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); line-height:1.5; } .lwb-select { min-width:110px; height:32px; padding:0 8px; border:1px solid #d7e0e9; border-radius:6px; color:#4f6071; background:#fff; font-size:var(--lwb-text-base,14px); } .lwb-field { display:grid; gap:6px; } .lwb-field label { color:#566879; font-size:var(--lwb-text-sm,13px); font-weight:700; } .lwb-input { width:100%; height:34px; padding:0 10px; border:1px solid #d8e2ec; border-radius:6px; outline:0; color:#40505f; background:#fff; font-size:var(--lwb-text-base,14px); } .lwb-input:focus,.lwb-select:focus { border-color:#9fc0f4; box-shadow:0 0 0 2px #eef5ff; } .lwb-form { display:grid; gap:14px; } .lwb-modal-title { margin:0; color:#253646; font-size:var(--lwb-text-heading,20px); } .lwb-modal-copy { margin:6px 0 0; color:#7a8997; font-size:var(--lwb-text-sm,13px); line-height:1.55; } .lwb-dialog-error { margin:0; padding:9px 10px; border:1px solid #efcfcf; border-radius:6px; color:#a54848; background:#fff7f7; font-size:var(--lwb-text-sm,13px); line-height:1.45; }
       .lwb-account-setting-body { padding:0 19px 20px; } .lwb-account-panel { display:grid; gap:15px; padding:16px; border:1px solid var(--lwb-line); border-radius:7px; background:var(--lwb-page); } .lwb-account-meta { display:flex; min-width:0; align-items:baseline; justify-content:space-between; gap:12px; } .lwb-account-meta strong { overflow:hidden; color:var(--lwb-ink); font-size:var(--lwb-text-md,15px); text-overflow:ellipsis; white-space:nowrap; } .lwb-account-meta span,.lwb-account-muted { color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-account-stat-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .lwb-account-stat-grid > div { display:grid; gap:4px; min-width:0; padding:11px 12px; border:1px solid var(--lwb-line); border-radius:6px; background:var(--lwb-surface); } .lwb-account-stat-grid span,.lwb-account-stat-grid small { color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); } .lwb-account-stat-grid strong { overflow:hidden; color:var(--lwb-ink); font-size:var(--lwb-text-md,15px); text-overflow:ellipsis; white-space:nowrap; } .lwb-account-form { max-width:520px; } .lwb-account-mode { display:flex; align-items:center; justify-content:space-between; gap:12px; } .lwb-link-button { padding:0; border:0; color:var(--lwb-blue); background:transparent; font:inherit; font-size:var(--lwb-text-sm,13px); cursor:pointer; } .lwb-link-button:hover { text-decoration:underline; } .lwb-account-notice { margin:0; padding:9px 10px; border:1px solid #b9dfca; border-radius:6px; color:#24714f; background:#f1fbf5; font-size:var(--lwb-text-sm,13px); line-height:1.45; }
       .lwb-purchase-section { display:grid; gap:13px; padding-top:2px; border-top:1px solid var(--lwb-line); } .lwb-purchase-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; } .lwb-purchase-heading strong { display:block; color:var(--lwb-ink); font-size:var(--lwb-text-md,15px); } .lwb-purchase-heading p { margin:4px 0 0; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); line-height:1.45; } .lwb-purchase-tabs { display:flex; gap:4px; border-bottom:1px solid var(--lwb-line); } .lwb-purchase-tabs button { min-height:34px; padding:0 11px; border:0; border-bottom:2px solid transparent; color:var(--lwb-muted); background:transparent; font:inherit; font-size:var(--lwb-text-sm,13px); cursor:pointer; } .lwb-purchase-tabs button:hover { color:var(--lwb-blue); } .lwb-purchase-tabs button.active { border-bottom-color:var(--lwb-blue); color:var(--lwb-blue); font-weight:700; } .lwb-purchase-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:9px; } .lwb-purchase-card { display:grid; min-width:0; gap:7px; padding:12px; border:1px solid var(--lwb-line); border-radius:6px; background:var(--lwb-surface); } .lwb-purchase-card strong { overflow:hidden; color:var(--lwb-ink); font-size:var(--lwb-text-base,14px); text-overflow:ellipsis; white-space:nowrap; } .lwb-purchase-card b { color:var(--lwb-blue); font-size:var(--lwb-text-lg,16px); font-variant-numeric:tabular-nums; } .lwb-purchase-card span { color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); line-height:1.4; } .lwb-purchase-card .lwb-primary-button { width:100%; margin-top:3px; } .lwb-payment-status { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 11px; border:1px solid #c7d9ef; border-radius:6px; color:var(--lwb-ink); background:var(--lwb-blue-soft); } .lwb-payment-status > div:first-child { display:grid; min-width:0; gap:2px; } .lwb-payment-status strong { overflow:hidden; font-size:var(--lwb-text-sm,13px); text-overflow:ellipsis; white-space:nowrap; } .lwb-payment-status span { color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); } .lwb-payment-status[data-status="paid"] { border-color:#b9dfca; background:var(--lwb-green-soft); } .lwb-payment-status[data-status="cancelled"],.lwb-payment-status[data-status="canceled"],.lwb-payment-status[data-status="failed"],.lwb-payment-status[data-status="expired"] { border-color:#e7c6c6; background:#fff6f6; } .lwb-payment-status .lwb-row-actions { flex:none; }
@@ -1705,7 +1706,195 @@ window.__ModuleLoader__.load({
       }
     }
 
-    function CapabilityPage() {
+    let embeddedSidebarRuntime;
+    const embeddedSidebarBySession = new Map();
+    let embeddedSidebarRestore;
+
+    function sessionIdFromResourceAddress(address) {
+      const match = /^dsh-resource:\/\/[^/]+\/session\/([^/]+)/.exec(String(address || ''));
+      return match ? decodeURIComponent(match[1]) : undefined;
+    }
+
+    function installEmbeddedSidebarRuntime(ctx) {
+      if (embeddedSidebarRuntime) return embeddedSidebarRuntime;
+      try {
+        const runtime = require('@deepseek-ai/dsh-client-ui-sidebar-right/client');
+        const tabs = ctx.get('sidebarRightTabs');
+        const resources = ctx.get('resources');
+        const shortcuts = ctx.get('shortcuts');
+        if (!runtime?.RightbarSeat || !runtime?.createSidebarRightStore || !runtime?.createSidebarRightController || !tabs || !resources || !shortcuts) return undefined;
+        const handle = runtime.createSidebarRightStore(() => runtime.defaultSeed(tabs));
+        const { controller, adopt, forget } = runtime.createSidebarRightController(tabs, (address, signal) => resources.pin(address, signal));
+        const store = {
+          ...handle,
+          create(scopeKey) {
+            const instance = handle.create(scopeKey);
+            if (scopeKey !== undefined) {
+              const sessionId = String(scopeKey);
+              const release = adopt(sessionId, instance);
+              const previous = embeddedSidebarBySession.get(sessionId);
+              previous?.release?.();
+              embeddedSidebarBySession.set(sessionId, { controller, release, instance });
+            }
+            return {
+              ...instance,
+              clearPersisted() {
+                instance.clearPersisted();
+                if (scopeKey !== undefined) forget(String(scopeKey));
+              },
+            };
+          },
+        };
+        const embeddedSlots = {
+          body: 'lwb.embedded.sidebar.right.pane.tab',
+          title: 'lwb.embedded.sidebar.right.pane.tab.title',
+          menu: 'lwb.embedded.sidebar.right.tab.menu.item',
+        };
+        const mirrored = new Map();
+        const mirror = (sourceName, targetName, kind) => {
+          const current = ctx.slots.entries(sourceName) || [];
+          const currentKeys = new Set();
+          current.forEach((entry) => {
+            const key = entry.options?.key || entry.options?.id || `${sourceName}:${currentKeys.size}`;
+            currentKeys.add(key);
+            const previous = mirrored.get(`${targetName}:${key}`);
+            if (previous?.entry === entry) return;
+            previous?.dispose?.();
+            const options = Object.assign({}, entry.options || {}, { name: targetName });
+            if (kind === 'keyed') options.key = entry.options?.key;
+            if (kind === 'list') options.id = entry.options?.id;
+            if (entry.inject) options.inject = entry.inject;
+            if (entry.locale) options.locale = entry.locale;
+            // Guide entries own nested slots whose original names belong to the
+            // host rightbar. Embedded artifact tabs do not declare children;
+            // skip those nested registrations instead of colliding with the
+            // host declarations.
+            if (entry.children) return;
+            const dispose = ctx.slots.register(options, entry.component);
+            mirrored.set(`${targetName}:${key}`, { entry, dispose });
+          });
+          Array.from(mirrored.keys()).forEach((id) => {
+            if (!id.startsWith(`${targetName}:`)) return;
+            const key = id.slice(targetName.length + 1);
+            if (!currentKeys.has(key)) {
+              mirrored.get(id)?.dispose?.();
+              mirrored.delete(id);
+            }
+          });
+        };
+        const mirrorAll = () => {
+          mirror('sidebar.right.pane.tab', embeddedSlots.body, 'keyed');
+          mirror('sidebar.right.pane.tab.title', embeddedSlots.title, 'keyed');
+          mirror('sidebar.right.tab.menu.item', embeddedSlots.menu, 'list');
+        };
+        const unsubscribeMirrors = [
+          ctx.slots.subscribe('sidebar.right.pane.tab', mirrorAll),
+          ctx.slots.subscribe('sidebar.right.pane.tab.title', mirrorAll),
+          ctx.slots.subscribe('sidebar.right.tab.menu.item', mirrorAll),
+        ];
+        const disposeSlot = ctx.slots.register({
+          name: 'lwb.embedded.rightbar',
+          locale: 'sidebarRight',
+          store,
+          children: {
+            [embeddedSlots.body]: { kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: runtime.tabInfoFactory } } },
+            [embeddedSlots.title]: { kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: runtime.tabInfoFactory } } },
+            [embeddedSlots.menu]: { kind: 'list', scope: 'session' },
+          },
+          inject: (sessionId) => ({
+            slotNames: embeddedSlots,
+            syncPresentation: () => {},
+            bindService: () => () => {},
+            splitPane: paneId => {
+              const local = embeddedSidebarBySession.get(String(sessionId));
+              local?.instance?.actions?.splitPane?.(String(sessionId), paneId);
+            },
+            toggleFullscreen: () => {
+              const local = embeddedSidebarBySession.get(String(sessionId));
+              const surface = local?.instance?.getSnapshot?.().bySession?.[String(sessionId)];
+              if (surface?.layout?.expanded) local.instance.actions.setMode(String(sessionId), surface.layout.mode === 'fullscreen' ? 'push' : 'fullscreen');
+            },
+            openTab: (kind, options) => controller.openTabIn(String(sessionId), kind, options),
+            closeTab: tabId => controller.closeIn(String(sessionId), tabId),
+            hooks: {
+              shortcuts: shortcuts.catalog,
+              tabTypes: { subscribe: listener => tabs.subscribe(listener), getSnapshot: () => tabs.entries() },
+            },
+            keyedHooks: { tabNavigation: key => controller.tabDomain.occurrence(String(sessionId), { id: key }).navigation },
+            occurrence: tab => controller.tabDomain.occurrence(String(sessionId), tab),
+          }),
+        }, runtime.RightbarSeat);
+        mirrorAll();
+        const globalSidebar = ctx.get('sidebarRight');
+        if (globalSidebar && typeof globalSidebar.openResource === 'function' && !embeddedSidebarRestore) {
+          const originalOpenResource = globalSidebar.openResource.bind(globalSidebar);
+          globalSidebar.openResource = (address, options) => {
+            const sessionId = sessionIdFromResourceAddress(address);
+            const target = sessionId ? embeddedSidebarBySession.get(sessionId) : undefined;
+            if (target) {
+              target.controller.openResourceIn(sessionId, address, options || {});
+              return;
+            }
+            originalOpenResource(address, options);
+          };
+          embeddedSidebarRestore = () => {
+            globalSidebar.openResource = originalOpenResource;
+            embeddedSidebarRestore = undefined;
+          };
+        }
+        embeddedSidebarRuntime = { dispose: () => { unsubscribeMirrors.forEach((dispose) => dispose()); mirrored.forEach((entry) => entry.dispose?.()); mirrored.clear(); disposeSlot(); }, store, controller };
+        return embeddedSidebarRuntime;
+      } catch (error) {
+        console.warn('[lwb] embedded rightbar unavailable', error);
+        return undefined;
+      }
+    }
+
+    function FixedEmbeddedConversationView({ renderSlot }) {
+      return renderSlot('conversation.session', { view: 'chat' });
+    }
+
+    function EmbeddedConversationHost({ sessionId, SessionProvider, renderFactorySlot }) {
+      const renderSlot = arguments[0].renderSlot;
+      const [state, setState] = React.useState({ reference: null, error: null });
+      React.useEffect(() => {
+        let active = true;
+        let released = false;
+        let reference;
+        const release = () => {
+          if (released || !reference) return;
+          released = true;
+          reference.release();
+        };
+        try {
+          reference = services.sessions.retain(sessionId, { source: 'gateway' });
+          Promise.resolve(reference.ready).then(() => {
+            if (active) setState({ reference, error: null });
+            else release();
+          }, (error) => {
+            release();
+            if (active) setState({ reference: null, error: error?.message || '会话加载失败。' });
+          });
+        } catch (error) {
+          setState({ reference: null, error: error?.message || '会话加载失败。' });
+        }
+        return () => { active = false; release(); };
+      }, [sessionId]);
+      if (state.error) return h('div', { className: 'lwb-embedded-conversation-state', role: 'alert' }, state.error);
+      if (!state.reference || !SessionProvider || !renderFactorySlot) return h('div', { className: 'lwb-embedded-conversation-state' }, '正在加载对话…');
+      return h('div', { className: 'lwb-embedded-conversation-shell', 'data-session-id': sessionId },
+        h(SessionProvider, { session: state.reference },
+          h('div', { className: 'lwb-embedded-conversation-main' }, renderFactorySlot('conversation.content', {
+            variant: 'embedded', phase: 'active', hero: false,
+          }, { slots: { views: FixedEmbeddedConversationView } })),
+          embeddedSidebarRuntime && renderSlot && renderSlot('lwb.embedded.rightbar', {
+            width: 380, viewportWidth: 1440, canShow: true, active: true,
+            retainTab: () => () => {},
+          }),
+        ));
+    }
+
+    function CapabilityPage({ renderConversation }) {
       const state = useProduct();
       const copy = useLwbCopy();
       const catalog = usePackCatalog();
@@ -1722,6 +1911,7 @@ window.__ModuleLoader__.load({
         menu,
         packId: pack.id,
         lwbAccount: lwbAccountFacade,
+        renderConversation,
         openConversation: () => showConversation(),
         openPacks: () => navTo('packs'),
         openPackMenu: (menuId) => { if (pack.menus.some((item) => item.id === menuId)) navTo('capability', capabilityRoute(pack.id, menuId)); },
@@ -1750,15 +1940,16 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function WorkbenchOverlay({ renderSlot }) {
+    function WorkbenchOverlay({ renderSlot, renderFactorySlot, SessionProvider }) {
       const state = useProduct();
       const copy = useLwbCopy();
       const catalog = usePackCatalog();
       const selected = state.page === 'capability' ? capabilityAtRoute(catalog.packs, state.capabilityPage) : undefined;
       const chrome = pageChrome(state.page, selected, copy);
       if (state.page === 'conversation') return h(React.Fragment, null, h(MobileNavToggle), h(ConversationOverlay, { renderSlot }));
+      const renderConversation = ({ sessionId }) => h(EmbeddedConversationHost, { sessionId, SessionProvider, renderFactorySlot, renderSlot });
       const body = h(React.Fragment, null,
-        (state.page === 'capability' || (state.page === 'settings' && state.accountReturnRoute)) && h('div', { key: 'capability', hidden: state.page !== 'capability', style: state.page !== 'capability' ? { display: 'none' } : undefined }, h(CapabilityPage)),
+        (state.page === 'capability' || (state.page === 'settings' && state.accountReturnRoute)) && h('div', { key: 'capability', hidden: state.page !== 'capability', style: state.page !== 'capability' ? { display: 'none' } : undefined }, h(CapabilityPage, { renderConversation })),
         state.page === 'packs' ? h(PacksPage, { key: 'packs' }) : state.page === 'settings' ? h(SettingsPage, { key: 'settings', renderSlot }) : null);
       return h(React.Fragment, null, h(MobileNavToggle), h('section', { className: 'lwb-overlay', 'aria-label': chrome.ariaLabel },
         h('header', { className: 'lwb-overlay-head' }, h('div', { className: 'lwb-overlay-title' }, h('b', null, chrome.title), h('span', null, chrome.hint)), button('lwb-plain-button', `← ${copy.conversation}`, () => showConversation())),
@@ -1806,18 +1997,27 @@ window.__ModuleLoader__.load({
           name: 'settings.launcher', priority: -10, registrant: 'lwb-workbench',
         }, LwbRuntimeSettingsTrigger));
         const disposeOverlay = ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-          name: 'shell.overlay', id: 'lwb-workbench-management', order: 10, registrant: 'lwb-workbench',
-          children: {
-            'sidebar.settings': { kind: 'single', scope: 'root' },
-            // Both DSH workspace flows must exist for its picker to activate.
-            // Our history pane owns the sidebar flow in the replacement shell.
-            'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' },
-          },
-        }, WorkbenchOverlay));
+            name: 'shell.overlay', id: 'lwb-workbench-management', order: 10, registrant: 'lwb-workbench',
+            children: {
+              'sidebar.settings': { kind: 'single', scope: 'root' },
+              'lwb.embedded.conversation': { kind: 'single', scope: 'session' },
+              'lwb.embedded.rightbar': { kind: 'single', scope: 'session' },
+              // Both DSH workspace flows must exist for its picker to activate.
+              // Our history pane owns the sidebar flow in the replacement shell.
+              'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' },
+            },
+          }, WorkbenchOverlay));
+        installEmbeddedSidebarRuntime(ctx);
         return () => {
           disableSidebar();
           disposeRuntimeSettingsTrigger?.();
           disposeOverlay?.();
+          embeddedSidebarRestore?.();
+          embeddedSidebarRuntime?.dispose?.();
+          embeddedSidebarBySession.forEach((entry) => { entry.release?.(); });
+          embeddedSidebarRuntime?.controller?.tabDomain?.dispose?.();
+          embeddedSidebarRuntime = undefined;
+          embeddedSidebarBySession.clear();
           disposePackCatalogReset?.();
           disposeDshAccount?.();
           clearInterval(accountTimer);
@@ -1832,7 +2032,7 @@ window.__ModuleLoader__.load({
       }, 'lwb: unified workbench shell');
     }
 
-    exports.inject = ['slots', 'connection', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'locale', 'remote', 'remote.account', 'loader', 'modules'];
+    exports.inject = ['slots', 'connection', 'sessions', 'workspaces', 'uiWorkspace', 'layout', 'locale', 'remote', 'remote.account', 'loader', 'modules', 'sidebarRight', 'sidebarRightTabs', 'resources', 'shortcuts'];
     exports.apply = apply;
     return module.exports;
   },

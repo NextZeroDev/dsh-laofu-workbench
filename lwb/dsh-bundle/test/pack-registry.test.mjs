@@ -75,7 +75,7 @@ test('projects only a revisioned DSH-served browser bundle for a mounted pack', 
 
 test('declares the host services required for dynamic browser bundle projection', async () => {
   const source = await readFile(new URL('../index.mjs', import.meta.url), 'utf8')
-  assert.match(source, /export const inject = \['loader', 'clientModules', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel', 'webServer', 'llm'\]/u)
+  assert.match(source, /export const inject = \['loader', 'clientModules', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel', 'webServer', 'llm', 'sessionController'\]/u)
 })
 
 test('restores enabled packs after the LWB host activates inside its loader subtree', async () => {
