@@ -114,4 +114,4 @@ LWB 账号服务和用户自有服务是两条独立路径：
 
 ## 当前版本的数据边界
 
-当前锁定 DSH `dsh-v0.1.7-rc.2`。默认从全新 `lwb/local/current` 启动，不读取或迁移旧目录；旧文件保留。桌面启动方式见 [Desktop 与 Web](37-desktop-parity.md)，升级检查见 [扩展边界](38-dsh-extension-boundary.md)。
+当前锁定 DSH `dsh-v0.2.0-rc.2`。默认从全新 `lwb/local/current` 启动，不读取或迁移旧目录；旧文件保留。桌面启动方式见 [Desktop 与 Web](37-desktop-parity.md)，升级检查见 [扩展边界](38-dsh-extension-boundary.md)。

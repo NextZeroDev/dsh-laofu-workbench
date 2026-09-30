@@ -54,6 +54,7 @@
 - [26 发布模块简化：视频货架 + 单一发布资料抽屉（连根删除批准/入队/导出）](26-publish-module-simplification.md)
 - [27 内容安排模块重设计分析（定时全自动流水线）](27-content-schedule-module-analysis.md)
 - [DSH 0.1.6 升级与文件上传验收](28-dsh-016-upgrade.md)
+- [DSH 0.2.0 升级与验收](43-dsh-020-upgrade.md)
 - [UI 巡检与使用就绪评估](30-ui-audit-and-readiness.md)
 - [产品默认配置审计](32-product-defaults-audit.md)
 - [视频工程预检与修复](33-video-preflight-repair.md)

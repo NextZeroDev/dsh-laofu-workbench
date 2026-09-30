@@ -6,7 +6,7 @@
 
 **口播视频内容创作是第一个已实现的场景能力包**，覆盖信号发现、选题、写稿、配音字幕、视频制作与发布资料。工作台架构支持继续增加其他场景包；当前仓库只提供这一个业务包。
 
-> 当前为开发预览版，面向本机单用户使用。主要验证环境为 macOS；Linux / Windows 的完整安装与媒体制作流程尚未在本文中提供验证承诺。运行时锁定 DSH `dsh-v0.1.7-rc.2`，具体版本以 [UPSTREAM.lock.json](lwb/UPSTREAM.lock.json) 为准。
+> 当前为开发预览版，面向本机单用户使用。主要验证环境为 macOS；Linux / Windows 的完整安装与媒体制作流程尚未在本文中提供验证承诺。运行时锁定 DSH `dsh-v0.2.0-rc.2`，具体版本以 [UPSTREAM.lock.json](lwb/UPSTREAM.lock.json) 为准。
 
 > 当前源码采用 [PolyForm Noncommercial License 1.0.0](LICENSE)，可用于协议允许的个人、非商业及特定机构用途；协议许可范围外的商业使用需要另行取得书面授权。它是源码可见的非商业许可，不是 OSI 认可的开源许可证。详见[许可证与商业使用](docs/licensing-and-commercial-use.md)。
 
