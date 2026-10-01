@@ -3167,6 +3167,7 @@ window.__ModuleLoader__.load({
           ))),
           AS_APPROVING.has(form.depth) ? h('p', { className: 'sv-as-warn' }, h('strong', null, '将自动确认 AI 稿件，不再人工过稿。'), h('span', null, '深度到达「成片」或「发布资料」时，自动化会代为确认稿件后继续配音与渲染。想保留人工把关请选「写稿」档：跑完停在稿件等你确认。')) : null,
           runtimeBlockers.length ? h('div', { className: 'sv-as-blockers' }, runtimeBlockers.map((item, index) => h('p', { key: index, className: 'sv-as-warn' }, item.message))) : null,
+          runtime?.model?.provider ? h('p', { className: 'sv-meta' }, `本轮使用的场景任务模型：${runtime.model.provider} · ${runtime.model.model}${runtime.model.state === 'missing-credential' ? `，未配置凭据（${runtime.model.ref}）` : runtime.model.state === 'unverifiable' ? '，凭据状态未知' : ''}`) : null,
           runtime && runtime.automationAvailable === false ? h('p', { className: 'sv-error' }, '当前运行环境不提供执行自动化所需的 Agent 服务，任务保存后无法执行。') : null,
         ),
         h('div', { className: 'sv-as-adv' },

@@ -361,6 +361,7 @@ function fakeHosts({ depth = 'packaging', perRunLimit = 1, failStep = null, neve
 
   const disposed = []
   const created = []
+  const adopted = []
   const agents = {
     async resume() { throw new Error('no persisted session') },
     async create(options) {
@@ -368,15 +369,16 @@ function fakeHosts({ depth = 'packaging', perRunLimit = 1, failStep = null, neve
       return { agent: { id: options.sessionId, session: { header: { cwd: options.meta.cwd }, id: options.sessionId } }, async dispose() { disposed.push(options.sessionId) } }
     },
   }
+  const adoptSession = async (agent) => { adopted.push(agent?.id ?? null) }
   const agentPresets = { async resolve(id) { return { id } }, async mount() {} }
   const agentDefaultModel = { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-chat' }) }
   const renamed = []
   const sessionTitle = { rename(session, title) { renamed.push(title); return {} } }
 
   return {
-    calls, projects, created, disposed, renamed, candidateList, projectIdFor,
+    calls, projects, created, disposed, adopted, renamed, candidateList, projectIdFor,
     reset: () => { pollCounts = new Map() },
-    hosts: { content, projects: store, media, publish, agents, agentPresets, agentDefaultModel, sessionTitle },
+    hosts: { content, projects: store, media, publish, agents, agentPresets, agentDefaultModel, sessionTitle, adoptSession },
   }
 }
 
@@ -689,6 +691,66 @@ test('owned schedules use host DSH readiness without acquiring an ordinary conve
   assert.equal((await settleRun(host, host.context, runId)).status, 'completed')
 })
 
+test('runtimeStatus warns when the scene model route has no credential before the round can fail', async (t) => {
+  const { host, cwd } = await setup(t)
+  host.context = { workspacePath: cwd }
+  host.executionStatus = async () => ({ configured: true })
+  host.modelRoute = async () => ({
+    provider: 'deepseek-official', model: 'deepseek-flash', state: 'missing-credential', ref: 'DEEPSEEK_API_KEY',
+    reason: '未配置 API Key（DEEPSEEK_API_KEY），请先在“设置 → 模型”中完成该模型服务的配置。',
+  })
+  const status = await host.runtimeStatus()
+  assert.equal(status.automationAvailable, true, 'the selection exists, so automation itself is available')
+  assert.equal(status.model.state, 'missing-credential')
+  const blocker = status.blockers.find((item) => item.depth === 'topic')
+  assert.match(blocker.message, /deepseek-official/u)
+  assert.match(blocker.message, /DEEPSEEK_API_KEY/u)
+})
+
+test('an unprovable or account-authenticated scene model route never blocks a round', async (t) => {
+  const { host, cwd } = await setup(t)
+  host.context = { workspacePath: cwd }
+  host.executionStatus = async () => ({ configured: true })
+  for (const state of ['ready', 'not-applicable', 'unverifiable']) {
+    host.modelRoute = async () => ({ provider: 'deepseek-account', model: 'deepseek-v4-pro', state, ref: null, reason: null })
+    const status = await host.runtimeStatus()
+    assert.equal(status.blockers.some((item) => item.message.includes('场景任务模型')), false, `${state} must not block`)
+  }
+  // A probe that cannot answer is not evidence of a missing credential.
+  host.modelRoute = async () => { throw new Error('probe exploded') }
+  const status = await host.runtimeStatus()
+  assert.equal(status.model, null)
+  assert.equal(status.blockers.some((item) => item.message.includes('场景任务模型')), false)
+})
+
+test('a round whose scene model route lacks a credential fails up front without running a stage', async (t) => {
+  const { host, cwd, currentAgent, fake } = await setup(t)
+  host.context = { workspacePath: cwd }
+  host.modelRoute = async () => ({
+    provider: 'deepseek-official', model: 'deepseek-flash', state: 'missing-credential', ref: 'DEEPSEEK_API_KEY',
+    reason: '未配置 API Key（DEEPSEEK_API_KEY），请先在“设置 → 模型”中完成该模型服务的配置。',
+  })
+  const created = await createTask(host, currentAgent)
+  const { runId } = await host.runSchedule(currentAgent, { scheduleId: created.id })
+  const run = await settleRun(host, currentAgent, runId)
+
+  assert.equal(run.status, 'failed')
+  assert.equal(run.step, 'topic')
+  assert.equal(run.items.length, 0)
+  assert.match(run.error, /缺少凭据/u, 'the reason names the route rather than only the failing stage')
+  assert.match(run.error, /deepseek-official/u)
+  assert.equal(fake.calls.some((call) => call.name === 'startTopicGeneration'), false, 'the topic child never starts')
+})
+
+test('a round continues when the scene model route cannot be proven unusable', async (t) => {
+  const { host, cwd, currentAgent } = await setup(t)
+  host.context = { workspacePath: cwd }
+  host.modelRoute = async () => ({ provider: 'deepseek-account', model: 'deepseek-v4-pro', state: 'not-applicable', ref: null, reason: null })
+  const created = await createTask(host, currentAgent)
+  const { runId } = await host.runSchedule(currentAgent, { scheduleId: created.id })
+  assert.equal((await settleRun(host, currentAgent, runId)).status, 'completed')
+})
+
 test('runtimeStatus warns about a missing TTS credential or renderer before the round can fail', async (t) => {
   const { host } = await setup(t)
   const ready = await host.runtimeStatus()
@@ -843,7 +905,7 @@ test('a revision conflict from concurrent manual editing fails the item instead 
   assert.equal(fake.disposed.length, 1)
 })
 
-test('the execution identity is created with the standard preset and always disposed', async (t) => {
+test('the execution identity is created with the standard preset, adopted, and always disposed', async (t) => {
   const { host, currentAgent, fake } = await setup(t, { depth: 'topic' })
   const created = await createTask(host, currentAgent, { depth: 'topic' })
   const { runId } = await host.runSchedule(currentAgent, { scheduleId: created.id })
@@ -853,7 +915,39 @@ test('the execution identity is created with the standard preset and always disp
   assert.equal(fake.created[0].sessionId, `sv-auto-${created.id}`)
   assert.equal(typeof fake.created[0].setup, 'function')
   await fake.created[0].setup({})
+  assert.deepEqual(fake.adopted, [fake.created[0].sessionId], 'the pack states ownership of its identity')
   assert.equal(fake.disposed[0], fake.created[0].sessionId)
+})
+
+test('a resumed automation identity is adopted again before any round work', async (t) => {
+  const { host, cwd, currentAgent, fake } = await setup(t, { depth: 'topic' })
+  const created = await createTask(host, currentAgent, { depth: 'topic' })
+  // The identity outlives the round, so a later round resumes it and must state
+  // its ownership again (a reset or a re-registration can drop the index).
+  fake.hosts.agents.resume = async (options) => ({
+    agent: { id: options.resumeSessionId, session: { header: { cwd }, id: options.resumeSessionId } },
+    async dispose() { fake.disposed.push(options.resumeSessionId) },
+  })
+  const { runId } = await host.runSchedule(currentAgent, { scheduleId: created.id })
+  await settleRun(host, currentAgent, runId)
+
+  assert.equal(fake.created.length, 0, 'the resumed identity is reused, not recreated')
+  assert.deepEqual(fake.adopted, [`sv-auto-${created.id}`])
+})
+
+test('automation without session adoption fails loudly instead of leaving an unowned identity', async (t) => {
+  const { host, currentAgent, fake } = await setup(t, { hostOptions: { adoptSession: null } })
+  const created = await createTask(host, currentAgent)
+  const { runId } = await host.runSchedule(currentAgent, { scheduleId: created.id })
+  const run = await settleRun(host, currentAgent, runId)
+
+  assert.equal(run.status, 'failed')
+  assert.match(run.error, /不提供能力包会话归属服务/u)
+  assert.equal(fake.created.length, 0, 'no identity was published without ownership')
+  assert.equal(fake.calls.length, 0, 'no stage ran')
+  const status = await host.runtimeStatus()
+  assert.equal(status.automationAvailable, false)
+  assert.ok(status.blockers.some((item) => item.depth === 'topic'))
 })
 
 test('run history retains more than 100 rounds and filters before paging lightweight results', async (t) => {

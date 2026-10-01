@@ -73,6 +73,13 @@ export async function apply(ctx, config = {}) {
   const schedule = new SpokenVideoScheduleHost({
     context, background: scope.background, modelSelection: scope.modelSelection,
     executionStatus: () => ctx.lwbPackServices.executionStatus(manifest.id),
+    // Separate from `executionStatus`: this one may read the effective route's
+    // credential reference so a round can name an unusable route up front
+    // instead of failing on the topic child's first model request.
+    modelRoute: () => ctx.lwbPackServices.modelRoute(manifest.id),
+    // An unattended round creates its own root Agent; the pack states that the
+    // Session is its own so ordinary conversation history keeps it hidden.
+    adoptSession: (agent) => scope.sessions.adopt(agent),
     ctx,
     content,
     projects,
