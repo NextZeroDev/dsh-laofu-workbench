@@ -36,5 +36,29 @@ if (!/\{\.\.\.slotInjected\.props\} \{\.\.\.contextual\} \{\.\.\.ownerProps\}/u.
 if (!/entry\.children\?\.\[key\]/u.test(rendererSlots)) {
   throw new Error('renderSlot authorization no longer reads the rendering entry children table; re-derive where the sidebar.workspaces seat must be declared')
 }
+// Pack Sessions are hidden by ownership id AND by their directory, because a
+// pack can create a Session after the ownership index was read. The directory
+// rule reads the Session list summary's `cwd`; losing that projection degrades
+// it to a silent no-op and pack Sessions reappear in ordinary history.
+const sessionService = readFileSync(join(dshPackageDirectory('@deepseek-ai/dsh-api-session-controller'), 'src/client/sessions/service.ts'), 'utf8')
+if (!/\.\.\.\(entry\.cwd !== undefined \? \{ cwd: entry\.cwd \} : \{\}\)/u.test(sessionService)) {
+  throw new Error('the client Session list no longer projects cwd; the pack-Session directory rule cannot identify a Session created after the ownership read')
+}
+// The conversation column also carries the official global panel rows. The
+// Plugins entry must stay the list seat's occupant, its management page must
+// stay an official `main` panel, and the main column must keep falling back to
+// the Conversation — the column dispatches the selected id and relies on that
+// fallback to return.
+const pluginManagerClient = readFileSync(join(dshPackageDirectory('@deepseek-ai/dsh-client-ui-plugin-manager'), 'src/client/index.ts'), 'utf8')
+if (!/ctx\.slots\.inject\('sidebar\.panellist',/u.test(pluginManagerClient)) {
+  throw new Error('ui-plugin-manager no longer fills the sidebar.panellist seat; the conversation column would lose the Plugins row')
+}
+if (!/PANEL_ID = 'plugins'/u.test(pluginManagerClient) || !/ctx\.slots\.inject\('main',/u.test(pluginManagerClient)) {
+  throw new Error('ui-plugin-manager no longer registers the plugins main panel; the Plugins row could not open its page')
+}
+const appFrame = readFileSync(join(dshPackageDirectory('@deepseek-ai/dsh-client-ui-layout'), 'src/client/AppFrame.tsx'), 'utf8')
+if (!/renderSlot\('main', \{\}, \{ entryKey: panelId \?\? 'conversation' \}\)/u.test(appFrame)) {
+  throw new Error('the main column no longer falls back to the conversation entry; a selected panel would replace the Conversation permanently')
+}
 applyLwbEntryPolicy(readFileSync(join(DSH_ROOT, 'apps/desktop/lib/main.js'), 'utf8'))
 console.log(`LWB upstream contract passed: ${UPSTREAM.tag} (${result.commit}); official source clean.`)

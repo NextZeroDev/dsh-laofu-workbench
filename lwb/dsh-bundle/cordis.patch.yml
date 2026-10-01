@@ -22,9 +22,10 @@
 - id: ui-sidebar
   disabled: true
 
-# LWB owns the product navigation; native DSH settings remain available.
-- id: ui-plugin-manager
-  disabled: true
+# ui-plugin-manager deliberately stays enabled: the Plugins page is an official
+# `main` panel, and its sidebar row is filled by the conversation module, whose
+# column declares `sidebar.panellist` on the LWB overlay entry. LWB owns only
+# the product navigation (`sidebar`), not the official panel rows.
 
 # The official Desktop now binds a local Web Host. Keep LWB separate from
 # an independently installed official Desktop without changing its source.

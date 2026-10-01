@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     var module = { exports: {} };
     var exports = module.exports;
     const React = require('react');
-    const { IconSettingsOutlineRegular, IconNewChatOutlineRegular, IconCordisPluginOutlineRegular, IconChevronLeftOutlineRegular } = require('@deepseek-ai/dsh-client-ui-primitives');
+    const { IconSettingsOutlineRegular, IconNewChatOutlineRegular, IconCordisPluginOutlineRegular, IconChevronLeftOutlineRegular, ShortcutKeys } = require('@deepseek-ai/dsh-client-ui-primitives');
     const h = React.createElement;
 
     // Browsers expose crypto.randomUUID only in secure contexts. The workbench
@@ -25,6 +25,7 @@ window.__ModuleLoader__.load({
     installLanCryptoCompatibility();
 
     const STORAGE_KEY = 'lwb.workbench.v3';
+    const NAV_STORAGE_KEY = 'lwb.nav.v1';
     const BASE_CONTRACT_VERSION = 9;
     let services;
 
@@ -69,12 +70,47 @@ window.__ModuleLoader__.load({
       return {
         baseContractVersion: BASE_CONTRACT_VERSION,
         stateUpdatedAt: Number.isFinite(state.stateUpdatedAt) ? state.stateUpdatedAt : Date.now(),
+        // The browser remembers where the user was; the Workbench does not keep a
+        // server-side route, so this snapshot is the only place it can live.
+        page: ['packs', 'settings', 'capability'].includes(state.page) ? state.page : 'conversation',
+        capabilityPage: typeof state.capabilityPage === 'string' ? state.capabilityPage : null,
       };
     }
     function persist(state) {
       const snapshot = persistedSnapshot(state);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch (_) {}
       return Promise.resolve();
+    }
+    /**
+     * Grouped capability navigation is shell chrome, so it belongs to the
+     * browser rather than to a Session: a reload must show the same open groups.
+     * The pack catalog stays authoritative for which ids exist, and a missing
+     * record (null) is distinct from an empty one — "no preference yet" keeps the
+     * first-run reveal rules alive, while an empty set is the user's own answer.
+     */
+    function navStorage(storage) {
+      if (storage) return storage;
+      return typeof globalThis === 'undefined' ? undefined : globalThis.localStorage;
+    }
+    function readNavPreference(storage) {
+      const target = navStorage(storage);
+      if (!target) return null;
+      try {
+        const saved = JSON.parse(target.getItem(NAV_STORAGE_KEY) || 'null');
+        if (!saved || typeof saved !== 'object' || !Array.isArray(saved.expandedPacks)) return null;
+        const ids = new Set();
+        for (const id of saved.expandedPacks) if (typeof id === 'string' && PACK_ID.test(id)) ids.add(id);
+        return ids;
+      } catch (_) {
+        return null;
+      }
+    }
+    function writeNavPreference(expanded, storage) {
+      const target = navStorage(storage);
+      if (!target) return;
+      try {
+        target.setItem(NAV_STORAGE_KEY, JSON.stringify({ expandedPacks: [...expanded].sort(), updatedAt: Date.now() }));
+      } catch (_) {}
     }
     function notify(listeners) {
       listeners.forEach((listener) => listener());
@@ -286,7 +322,7 @@ window.__ModuleLoader__.load({
         collapseSidebar: '收起侧栏', closeNavigation: '关闭导航', openNavigation: '打开导航', openConversationList: '打开会话列表',
         expandPack: (name) => `展开${name}`, collapsePack: (name) => `收起${name}`,
         conversationModule: '对话模块', conversationHistory: '会话历史', closeConversationList: '关闭会话列表',
-        session: '会话', newConversation: '新建对话', readingWorkspaces: '正在读取工作区', searchConversations: '搜索对话…',
+        session: '会话', newSession: '新会话', newSessionLabel: '新建会话', conversationPanels: '官方功能', readingWorkspaces: '正在读取工作区', searchConversations: '搜索对话…',
         searchResults: '搜索结果', workspaces: '工作区', addWorkspace: '添加工作区', loadingWorkspaces: '正在读取 DSH 工作区…',
         noWorkspaces: '尚未添加工作区。', unassignedSessions: '未归属会话', archivedSessions: '已归档会话',
         noArchivedSessions: '暂无已归档会话。', noMatchingSessions: '没有匹配的会话。', noSessionsInWorkspace: '该工作区暂无会话。',
@@ -325,7 +361,7 @@ window.__ModuleLoader__.load({
         collapseSidebar: 'Collapse sidebar', closeNavigation: 'Close navigation', openNavigation: 'Open navigation', openConversationList: 'Open conversation list',
         expandPack: (name) => `Expand ${name}`, collapsePack: (name) => `Collapse ${name}`,
         conversationModule: 'Conversation module', conversationHistory: 'Conversation history', closeConversationList: 'Close conversation list',
-        session: 'Sessions', newConversation: 'New conversation', readingWorkspaces: 'Loading workspaces', searchConversations: 'Search conversations...',
+        session: 'Sessions', newSession: 'New session', newSessionLabel: 'New session', conversationPanels: 'Official panels', readingWorkspaces: 'Loading workspaces', searchConversations: 'Search conversations...',
         searchResults: 'Search results', workspaces: 'Workspaces', addWorkspace: 'Add workspace', loadingWorkspaces: 'Loading DSH workspaces...',
         noWorkspaces: 'No workspaces added yet.', unassignedSessions: 'Unassigned sessions', archivedSessions: 'Archived sessions',
         noArchivedSessions: 'No archived sessions.', noMatchingSessions: 'No matching sessions.', noSessionsInWorkspace: 'No sessions in this workspace.',
@@ -580,12 +616,17 @@ window.__ModuleLoader__.load({
       return response.value;
     }
     function navTo(page, capabilityPage) {
-      updateProduct({ page, accountReturnRoute: null, capabilityPage: capabilityPage || null, mobileNavOpen: false, conversationPanelOpen: false }, false);
-      if (page !== 'conversation') persist(productState);
+      // Persisted, not transient: a reload returns to the page the user left,
+      // which is also what re-reveals that page's capability group.
+      if (page === 'conversation') clearConversationPanel();
+      updateProduct({ page, accountReturnRoute: null, capabilityPage: capabilityPage || null, mobileNavOpen: false, conversationPanelOpen: false });
     }
     function showConversation(sessionId) {
       if (sessionId) services?.uiWorkspace?.openSession?.(sessionId);
-      updateProduct({ page: 'conversation', accountReturnRoute: null, capabilityPage: null, mobileNavOpen: false, conversationPanelOpen: false }, false);
+      // The conversation module shows the Conversation again rather than the
+      // official panel the user last had open inside it.
+      clearConversationPanel();
+      updateProduct({ page: 'conversation', accountReturnRoute: null, capabilityPage: null, mobileNavOpen: false, conversationPanelOpen: false });
     }
 
     const css = `
@@ -611,7 +652,8 @@ window.__ModuleLoader__.load({
       .lwb-nav-count { display:grid; min-width:17px; height:17px; margin-left:auto; place-items:center; border-radius:9px; color:#8090a0; background:#eef2f6; font-size:var(--lwb-text-xs,12px); }
       .lwb-capability-nav { gap:5px; } .lwb-cap-group { display:grid; min-width:0; gap:1px; } .lwb-cap-toggle { display:flex; width:100%; min-width:0; min-height:34px; align-items:center; gap:7px; padding:0 8px; border:0; border-radius:6px; color:#324458; background:transparent; font:inherit; font-size:var(--lwb-text-sm,13px); font-weight:700; text-align:left; cursor:pointer; } .lwb-cap-toggle:hover { color:#273645; background:#f3f6fa; } .lwb-cap-group[data-active="true"] .lwb-cap-toggle { color:var(--lwb-blue); } .lwb-cap-mark { display:grid; width:22px; height:22px; flex:none; place-items:center; border-radius:5px; color:var(--lwb-blue); background:#e9f1ff; font-size:var(--lwb-text-xs,12px); } .lwb-cap-chevron { display:grid; width:16px; height:16px; flex:none; place-items:center; color:#8b99a7; transform:rotate(180deg); transition:transform .14s ease; } .lwb-cap-toggle[aria-expanded="true"] .lwb-cap-chevron { transform:rotate(-90deg); } .lwb-cap-menu { display:grid; min-width:0; gap:1px; margin:0 0 3px 11px; padding-left:9px; border-left:1px solid var(--lwb-line); } .lwb-cap-menu .lwb-nav-item { min-height:34px; padding:0 8px; font-size:var(--lwb-text-sm,13px); } .lwb-cap-menu .lwb-nav-icon { width:22px; height:22px; border-radius:5px; font-size:var(--lwb-text-xs,12px); }
       .lwb-sidebar-foot { display:flex; min-height:35px; align-items:center; gap:8px; margin-top:auto; padding:10px 8px 0; border-top:1px solid #eef1f4; color:#768493; font-size:var(--lwb-text-sm,13px); } .lwb-user-avatar { display:grid; width:23px; height:23px; place-items:center; border-radius:50%; color:#2869d8; background:#e9f1ff; font-size:var(--lwb-text-xs,12px); font-weight:800; } .lwb-sidebar[data-collapsed="true"] { align-items:center; padding:14px 10px; } .lwb-sidebar[data-collapsed="true"] .lwb-brand { width:36px; justify-content:center; padding:2px 0 15px; } .lwb-sidebar[data-collapsed="true"] .lwb-nav-item,.lwb-sidebar[data-collapsed="true"] .lwb-cap-toggle { width:36px; justify-content:center; padding:0; } .lwb-sidebar[data-collapsed="true"] .lwb-nav-caption,.lwb-sidebar[data-collapsed="true"] .lwb-brand-copy,.lwb-sidebar[data-collapsed="true"] .lwb-collapse,.lwb-sidebar[data-collapsed="true"] .lwb-nav-label,.lwb-sidebar[data-collapsed="true"] .lwb-nav-count,.lwb-sidebar[data-collapsed="true"] .lwb-cap-chevron,.lwb-sidebar[data-collapsed="true"] .lwb-sidebar-foot span { display:none; } .lwb-sidebar[data-collapsed="true"] .lwb-nav-group,.lwb-sidebar[data-collapsed="true"] .lwb-sidebar-foot { width:36px; } .lwb-sidebar[data-collapsed="true"] .lwb-cap-menu { display:none; } .lwb-sidebar[data-collapsed="true"] .lwb-sidebar-foot { justify-content:center; padding:10px 0 0; }
-      .lwb-overlay { position:absolute; z-index:1; inset:0 var(--lwb-rightbar-inset,0px) 0 var(--lwb-sidebar-width); display:flex; flex-direction:column; overflow:hidden; background:var(--lwb-page); } .lwb-conversation-overlay { position:absolute; z-index:1; inset:0 0 0 var(--lwb-sidebar-width); pointer-events:none; --lwb-conversation-panel-width:264px; } .lwb-conversation-pane { display:flex; width:var(--lwb-conversation-panel-width); height:100%; flex-direction:column; overflow:hidden; border-right:1px solid var(--lwb-line); background:var(--dsw-specific-sidebar-fill,#fbfcfd); box-shadow:8px 0 20px rgba(30,48,70,.025); pointer-events:auto; --dsh-sidebar-inline-padding:12px; --dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2); --dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2); color:var(--dsw-alias-label-primary,var(--lwb-ink)); font-size:var(--lwb-text-base,14px); } .lwb-conversation-pane-head { display:flex; min-height:38px; align-items:center; justify-content:space-between; padding:0 var(--dsh-sidebar-inline-padding) 6px; } .lwb-conversation-pane-head button { width:28px; height:28px; border:0; border-radius:var(--dsw-radius-sm,5px); color:var(--dsw-alias-label-secondary,var(--lwb-blue)); background:transparent; font-size:var(--lwb-text-heading,20px); cursor:pointer; } .lwb-conversation-pane-head button:hover { background:var(--dsw-alias-interactive-bg-hover,var(--lwb-blue-soft)); } .lwb-conversation-close,.lwb-conversation-backdrop { display:none; } .lwb-conversation-region { display:flex; min-height:0; flex:1; flex-direction:column; overflow:hidden; padding-left:var(--dsh-sidebar-inline-padding); } .lwb-conversation-loading { display:grid; min-height:120px; place-items:center; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-embedded-conversation-shell { position:relative; display:flex; flex-direction:column; width:100%; height:100%; min-height:0; overflow:hidden; background:var(--lwb-surface); } .lwb-embedded-conversation-main { width:100%; height:100%; min-height:0; flex:1; } .lwb-embedded-conversation-main > * { height:100%; min-height:0; } .lwb-embedded-conversation-state { display:grid; min-height:220px; place-items:center; padding:24px; border:1px dashed var(--lwb-line); border-radius:7px; color:var(--lwb-muted); background:var(--lwb-surface); font-size:var(--lwb-text-sm,13px); text-align:center; } [data-lwb-conversation-active="true"] > div:nth-child(2) { box-sizing:border-box; padding-left:calc(var(--lwb-conversation-panel-width,264px) + 16px); }
+      .lwb-overlay { position:absolute; z-index:1; inset:0 var(--lwb-rightbar-inset,0px) 0 var(--lwb-sidebar-width); display:flex; flex-direction:column; overflow:hidden; background:var(--lwb-page); } .lwb-conversation-overlay { position:absolute; z-index:1; inset:0 0 0 var(--lwb-sidebar-width); pointer-events:none; --lwb-conversation-panel-width:264px; } .lwb-conversation-pane { display:flex; width:var(--lwb-conversation-panel-width); height:100%; flex-direction:column; overflow:hidden; border-right:1px solid var(--lwb-line); background:var(--dsw-specific-sidebar-fill,#fbfcfd); box-shadow:8px 0 20px rgba(30,48,70,.025); pointer-events:auto; --dsh-sidebar-inline-padding:12px; --dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2); --dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2); color:var(--dsw-alias-label-primary,var(--lwb-ink)); font-size:var(--lwb-text-base,14px); } .lwb-conversation-pane-head { display:flex; min-height:38px; align-items:center; justify-content:space-between; padding:0 var(--dsh-sidebar-inline-padding) 6px; } .lwb-conversation-pane-head button { width:28px; height:28px; border:0; border-radius:var(--dsw-radius-sm,5px); color:var(--dsw-alias-label-secondary,var(--lwb-blue)); background:transparent; font-size:var(--lwb-text-heading,20px); cursor:pointer; } .lwb-conversation-pane-head button:hover { background:var(--dsw-alias-interactive-bg-hover,var(--lwb-blue-soft)); } .lwb-conversation-close,.lwb-conversation-backdrop { display:none; } .lwb-conversation-region { display:flex; min-height:0; flex:1; flex-direction:column; overflow:hidden; padding-left:var(--dsh-sidebar-inline-padding); } .lwb-conversation-loading { display:grid; min-height:120px; place-items:center; color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-embedded-conversation-shell { position:relative; display:flex; flex-direction:column; width:100%; height:100%; min-height:0; overflow:hidden; background:var(--lwb-surface); } .lwb-embedded-conversation-head { display:flex; min-width:0; flex:none; align-items:center; justify-content:space-between; gap:10px; padding:6px 10px 6px 12px; border-bottom:1px solid var(--lwb-line); background:var(--lwb-surface); } .lwb-embedded-conversation-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--lwb-text-sm,13px); font-weight:600; } .lwb-embedded-rightbar-toggle { display:inline-flex; flex:none; align-items:center; min-height:26px; padding:0 9px; border:1px solid var(--lwb-line); border-radius:6px; color:var(--lwb-muted); background:var(--lwb-page); font:inherit; font-size:var(--lwb-text-xs,12px); font-weight:600; cursor:pointer; } .lwb-embedded-rightbar-toggle:hover { border-color:var(--lwb-blue); color:var(--lwb-blue); } .lwb-embedded-rightbar-toggle[data-on="true"] { border-color:var(--lwb-blue); color:var(--lwb-blue); background:var(--lwb-blue-soft); } .lwb-embedded-conversation-main { width:100%; height:100%; min-height:0; flex:1; } .lwb-embedded-conversation-main > * { height:100%; min-height:0; } .lwb-embedded-conversation-state { display:grid; min-height:220px; place-items:center; padding:24px; border:1px dashed var(--lwb-line); border-radius:7px; color:var(--lwb-muted); background:var(--lwb-surface); font-size:var(--lwb-text-sm,13px); text-align:center; } [data-lwb-conversation-active="true"] > div:nth-child(2) { box-sizing:border-box; padding-left:calc(var(--lwb-conversation-panel-width,264px) + 16px); }
+      .lwb-conversation-actions { flex:none; padding:0 var(--dsh-sidebar-inline-padding) 6px; } .lwb-conversation-new { display:flex; width:100%; min-height:32px; align-items:center; gap:8px; padding:0 10px; border:1px solid var(--lwb-line); border-radius:var(--dsw-radius-sm,6px); color:var(--dsw-alias-label-primary,var(--lwb-ink)); background:var(--lwb-surface); font:inherit; font-size:var(--lwb-text-sm,13px); font-weight:600; text-align:left; cursor:pointer; } .lwb-conversation-new:hover { border-color:var(--lwb-blue); color:var(--lwb-blue); } .lwb-conversation-new-key { display:inline-flex; margin-left:auto; color:var(--lwb-muted); } .lwb-conversation-panels { display:grid; flex:none; gap:2px; padding:0 var(--dsh-sidebar-inline-padding) 6px; } .lwb-conversation-panel { display:flex; min-height:34px; align-items:center; gap:8px; padding:0 9px; border:0; border-radius:var(--dsw-radius-sm,6px); color:var(--dsw-alias-label-secondary,var(--lwb-muted)); background:transparent; font:inherit; font-size:var(--lwb-text-sm,13px); font-weight:600; text-align:left; cursor:pointer; } .lwb-conversation-panel:hover { color:var(--dsw-alias-label-primary,var(--lwb-ink)); background:var(--dsw-alias-interactive-bg-hover,var(--lwb-blue-soft)); } .lwb-conversation-panel[data-active="true"] { color:var(--lwb-blue); background:var(--lwb-blue-soft); } .lwb-conversation-panel-glyph { display:grid; width:18px; flex:none; place-items:center; } .lwb-conversation-panel-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .lwb-overlay-head { display:flex; min-height:58px; align-items:center; justify-content:space-between; padding:0 28px; border-bottom:1px solid var(--lwb-line); background:rgba(255,255,255,.96); } .lwb-overlay-title { display:flex; min-width:0; gap:10px; align-items:center; } .lwb-overlay-title b { font-size:var(--lwb-text-lg,16px); } .lwb-overlay-title span { overflow:hidden; color:var(--lwb-muted); font-size:var(--lwb-text-base,14px); text-overflow:ellipsis; white-space:nowrap; } .lwb-overlay-body { min-height:0; flex:1; overflow:auto; } .lwb-page { width:min(1180px,100%); min-height:100%; margin:0 auto; padding:31px 36px 52px; } .lwb-page-capability { width:100%; max-width:none; margin:0; padding:20px clamp(20px,2.4vw,44px) 52px; } .lwb-page-intro { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:22px; } .lwb-page-capability .lwb-page-intro { min-height:64px; margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--lwb-line); } .lwb-page-capability .lwb-eyebrow { margin-bottom:5px; } .lwb-eyebrow { margin-bottom:8px; color:var(--lwb-blue); font-size:var(--lwb-text-xs,12px); font-weight:800; letter-spacing:.12em; } .lwb-page-intro h1 { margin:0; font-size:var(--lwb-text-title,24px); line-height:1.2; } .lwb-page-capability .lwb-page-intro h1 { font-size:var(--lwb-text-heading,20px); } .lwb-page-intro p { max-width:650px; margin:8px 0 0; color:var(--lwb-muted); font-size:var(--lwb-text-md,15px); line-height:1.55; } .lwb-page-capability .lwb-page-intro p { max-width:900px; margin-top:4px; font-size:var(--lwb-text-base,14px); }
       .lwb-card { border:1px solid var(--lwb-line); border-radius:7px; background:var(--lwb-surface); box-shadow:0 2px 8px rgba(24,39,56,.025); } .lwb-card-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:15px 17px; border-bottom:1px solid var(--lwb-line); } .lwb-card-heading span { color:var(--lwb-muted); font-size:var(--lwb-text-sm,13px); } .lwb-status { display:inline-flex; min-height:21px; align-items:center; padding:0 8px; border-radius:11px; color:var(--lwb-green); background:var(--lwb-green-soft); font-size:var(--lwb-text-sm,13px); font-weight:700; white-space:nowrap; } .lwb-status[data-tone="muted"] { color:#7c8996; background:#f0f3f5; } .lwb-status[data-tone="warm"] { color:var(--lwb-warm); background:var(--lwb-warm-soft); } .lwb-empty-state,.lwb-pack-empty { display:grid; min-height:280px; place-items:center; padding:36px; text-align:center; } .lwb-empty-state p { color:var(--lwb-muted); font-size:var(--lwb-text-base,14px); line-height:1.65; } .lwb-empty-glyph,.lwb-pack-icon { display:grid; place-items:center; border-radius:8px; color:var(--lwb-blue); background:var(--lwb-blue-soft); } .lwb-empty-glyph { width:50px; height:50px; margin:auto; font-size:var(--lwb-text-title,24px); } .lwb-row-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
       .lwb-plain-button,.lwb-primary-button,.lwb-danger-button { min-height:32px; padding:0 11px; border:1px solid #d7e0e9; border-radius:6px; background:#fff; color:#4f6071; font-size:var(--lwb-text-base,14px); font-weight:600; cursor:pointer; } .lwb-primary-button { border-color:var(--lwb-blue); color:#fff; background:var(--lwb-blue); } .lwb-danger-button { border-color:#dba8a8; color:#a44949; background:#fff7f7; }
@@ -623,7 +665,7 @@ window.__ModuleLoader__.load({
       body[data-ds-dark-theme] .lwb-account-panel { border-color:var(--lwb-line); background:#1b2733; } body[data-ds-dark-theme] .lwb-account-stat-grid > div { border-color:var(--lwb-line); background:#23313f; } body[data-ds-dark-theme] .lwb-account-notice { border-color:#376b56; color:#8fe0b5; background:#17372d; } body[data-ds-dark-theme] .lwb-purchase-card { border-color:var(--lwb-line); background:#23313f; } body[data-ds-dark-theme] .lwb-payment-status[data-status="cancelled"],body[data-ds-dark-theme] .lwb-payment-status[data-status="canceled"],body[data-ds-dark-theme] .lwb-payment-status[data-status="failed"],body[data-ds-dark-theme] .lwb-payment-status[data-status="expired"] { border-color:#754b4b; background:#3f292b; }
       .lwb-account-panel { background:var(--lwb-page); }
       body[data-ds-dark-theme] .lwb-account-note { border-color:#3a6d94; color:#bcdcf7; background:#172f3f; }
-      .lwb-account-form { width:min(520px,100%); max-width:none; gap:20px; padding:22px; border-color:#c9d9e5; border-left:3px solid #287c78; box-shadow:0 4px 16px rgba(31,58,75,.06); }
+      .lwb-account-form { width:min(520px,100%); max-width:none; justify-self:center; gap:20px; padding:22px; border-color:#c9d9e5; border-left:3px solid #287c78; box-shadow:0 4px 16px rgba(31,58,75,.06); }
       .lwb-account-mode { align-items:flex-start; padding-bottom:16px; border-bottom:1px solid var(--lwb-line); }
       .lwb-account-mode-heading { display:flex; min-width:0; align-items:center; gap:10px; }
       .lwb-account-mode-mark { display:grid; width:32px; height:32px; flex:none; place-items:center; border-radius:6px; color:#16736e; background:#e5f5f1; font-size:19px; font-weight:700; line-height:1; }
@@ -862,14 +904,40 @@ window.__ModuleLoader__.load({
       return (selector, equal) => hook((value) => selector(stable(value)), equal);
     }
 
+    /**
+     * Whether one Session directory sits inside a pack-owned Workspace.
+     *
+     * A pack may run each task in its own directory below that Workspace (one
+     * directory per model run, for example). Those Sessions are created while
+     * the browser is open, so the ownership index read at page load cannot name
+     * them yet; their directory is the durable fact that outlives the read.
+     * @param cwd - the Session's working directory, as the list snapshot reports it.
+     * @param roots - pack Workspace directories from `lwbPacks/visibility`.
+     * @returns true when `cwd` is one of those directories or lies below one.
+     */
+    function insidePackWorkspace(cwd, roots) {
+      if (typeof cwd !== 'string' || cwd === '') return false;
+      for (const root of roots) {
+        if (typeof root !== 'string' || root === '') continue;
+        let end = root.length;
+        while (end > 0 && (root[end - 1] === '/' || root[end - 1] === '\\')) end -= 1;
+        const base = root.slice(0, end);
+        // The separator is required, so a sibling directory sharing the prefix
+        // (`/root/pack-2` beside `/root/pack`) is not swallowed.
+        if (base !== '' && (cwd === base || cwd.startsWith(`${base}/`) || cwd.startsWith(`${base}\\`))) return true;
+      }
+      return false;
+    }
+
     /** Drop pack-owned root Sessions from one Session list snapshot. */
     function projectSessionList(list, isPackSession) {
       const ids = list?.ids;
-      if (!Array.isArray(ids) || !ids.some((id) => isPackSession(id))) return list;
+      const hidden = (id) => isPackSession(id, list?.byId?.[id]);
+      if (!Array.isArray(ids) || !ids.some(hidden)) return list;
       const kept = [];
       const byId = {};
       for (const id of ids) {
-        if (isPackSession(id)) continue;
+        if (hidden(id)) continue;
         kept.push(id);
         byId[id] = list.byId[id];
       }
@@ -893,13 +961,87 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The conversation module's left column. It hosts the official Workspace
-     * browser through the `sidebar.workspaces` seat, so ordinary conversation
-     * history is the official surface. LWB declares the seat (upstream
+     * The official global panel rows (Plugins and any later registrant) the
+     * conversation column shows. Upstream `ui-sidebar` owns the seat and the row
+     * chrome; this composition disables that shell and renders the seat itself,
+     * so it reads the same registry the official shell reads. Rows are compared
+     * by content because `entriesOfSlot` builds a fresh array per call and the
+     * React store needs one stable snapshot between changes.
+     */
+    const conversationPanels = { rows: [], listeners: new Set() };
+    /**
+     * Resolve one slot entry's label, which a registrant supplies as a function
+     * when it must follow locale changes. Same contract as the official
+     * `resolveSlotLabel`; inlined because it is one pure expression and this
+     * column needs no other part of the slot client API.
+     */
+    function resolvePanelLabel(label) { return typeof label === 'function' ? label() : label; }
+    /** @returns the current `sidebar.panellist` rows, ordered and label-resolved. */
+    function readConversationPanels() {
+      const entries = services?.slots?.entriesOfSlot?.('sidebar.panellist');
+      if (!Array.isArray(entries)) return [];
+      return entries
+        .map((entry) => ({
+          id: entry?.options?.id,
+          order: typeof entry?.options?.order === 'number' ? entry.options.order : 0,
+          label: resolvePanelLabel(entry?.options?.label),
+        }))
+        .filter((row) => typeof row.id === 'string' && row.id !== '')
+        .sort((left, right) => left.order - right.order)
+        .map((row) => ({ id: row.id, label: row.label || row.id }));
+    }
+    function syncConversationPanels() {
+      const next = readConversationPanels();
+      const previous = conversationPanels.rows;
+      if (previous.length === next.length && previous.every((row, index) => row.id === next[index].id && row.label === next[index].label)) return;
+      conversationPanels.rows = next;
+      conversationPanels.listeners.forEach((listener) => listener());
+    }
+    function useConversationPanels() {
+      return React.useSyncExternalStore(
+        (listener) => { conversationPanels.listeners.add(listener); return () => conversationPanels.listeners.delete(listener); },
+        () => conversationPanels.rows,
+        () => conversationPanels.rows,
+      );
+    }
+    /**
+     * Whether the official main slot currently registers one panel id. Selection
+     * is guarded because `layout.selectPanel` throws for an unregistered key,
+     * and a row can outlive the page that addresses it.
+     */
+    function conversationPanelRegistered(panelId) {
+      const entries = services?.slots?.entries?.('main');
+      return Array.isArray(entries) && entries.some((entry) => entry?.options?.key === panelId);
+    }
+    /**
+     * Select one official main panel; an unregistered id is ignored, not thrown.
+     * The call stays a method call on the service: `LayoutController.selectPanel`
+     * reads its own fields (`hasMainPanel`, `panels`), so a reference detached
+     * from the service would run with `this === undefined`.
+     */
+    function selectConversationPanel(panelId) {
+      const layout = services?.layout;
+      if (!layout || typeof layout.selectPanel !== 'function') return;
+      if (panelId !== null && !conversationPanelRegistered(panelId)) return;
+      layout.selectPanel(panelId);
+    }
+    /** Return the frame to the Conversation when a panel is still selected. */
+    function clearConversationPanel() {
+      const active = services?.layout?.panelInfo?.getSnapshot?.().activePanelId;
+      if (active === undefined || active === null) return;
+      selectConversationPanel(null);
+    }
+    /** Stand-in for the layout root binding when a composition lacks ui-layout. */
+    function useNoActivePanel(selector) { return selector({ activePanelId: null }); }
+
+    /**
+     * The conversation module's left column: the official panel rows, the
+     * official Workspace browser through the `sidebar.workspaces` seat, and the
+     * official-shaped New Session control. LWB declares the seats (upstream
      * `ui-sidebar` is disabled for this composition) and hides capability-pack
      * Sessions, which the official browser has no way to know about.
      */
-    function ConversationOverlay({ renderSlot, useSessions, useWorkspaces }) {
+    function ConversationOverlay({ renderSlot, useSessions, useWorkspaces, usePanelInfo }) {
       const rootRef = React.useRef(null);
       const state = useProduct();
       const copy = useLwbCopy();
@@ -908,6 +1050,16 @@ window.__ModuleLoader__.load({
       // seat waits for it rather than letting pack Sessions flash into history.
       const catalog = usePackCatalog();
       const internal = catalog.visibility;
+      // The official global panel rows and the layout's own selection, so the
+      // row state stays the official one instead of a private mirror.
+      const panels = useConversationPanels();
+      const useActivePanel = typeof usePanelInfo === 'function' ? usePanelInfo : useNoActivePanel;
+      const activePanel = useActivePanel((info) => info.activePanelId);
+      const shortcutRows = useObservable(services?.shortcuts?.catalog, undefined);
+      const newSessionShortcut = React.useMemo(
+        () => (Array.isArray(shortcutRows) ? shortcutRows.find((row) => row?.id === 'session.new') : undefined),
+        [shortcutRows],
+      );
 
       React.useLayoutEffect(() => {
         const frame = rootRef.current?.closest?.('[data-shell-overlay]')?.parentElement;
@@ -921,8 +1073,14 @@ window.__ModuleLoader__.load({
         const sessionIds = new Set(internal.sessionIds || []);
         const workspaceIds = new Set(internal.workspaceIds || []);
         const workspacePaths = new Set(internal.workspacePaths || []);
+        const roots = [...workspacePaths];
         return {
-          isPackSession: (id) => sessionIds.has(id),
+          // The id set is read once per catalog refresh, so a Session a pack
+          // creates afterwards is only recognizable by its directory. Both facts
+          // are durable host-owned state: the pack never writes the index itself
+          // for a Session the browser has not seen, and its Workspace directory
+          // outlives every task run.
+          isPackSession: (id, summary) => sessionIds.has(id) || insidePackWorkspace(summary?.cwd, roots),
           isPackWorkspace: (workspace) => workspacePaths.has(workspace.path) || workspaceIds.has(workspace.workspaceId),
         };
       }, [internal]);
@@ -947,10 +1105,44 @@ window.__ModuleLoader__.load({
         h('aside', { className: 'lwb-conversation-pane', 'aria-label': copy.conversationHistory },
           h('header', { className: 'lwb-conversation-pane-head' },
             h('strong', null, copy.session),
-            h('div', { className: 'lwb-row-actions' },
-              h('button', { type: 'button', className: 'lwb-conversation-close', title: copy.closeConversationList, 'aria-label': copy.closeConversationList, onClick: () => updateProduct({ conversationPanelOpen: false }, false) }, '×'),
-              h('button', { type: 'button', title: internal ? copy.newConversation : copy.readingWorkspaces, 'aria-label': copy.newConversation, disabled: !internal, onClick: () => createConversation() }, '+'),
+            h('button', { type: 'button', className: 'lwb-conversation-close', title: copy.closeConversationList, 'aria-label': copy.closeConversationList, onClick: () => updateProduct({ conversationPanelOpen: false }, false) }, '×'),
+          ),
+          // The official column's first action. Upstream hard-codes this control
+          // in the sidebar shell it owns, so it cannot be borrowed through a
+          // seat; the label, shortcut hint, and action are the official ones
+          // (`uiWorkspace.startSession`), and it is usable from the first frame.
+          h('div', { className: 'lwb-conversation-actions' },
+            h('button', {
+              type: 'button', className: 'lwb-conversation-new',
+              title: copy.newSessionLabel, 'aria-label': copy.newSessionLabel,
+              'aria-keyshortcuts': newSessionShortcut?.aria,
+              onClick: () => createConversation(),
+            },
+              h(IconNewChatOutlineRegular, { size: 16, 'aria-hidden': true }),
+              h('span', null, copy.newSession),
+              newSessionShortcut && Array.isArray(newSessionShortcut.keys) && newSessionShortcut.keys.length > 0
+                ? h('span', { className: 'lwb-conversation-new-key', 'aria-hidden': true }, h(ShortcutKeys, { keys: newSessionShortcut.keys }))
+                : null,
             ),
+          ),
+          // One row per `sidebar.panellist` registration, in the official order.
+          // The glyph is the registrant's own component; the row chrome, the
+          // label, and the selection state are the shell's, exactly as they are
+          // in the official sidebar.
+          panels.length > 0 && h('nav', { className: 'lwb-conversation-panels', 'aria-label': copy.conversationPanels },
+            panels.map((panel) => {
+              const active = activePanel === panel.id;
+              return h('button', {
+                key: panel.id, type: 'button', className: 'lwb-conversation-panel',
+                'data-active': active ? 'true' : 'false', 'aria-current': active ? 'page' : undefined,
+                title: panel.label, 'aria-label': panel.label,
+                onClick: () => selectConversationPanel(panel.id),
+              },
+                h('span', { className: 'lwb-conversation-panel-glyph', 'aria-hidden': 'true' },
+                  renderSlot('sidebar.panellist', { size: 16, active }, { only: panel.id })),
+                h('span', { className: 'lwb-conversation-panel-label' }, panel.label),
+              );
+            }),
           ),
           h('div', { className: 'lwb-conversation-region' },
             internal
@@ -976,8 +1168,15 @@ window.__ModuleLoader__.load({
       const copy = useLwbCopy();
       const catalog = usePackCatalog();
       const [mobile, setMobile] = React.useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 680px)').matches);
-      const [expandedPacks, setExpandedPacks] = React.useState(() => new Set());
+      // Read once per mount: null means no recorded preference yet, so the
+      // first-run reveal rules below still apply. An empty set is a real answer.
+      const navPreference = React.useRef(readNavPreference());
+      const [expandedPacks, setExpandedPacks] = React.useState(() => new Set(navPreference.current || undefined));
       const knownPackIds = React.useRef(new Set());
+      /** The pack whose capability route is already accounted for; undefined means "not on one". */
+      const revealedPackId = React.useRef(undefined);
+      /** Writing before the catalog is ready would erase a preference with an empty frame. */
+      const navReady = React.useRef(false);
       const sidebarCollapsed = collapsed && !mobile && !state.mobileNavOpen;
       const wide = !sidebarCollapsed;
       const packs = catalog.packs;
@@ -993,21 +1192,37 @@ window.__ModuleLoader__.load({
         return () => query.removeEventListener?.('change', update);
       }, []);
       React.useEffect(() => {
+        if (!navReady.current) return;
+        navPreference.current = expandedPacks;
+        writeNavPreference(expandedPacks);
+      }, [expandedPacks]);
+      React.useEffect(() => {
+        // A pending or failed catalog says nothing about which packs exist, so it
+        // must not prune the recorded groups — an RPC hiccup would erase them.
+        if (catalog.phase !== 'ready') return;
         const current = new Set(packs.map((pack) => pack.id));
         const previousPackIds = knownPackIds.current;
+        const firstCatalog = previousPackIds.size === 0;
+        const activePack = activePackId && current.has(activePackId) ? activePackId : undefined;
+        // Entering a capability route reveals that pack. A catalog refresh is not
+        // an entry and a restored route is not an entry either when the user has a
+        // recorded preference, so a group closed by hand stays closed.
+        const revealActive = Boolean(activePack) && revealedPackId.current === undefined && (firstCatalog ? !navPreference.current : true);
         setExpandedPacks((previous) => {
           const next = new Set([...previous].filter((id) => current.has(id)));
-          if (previousPackIds.size === 0) {
-            if (packs.length === 1) next.add(packs[0].id);
+          if (firstCatalog) {
+            if (packs.length === 1 && !navPreference.current) next.add(packs[0].id);
           } else {
             for (const pack of packs) if (!previousPackIds.has(pack.id)) next.add(pack.id);
           }
-          if (activePackId && current.has(activePackId)) next.add(activePackId);
+          if (revealActive) next.add(activePack);
           if (next.size === previous.size && [...next].every((id) => previous.has(id))) return previous;
           return next;
         });
         knownPackIds.current = current;
-      }, [packs, activePackId]);
+        revealedPackId.current = activePack;
+        navReady.current = true;
+      }, [packs, activePackId, catalog.phase]);
 
       const navItem = (id, label, symbol, count) => h('button', {
         key: id, type: 'button', className: 'lwb-nav-item', title: label,
@@ -1279,7 +1494,7 @@ window.__ModuleLoader__.load({
     }
 
     function openLwbAccountSettings() {
-      updateProduct({ page: 'settings', accountReturnRoute: productState.capabilityPage, mobileNavOpen: false }, false);
+      updateProduct({ page: 'settings', accountReturnRoute: productState.capabilityPage, mobileNavOpen: false });
     }
     function LwbServiceCard({ service, description }) {
       const account = useLwbAccount();
@@ -1315,7 +1530,25 @@ window.__ModuleLoader__.load({
         catch (cause) { setError(cause.message); }
       }, []);
       React.useEffect(() => { void load(); }, [load, account.user?.id]);
-      const models = (value?.groups || []).flatMap((group) => (group.models || []).map((model) => ({ key: JSON.stringify([group.id, model.id]), label: `${group.name || group.id} · ${model.name || model.id}` })));
+      const groupById = new Map((value?.groups || []).map(group => [group.id, group]));
+      const models = (value?.groups || []).flatMap((group) => (group.models || []).map((model) => ({
+        key: JSON.stringify([group.id, model.id]),
+        label: `${group.name || group.id} · ${model.name || model.id}`,
+        auth: group.auth || null,
+      })));
+      // Availability is stated, never enforced: a route with no credential yet
+      // is a legitimate staging choice, but the operator must see that scoped
+      // tasks on it will fail on their first model request.
+      const authNote = (auth) => {
+        if (!auth) return '';
+        if (auth.state === 'missing-credential') return ` · 未配置凭据（${auth.ref || 'API Key'}）`;
+        if (auth.state === 'unverifiable') return ' · 凭据状态未知';
+        return '';
+      };
+      const selectedModel = models.find(model => model.key === draft.key) || null;
+      const selectedAuth = draft.mode === 'specified'
+        ? (selectedModel?.auth || (draft.key ? groupById.get(JSON.parse(draft.key || '[]')[0])?.auth || null : null))
+        : null;
       const save = async () => {
         setBusy(true); setNotice('');
         try {
@@ -1336,7 +1569,9 @@ window.__ModuleLoader__.load({
         ),
         h('div', { className: 'lwb-settings-group-body' },
           h('label', { className: 'lwb-field' }, h('span', null, '选择方式'), h('select', { className: 'lwb-select', value: draft.mode, disabled: !value || busy, onChange: event => { setDraft({ ...draft, mode: event.target.value }); setNotice(''); } }, h('option', { value: 'follow-dsh' }, '跟随 DSH 默认模型'), h('option', { value: 'specified' }, '指定场景任务模型'))),
-          draft.mode === 'specified' && h('label', { className: 'lwb-field' }, h('span', null, '场景任务模型'), h('select', { className: 'lwb-select', value: draft.key, disabled: busy, onChange: event => { setDraft({ ...draft, key: event.target.value }); setNotice(''); } }, h('option', { value: '' }, '请选择模型'), draft.key && !models.some(model => model.key === draft.key) && h('option', { value: draft.key }, '已保存的模型当前不可用，请检查账号或服务'), models.map(model => h('option', { key: model.key, value: model.key }, model.label)))),
+          draft.mode === 'specified' && h('label', { className: 'lwb-field' }, h('span', null, '场景任务模型'), h('select', { className: 'lwb-select', value: draft.key, disabled: busy, onChange: event => { setDraft({ ...draft, key: event.target.value }); setNotice(''); } }, h('option', { value: '' }, '请选择模型'), draft.key && !models.some(model => model.key === draft.key) && h('option', { value: draft.key }, '已保存的模型当前不可用，请检查账号或服务'), models.map(model => h('option', { key: model.key, value: model.key }, `${model.label}${authNote(model.auth)}`)))),
+          draft.mode === 'specified' && selectedAuth?.state === 'missing-credential' && h('p', { className: 'lwb-account-muted' }, `该模型服务尚未配置凭据（${selectedAuth.ref || 'API Key'}）：场景包的选题、写稿和定时任务会在第一次请求时失败。请先点击「打开设置」在「模型」中完成配置，或改选其他模型。`),
+          draft.mode === 'specified' && selectedAuth?.state === 'unverifiable' && h('p', { className: 'lwb-account-muted' }, `无法确认该模型服务的凭据状态（${selectedAuth.ref || 'API Key'}）：账号、设备或 OAuth 认证的路由请忽略此提示。`),
           draft.mode === 'follow-dsh' && h('p', { className: 'lwb-account-muted' }, '保留当前行为：新任务读取 DSH 默认选择；对话中切换模型并保存默认值后，也会影响后续场景任务。'),
           account.user && account.catalog?.models?.map(model => !model.available && h('p', { key: model.id, className: 'lwb-account-muted' }, `LWB · ${model.name}：${model.reason || '暂不可用'}`)),
           account.serviceError && h('p', { className: 'lwb-dialog-error' }, account.serviceError),
@@ -1528,7 +1763,7 @@ window.__ModuleLoader__.load({
         h(TaskModelSetting),
         product.accountReturnRoute && h('div', { className: 'lwb-card lwb-account-return' },
           h('span', null, copy.accountReturnHint),
-          button('lwb-plain-button', copy.accountReturn, () => updateProduct({ page: 'capability', capabilityPage: product.accountReturnRoute }, false)),
+          button('lwb-plain-button', copy.accountReturn, () => updateProduct({ page: 'capability', capabilityPage: product.accountReturnRoute })),
         ),
         h('section', { id: 'lwb-account-section', className: 'lwb-card lwb-settings-group' },
           h('header', { className: 'lwb-settings-group-head' },
@@ -1596,17 +1831,169 @@ window.__ModuleLoader__.load({
     /** Sessions this host has rendered since load; a chip inside one is never the user's own file. */
     const packSessionRendered = new Set();
     const embeddedHostSessions = new Map();
+    /** Bumped by every focus; a queued collapse only acts while its epoch is current. */
+    let packPanelEpoch = 0;
+    /** The collapse one card focus still owes; started once the focusing gesture ends. */
+    let pendingPanelCollapse;
     /** The Session the frame showed before pack Session mode armed, restored when it ends. */
     let packSessionRestore = null;
     /** Pending right-Sidebar inset observer, armed with pack Session mode. */
     let packSessionInset = null;
 
+    /**
+     * The Session one resource address names, when it names one at all.
+     *
+     * A file opened from a conversation is addressed
+     * `dsh-resource://file/session/<sessionId>/<path>`; the `absolute` scope of
+     * the same scheme carries no Session. The route below intervenes only for a
+     * pack Session, so an address that names none stays `undefined` and travels
+     * the official path untouched.
+     */
+    function sessionIdFromResourceAddress(address) {
+      const match = /^dsh-resource:\/\/[^/]+\/session\/([^/]+)/.exec(String(address || ''));
+      if (!match) return undefined;
+      // Every id segment is component-encoded; a malformed escape names no
+      // Session here rather than failing the open.
+      try { return decodeURIComponent(match[1]); } catch (_) { /* malformed escape */ return undefined; }
+    }
+
     function packSessionArmed() {
       return embeddedHostSessions.size > 0;
     }
-    /** Point the frame at one pack Session so the official surfaces follow it. */
-    function focusSession(sessionId) {
-      if (embeddedHostSessions.has(sessionId)) services?.uiWorkspace?.openSession?.(sessionId);
+    /** The card whose right-Sidebar seat is mounted right now, when it is one of ours. */
+    function mountedPackPanelSession() {
+      const mounted = services?.sidebarRight?.mounted?.getSnapshot?.();
+      return typeof mounted === 'string' && mounted && embeddedHostSessions.has(mounted) ? mounted : null;
+    }
+    /**
+     * Close a card's panel through the official toggle; an already collapsed column
+     * is left alone.
+     */
+    function collapsePackPanel() {
+      const sidebarRight = services?.sidebarRight;
+      if (!mountedPackPanelSession()) return;
+      if (typeof sidebarRight?.isExpanded !== 'function' || typeof sidebarRight?.toggleExpanded !== 'function') return;
+      try { if (sidebarRight.isExpanded()) sidebarRight.toggleExpanded(); } catch (_) { /* no surface mounted */ }
+    }
+    /**
+     * A plainly focused card never inherits an expanded panel.
+     *
+     * The official store remembers a panel per Session, so a card that was left
+     * expanded — or restored from storage — would show its panel again the moment
+     * it is focused. On this page the panel is one surface: leaving it closed must
+     * keep it closed, so the target is collapsed once its seat is mounted.
+     */
+    function collapseWhenSettled(sessionId, epoch) {
+      const sidebarRight = services?.sidebarRight;
+      if (typeof sidebarRight?.isExpanded !== 'function' || typeof sidebarRight?.toggleExpanded !== 'function') return;
+      let attempts = 0;
+      const step = () => {
+        // A later panel gesture owns the outcome now: a queued collapse must not
+        // close a panel the user asked for in the meantime.
+        if (epoch !== packPanelEpoch) return;
+        if (sidebarRight.mounted?.getSnapshot?.() === sessionId) {
+          try { if (sidebarRight.isExpanded()) sidebarRight.toggleExpanded(); } catch (_) { /* no surface mounted */ }
+          return;
+        }
+        if (attempts > 40) return;
+        attempts += 1;
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+    /**
+     * Point the frame at one pack Session so the official surfaces follow it.
+     *
+     * One surface, one panel: a plainly focused card collapses its own remembered
+     * panel. That collapse waits for the gesture to end, because the same gesture
+     * may be an official control opening a file — the open arrives after this
+     * focus, and what the user asked to see decides the column. `keepExpanded` is
+     * for the gestures that are themselves about the panel (its toggle, or an
+     * official control opening a file in it): those own the result at once.
+     */
+    function focusSession(sessionId, options) {
+      if (!embeddedHostSessions.has(sessionId)) return;
+      // Every focus invalidates a queued collapse; an explicit panel gesture also
+      // owns the result even when the Session is already mounted.
+      packPanelEpoch += 1;
+      if (options?.keepExpanded) {
+        pendingPanelCollapse = undefined;
+        return services?.uiWorkspace?.openSession?.(sessionId);
+      }
+      if (services?.sidebarRight?.mounted?.getSnapshot?.() === sessionId) return;
+      services?.uiWorkspace?.openSession?.(sessionId);
+      pendingPanelCollapse = { sessionId, epoch: packPanelEpoch };
+    }
+    /**
+     * Start the collapse a card focus owes, once its gesture has ended.
+     *
+     * Pointing the frame at the arriving card happens immediately; only the
+     * collapse waits, so an official control inside that same gesture supersedes
+     * it by taking a newer epoch. A gesture that owes nothing settles nothing.
+     */
+    function settlePanelGesture() {
+      const pending = pendingPanelCollapse;
+      pendingPanelCollapse = undefined;
+      if (pending === undefined) return;
+      collapseWhenSettled(pending.sessionId, pending.epoch);
+    }
+    /** The official service's refusal while a Session's Sidebar surface is not minted yet. */
+    const PACK_SURFACE_PENDING = 'no session surface is mounted';
+    /**
+     * Open one official resource in a pack card's Session.
+     *
+     * The official call acts on the Session its seat publishes AND on that
+     * Session's adopted surface, which the seat mints one render after `mounted`
+     * names it — its own refusal names the missing surface, and that is the one
+     * failure worth waiting for. Every other refusal is a wiring mistake the
+     * caller must see now. The open is also what leaves the column expanded: the
+     * official store expands only when it places a new tab, so an address it
+     * merely reveals would otherwise leave an earlier collapse in force.
+     * @param sidebarRight - the official Sidebar service.
+     * @param openResource - its original `openResource`, bound.
+     * @param sessionId - the pack Session whose own file is being opened.
+     * @param address - the resource address to open.
+     * @param options - placement and navigation parameters, passed through.
+     */
+    function openPackResource(sidebarRight, openResource, sessionId, address, options) {
+      const mounted = () => sidebarRight.mounted?.getSnapshot?.();
+      let attempts = 0;
+      const open = () => {
+        // A wait that ran out must not act on the previous Session: the official
+        // call would land in the wrong Surface.
+        if (mounted() !== sessionId) {
+          if (attempts > 40) return;
+          attempts += 1;
+          requestAnimationFrame(open);
+          return;
+        }
+        try {
+          openResource(address, options);
+        } catch (error) {
+          // Its refusal is matched by name, not by class: the service and this
+          // bundle cross no realm here, but the message is the whole signal.
+          const message = typeof error?.message === 'string' ? error.message : '';
+          if (!message.includes(PACK_SURFACE_PENDING) || attempts > 40) throw error;
+          attempts += 1;
+          requestAnimationFrame(open);
+          return;
+        }
+        try { if (!sidebarRight.isExpanded?.()) sidebarRight.toggleExpanded?.(); } catch (_) { /* no surface mounted */ }
+      };
+      open();
+    }
+    /**
+     * The panel column drawn right now.
+     *
+     * A Session that has opened a tab keeps its own panel in the DOM after the
+     * frame moves on; that one is hidden with its view, so the element to read is
+     * the first that no hidden ancestor covers.
+     */
+    function onScreenPanel() {
+      for (const panel of document.querySelectorAll('[data-sidebar-right-panel]')) {
+        if (panel.closest('[hidden]') === null) return panel;
+      }
+      return undefined;
     }
     /**
      * The official right Sidebar is the frame's own third column, so a pack page
@@ -1617,7 +2004,7 @@ window.__ModuleLoader__.load({
      */
     function installPackSessionInset() {
       if (packSessionInset) return packSessionInset;
-      const panelOf = () => document.querySelector('[data-sidebar-right-panel]');
+      const panelOf = onScreenPanel;
       const apply = () => {
         const panel = panelOf();
         const open = Boolean(panel?.hasAttribute('data-sidebar-right-open'));
@@ -1630,21 +2017,24 @@ window.__ModuleLoader__.load({
       const observer = new MutationObserver(apply);
       const resize = new ResizeObserver(apply);
       // The conversation streams constantly, so the frame watcher only re-binds
-      // when the panel itself is replaced; widths come from the panel's own
-      // observers, never from a body mutation.
+      // when the panel in view is replaced — a card switch hides one view and
+      // reveals the next without touching the tree. Widths come from the panel's
+      // own observers, never from a body mutation.
       const observe = () => {
         const panel = panelOf();
-        if (!panel || panel === observed) return;
+        if (panel === observed) return;
         observer.disconnect();
         resize.disconnect();
         observed = panel;
-        observer.observe(panel, { attributes: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel', 'style'] });
-        resize.observe(panel);
+        if (panel) {
+          observer.observe(panel, { attributes: true, attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel', 'style'] });
+          resize.observe(panel);
+        }
         apply();
       };
       observe();
       const frameObserver = new MutationObserver(observe);
-      frameObserver.observe(document.body, { childList: true, subtree: true });
+      frameObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
       packSessionInset = () => {
         observer.disconnect();
         frameObserver.disconnect();
@@ -1672,6 +2062,7 @@ window.__ModuleLoader__.load({
       }
       embeddedHostSessions.delete(sessionId);
       if (packSessionArmed()) return;
+      collapsePackPanel();
       packSessionInset?.();
       const restore = packSessionRestore;
       packSessionRestore = null;
@@ -1682,6 +2073,94 @@ window.__ModuleLoader__.load({
       if (!current || !packSessionRendered.has(current)) return;
       if (services?.sessions?.list?.getSnapshot?.().byId?.[restore]) services.uiWorkspace.openSession(restore);
     }
+    /**
+     * Toggle the official right Sidebar for one embedded Session.
+     *
+     * `toggleExpanded()` acts on the mounted seat, so the card is focused first
+     * and the call waits for that seat to publish the Session — the same order
+     * the file-chip route uses, and the reason a keyboard-activated click works
+     * as well as a pointer one.
+     */
+    function toggleEmbeddedRightbar(sessionId) {
+      const sidebarRight = services?.sidebarRight;
+      if (typeof sidebarRight?.toggleExpanded !== 'function') return;
+      focusSession(sessionId, { keepExpanded: true });
+      const mounted = () => sidebarRight.mounted?.getSnapshot?.();
+      let attempts = 0;
+      const run = () => {
+        if (mounted() === sessionId) {
+          try { sidebarRight.toggleExpanded(); } catch (_) { /* no surface mounted yet */ }
+          return;
+        }
+        // Never toggle whatever else is mounted: a wait that ran out simply
+        // leaves the panel alone.
+        if (attempts > 40) return;
+        attempts += 1;
+        requestAnimationFrame(run);
+      };
+      run();
+    }
+
+    /**
+     * Whether the official panel column is showing a panel right now.
+     *
+     * The service publishes the on-screen Session but not that Session's layout,
+     * so the marker its seat renders is the observable fact — the same element
+     * this page's own width report measures.
+     */
+    function readPanelOpen() {
+      return Boolean(onScreenPanel()?.hasAttribute('data-sidebar-right-open'));
+    }
+    /** Observe that marker, re-binding as a card switch puts another panel in view. */
+    function subscribePanelOpen(listener) {
+      let observed = null;
+      const marker = new MutationObserver(listener);
+      const rebind = () => {
+        const panel = onScreenPanel();
+        if (panel === observed) return;
+        marker.disconnect();
+        observed = panel;
+        if (panel) marker.observe(panel, { attributes: true, attributeFilter: ['data-sidebar-right-open'] });
+        listener();
+      };
+      const frame = new MutationObserver(rebind);
+      frame.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+      rebind();
+      return () => { marker.disconnect(); frame.disconnect(); };
+    }
+    /** One card head's panel control: the column is showing a panel for THIS card. */
+    function panelControlState(mounted, sessionId, open) {
+      return { expanded: mounted === sessionId && open === true };
+    }
+    /**
+     * The control the official conversation header would have carried.
+     *
+     * The official expand button sits in `conversation.session.header.corner`,
+     * which belongs to the frame's main panel chain — an embedded conversation
+     * renders only the `conversation.content` factory, so it has no header to put
+     * it in. This strip restores that affordance with the official action and the
+     * column's own rendered state; nothing about the panel is reimplemented.
+     */
+    function EmbeddedConversationHead({ sessionId }) {
+      const sessions = useObservable(services?.sessions?.list, undefined);
+      const mounted = useObservable(services?.sidebarRight?.mounted, undefined);
+      const open = React.useSyncExternalStore(subscribePanelOpen, readPanelOpen, () => false);
+      const { expanded } = panelControlState(mounted, sessionId, open);
+      const title = sessions?.byId?.[sessionId]?.displayTitle || '会话';
+      const keys = services?.shortcuts?.catalog?.getSnapshot?.()?.find?.((entry) => entry.id === 'sidebar.right.toggle')?.keys?.[0];
+      const label = expanded ? '收起右侧栏' : '展开右侧栏（产物、文件、终端等）';
+      return h('div', { className: 'lwb-embedded-conversation-head' },
+        h('strong', { className: 'lwb-embedded-conversation-title', title }, title),
+        h('button', {
+          type: 'button', className: 'lwb-embedded-rightbar-toggle',
+          'data-on': expanded ? 'true' : undefined,
+          'aria-pressed': expanded ? 'true' : 'false',
+          'aria-label': label,
+          title: keys ? `${label} · ${keys}` : label,
+          onClick: () => toggleEmbeddedRightbar(sessionId),
+        }, expanded ? '收起右栏' : '右侧栏'));
+    }
+
     function EmbeddedConversationHost({ sessionId, SessionProvider, renderFactorySlot }) {
       const renderSlot = arguments[0].renderSlot;
       const [state, setState] = React.useState({ reference: null, error: null });
@@ -1717,6 +2196,7 @@ window.__ModuleLoader__.load({
       if (state.error) return h('div', { className: 'lwb-embedded-conversation-state', role: 'alert' }, state.error);
       if (!state.reference || !SessionProvider || !renderFactorySlot) return h('div', { className: 'lwb-embedded-conversation-state' }, '正在加载对话…');
       return h('div', { className: 'lwb-embedded-conversation-shell', 'data-session-id': sessionId },
+        h(EmbeddedConversationHead, { sessionId }),
         h(SessionProvider, { session: state.reference },
           h('div', { className: 'lwb-embedded-conversation-main' }, renderFactorySlot('conversation.content', {
             variant: 'embedded', phase: 'active', hero: false,
@@ -1803,36 +2283,28 @@ window.__ModuleLoader__.load({
       lwbPackClientRuntime = new LwbPackClientRuntime(ctx.get('modules'));
       services = {
         slots: ctx.get('slots'), connection: ctx.get('connection'), sessions: ctx.get('sessions'), workspaces: ctx.get('workspaces'), uiWorkspace: ctx.get('uiWorkspace'), layout: ctx.get('layout'), locale: ctx.get('locale'), remote: ctx.get('remote'),
+        // Both are looked up rather than injected: an embedded conversation only
+        // loses its right-Sidebar control when the composition lacks them.
+        sidebarRight: ctx.get('sidebarRight'), shortcuts: ctx.get('shortcuts'),
       };
       installStyle();
       // A file chip inside an embedded conversation asks the Sidebar to open a
       // resource. The official Sidebar serves the frame's current Session, so a
       // resource of a pack Session is routed the same way: focus that card's
-      // Session, wait for the mounted seat to publish it, then let the official
-      // call do the rest. Anything else keeps the untouched official path.
+      // Session, then let the official call do the rest once its own surface is
+      // ready. Anything else keeps the untouched official path.
       const sidebarRight = ctx.get('sidebarRight');
       let restoreOpenResource;
       if (sidebarRight && typeof sidebarRight.openResource === 'function') {
         const openResource = sidebarRight.openResource.bind(sidebarRight);
-        const mountedSession = () => sidebarRight.mounted?.getSnapshot?.();
         sidebarRight.openResource = (address, options) => {
           const sessionId = sessionIdFromResourceAddress(address);
           if (!sessionId || !embeddedHostSessions.has(sessionId)) {
             openResource(address, options);
             return;
           }
-          focusSession(sessionId);
-          let attempts = 0;
-          const open = () => {
-            if (mountedSession() === sessionId || attempts > 40) {
-              openResource(address, options);
-              return;
-            }
-            attempts += 1;
-            requestAnimationFrame(open);
-          };
-          if (mountedSession() === sessionId) openResource(address, options);
-          else requestAnimationFrame(open);
+          focusSession(sessionId, { keepExpanded: true });
+          openPackResource(sidebarRight, openResource, sessionId, address, options);
         };
         restoreOpenResource = () => { sidebarRight.openResource = openResource; };
       }
@@ -1844,6 +2316,12 @@ window.__ModuleLoader__.load({
       const accountTimer = setInterval(refreshAccountWhenVisible, 15000);
       window.addEventListener('focus', refreshAccountWhenVisible);
       document.addEventListener('visibilitychange', refreshAccountWhenVisible);
+      // A card focus owes its collapse only until the gesture that focused it
+      // ends: that gesture's own click is what may carry the official open which
+      // supersedes it. Document-level, so a gesture leaving the card still settles.
+      document.addEventListener('pointerup', settlePanelGesture, true);
+      document.addEventListener('pointercancel', settlePanelGesture, true);
+      document.addEventListener('click', settlePanelGesture, false);
       const disposePackCatalogReset = ctx.on('connection/reset', () => {
         void refreshPackCatalog();
         });
@@ -1860,6 +2338,17 @@ window.__ModuleLoader__.load({
           disposeSidebar = undefined;
         };
         enableSidebar();
+        // The conversation column renders `sidebar.panellist`, so its rows are
+        // projected here for the same reason the official shell projects them:
+        // registration and locale changes both move a row's label, and a later
+        // registrant adds its own panel without a reload.
+        const disposeConversationPanels = typeof ctx.slots.subscribe === 'function'
+          ? ctx.slots.subscribe('sidebar.panellist', syncConversationPanels)
+          : () => {};
+        const disposeConversationPanelLabels = typeof services.locale?.subscribe === 'function'
+          ? services.locale.subscribe(syncConversationPanels)
+          : () => {};
+        syncConversationPanels();
         const disposeRuntimeSettingsTrigger = ctx.slots.inject('settings.launcher', () => ctx.slots.register({
           name: 'settings.launcher', priority: -10, registrant: 'lwb-workbench',
         }, LwbRuntimeSettingsTrigger));
@@ -1874,6 +2363,12 @@ window.__ModuleLoader__.load({
               // `ui-workspace`'s Workspace browser, since upstream `ui-sidebar`
               // is disabled for this composition.
               'sidebar.workspaces': { kind: 'single', scope: 'root' },
+              // The official global panel rows (the Plugins entry today) belong
+              // to the conversation column for the same reason, and declaring
+              // the seat is what activates `ui-plugin-manager`'s registration.
+              // Row labels and selection stay the shell's; the glyph is the
+              // registrant's.
+              'sidebar.panellist': { kind: 'list', scope: 'root' },
               // Declaring one Session-scoped child is what makes the slot kit
               // hand this overlay a SessionProvider; pack pages use it to render
               // an official conversation for one of their own Sessions.
@@ -1886,6 +2381,9 @@ window.__ModuleLoader__.load({
           }, WorkbenchOverlay));
         return () => {
           disableSidebar();
+          disposeConversationPanels?.();
+          disposeConversationPanelLabels?.();
+          conversationPanels.rows = [];
           disposeRuntimeSettingsTrigger?.();
           disposeOverlay?.();
           disposePackCatalogReset?.();
@@ -1894,6 +2392,9 @@ window.__ModuleLoader__.load({
           clearInterval(accountTimer);
           window.removeEventListener('focus', refreshAccountWhenVisible);
           document.removeEventListener('visibilitychange', refreshAccountWhenVisible);
+          document.removeEventListener('pointerup', settlePanelGesture, true);
+          document.removeEventListener('pointercancel', settlePanelGesture, true);
+          document.removeEventListener('click', settlePanelGesture, false);
           disposeProductMetadata();
           lwbPackClient = undefined;
           lwbPackClientRuntime = undefined;

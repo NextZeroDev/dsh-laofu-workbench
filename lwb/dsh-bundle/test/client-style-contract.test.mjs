@@ -188,6 +188,13 @@ test('loaded capability menus stay nested inside independently collapsible pack 
   assert.match(sidebar, /'aria-expanded': wide \? expanded : undefined/u)
   assert.match(sidebar, /className: 'lwb-cap-menu' \}, pack\.menus\.map/u)
   assert.doesNotMatch(sidebar, /packs\.flatMap/u)
+  // A reload must show the same open groups, and neither a pending catalog nor a
+  // catalog refresh may reopen a group the user closed by hand.
+  assert.match(sidebar, /const navPreference = React\.useRef\(readNavPreference\(\)\);/u)
+  assert.match(sidebar, /writeNavPreference\(expandedPacks\);/u)
+  assert.match(sidebar, /if \(catalog\.phase !== 'ready'\) return;/u)
+  assert.match(sidebar, /const revealActive = Boolean\(activePack\) && revealedPackId\.current === undefined/u)
+  assert.doesNotMatch(sidebar, /if \(activePackId && current\.has\(activePackId\)\) next\.add\(activePackId\);/u)
 })
 
 test('marketplace pins the production spoken-video pack to the first card', async () => {
@@ -220,9 +227,14 @@ test('new conversation delegates workspace selection to the DSH navigation servi
   assert.match(action, /services\.uiWorkspace\.startSession\(workspaceId\);/u)
   assert.doesNotMatch(action, /resolveWorkspaceForNewSession/u)
   assert.doesNotMatch(action, /sessions\?\.create/u)
-  // One entry point remains: the column header. Per-workspace creation and
-  // workspace management belong to the official browser this module hosts.
-  assert.match(source, /onClick: \(\) => createConversation\(\) \}/u)
+  // The official-shaped New Session control lives in this column. Upstream
+  // hard-codes it in the sidebar shell it owns, so it cannot be borrowed
+  // through a seat; the action is the official startSession navigation.
+  assert.match(source, /className: 'lwb-conversation-new'/u)
+  assert.match(source, /copy\.newSessionLabel/u)
+  assert.match(source, /onClick: \(\) => createConversation\(\),/u)
+  // It is usable from the first frame, exactly as the official control is.
+  assert.doesNotMatch(source, /disabled: !internal/u)
 })
 
 test('history and fork navigation open sessions through the DSH workspace service', async () => {
@@ -237,7 +249,7 @@ test('history and fork navigation open sessions through the DSH workspace servic
 
 test('the conversation module hosts the official Workspace browser', async () => {
   const source = await readFile(clientPath, 'utf8')
-  const start = source.indexOf('function ConversationOverlay({ renderSlot, useSessions, useWorkspaces })')
+  const start = source.indexOf('function ConversationOverlay({ renderSlot, useSessions, useWorkspaces, usePanelInfo })')
   const end = source.indexOf('\n    function LwbRuntimeSettingsTrigger', start)
   assert.ok(start >= 0 && end > start, 'client must define the conversation module')
   const overlay = source.slice(start, end)
@@ -261,6 +273,18 @@ test('the conversation module hosts the official Workspace browser', async () =>
   // and the browser owns the directory-flow hole it declares underneath.
   assert.match(source, /'sidebar\.workspaces': \{ kind: 'single', scope: 'root' \}/u)
   assert.doesNotMatch(source, /'sidebar\.workspaces\.directoryFlow': \{ kind: 'single', scope: 'root' \}/u)
+
+  // The same column carries the official global panel rows: the seat is
+  // declared on this entry, the glyph is the registrant's component, and the
+  // label and selection state come from the official registry and layout.
+  assert.match(source, /'sidebar\.panellist': \{ kind: 'list', scope: 'root' \}/u)
+  assert.match(overlay, /renderSlot\('sidebar\.panellist', \{ size: 16, active \}, \{ only: panel\.id \}\)/u)
+  assert.match(overlay, /selectConversationPanel\(panel\.id\)/u)
+  assert.match(source, /function selectConversationPanel\(panelId\)/u)
+  assert.match(source, /if \(panelId !== null && !conversationPanelRegistered\(panelId\)\) return;/u)
+  assert.match(source, /ctx\.slots\.subscribe\('sidebar\.panellist', syncConversationPanels\)/u)
+  assert.match(source, /function resolvePanelLabel\(label\) \{ return typeof label === 'function' \? label\(\) : label; \}/u)
+  assert.match(source, /resolvePanelLabel\(entry\?\.options\?\.label\)/u)
 })
 
 test('capability packs render their own Sessions without touching the conversation module', async () => {
@@ -279,16 +303,47 @@ test('capability packs render their own Sessions without touching the conversati
   assert.doesNotMatch(source, /installEmbeddedSidebarRuntime|lwb\.embedded\.rightbar/u)
 })
 
+test('an embedded conversation carries its own right-Sidebar control', async () => {
+  const source = await readFile(clientPath, 'utf8')
+  // The official expand button lives in the frame's main-panel header, which an
+  // embedded conversation cannot render. The host restores that affordance with
+  // official state and the official action.
+  assert.ok(source.includes('function EmbeddedConversationHead({ sessionId })'), 'every embedded conversation gets the control')
+  assert.ok(source.includes('h(EmbeddedConversationHead, { sessionId }),'), 'the strip renders inside the embedded shell')
+  assert.ok(source.includes("h('strong', { className: 'lwb-embedded-conversation-title'"), 'the strip names the Session')
+  assert.ok(source.includes('lwb-embedded-rightbar-toggle'), 'the toggle is host chrome, not a copied official button')
+  assert.ok(source.includes('panelControlState(mounted, sessionId, open)'), 'state is the rendered column, for this card alone')
+  assert.ok(source.includes('function subscribePanelOpen(listener)') && source.includes("attributeFilter: ['data-sidebar-right-open']"), 'the column marker is observed, not guessed from the service')
+  assert.ok(source.includes('sidebarRight.toggleExpanded()'), 'the action is the official toggle')
+  assert.ok(source.includes('function toggleEmbeddedRightbar(sessionId)') && source.includes('focusSession(sessionId, { keepExpanded: true });'), 'the card is focused before the official toggle')
+  assert.ok(source.includes('if (mounted() === sessionId) {'), 'a wait that ran out never toggles another Session')
+  assert.ok(source.includes('openPackResource(sidebarRight, openResource, sessionId, address, options);'), 'an official open is routed through the surface-aware route')
+  assert.ok(source.includes('PACK_SURFACE_PENDING'), 'a surface the seat has not minted yet is waited for, and a wiring mistake is not')
+  assert.ok(source.includes('const mounted = () => sidebarRight.mounted?.getSnapshot?.();'), 'the toggle waits for the mounted seat to publish the focused Session')
+  assert.ok(source.includes("sidebarRight: ctx.get('sidebarRight'), shortcuts: ctx.get('shortcuts')"), 'both services are optional lookups')
+})
+
 test('the official right Sidebar follows the pack card in use', async () => {
   const source = await readFile(clientPath, 'utf8')
   // The right Sidebar is the frame's own column and serves its current Session,
   // so a pack page only focuses the card in use and stops covering the column.
-  assert.ok(source.includes('function focusSession(sessionId)'), 'the pack asks the host to focus a Session')
+  assert.ok(source.includes('function focusSession(sessionId, options)'), 'the pack asks the host to focus a Session')
   assert.ok(source.includes('services?.uiWorkspace?.openSession?.(sessionId)'), 'focusing is official navigation')
   assert.ok(source.includes('function armPackSession(sessionId)') && source.includes('function releasePackSession(sessionId)'))
   assert.ok(source.includes('if (count === 0 && !packSessionArmed()) {'), 'the previous Session is captured when the mode arms')
   assert.ok(source.includes('if (!current || !packSessionRendered.has(current)) return;'), 'a later navigation of the user wins over the restore')
-  assert.ok(source.includes("document.querySelector('[data-sidebar-right-panel]')"), 'the Sidebar column is measured, not reimplemented')
+  // One surface, one open panel: a card switch closes the panel it leaves, and
+  // a plainly focused card never inherits a remembered expansion.
+  assert.ok(source.includes('function collapsePackPanel()'), 'the host can close the panel through the official toggle')
+  assert.ok(source.includes('pendingPanelCollapse = { sessionId, epoch: packPanelEpoch };'), 'switching cards owes a collapse instead of performing one')
+  assert.ok(source.includes('function settlePanelGesture()'), 'the owed collapse starts once the gesture that focused the card ends')
+  assert.ok(source.includes("document.addEventListener('click', settlePanelGesture, false)"), 'the gesture\'s own click settles it, after any official open it carried')
+  assert.ok(source.includes('if (epoch !== packPanelEpoch) return;'), 'a queued collapse never closes a panel a later gesture asked for')
+  assert.ok(source.includes('function collapseWhenSettled(sessionId, epoch)'), 'a plainly focused card is collapsed once its seat mounts')
+  assert.ok(source.includes('focusSession(sessionId, { keepExpanded: true });'), 'panel gestures keep their target expanded')
+  assert.ok(source.includes('collapsePackPanel();\n      packSessionInset?.();'), 'leaving the page closes the panel it left open')
+  assert.ok(source.includes('function onScreenPanel()') && source.includes("panel.closest('[hidden]') === null"), 'the column read is the panel in view, not a hidden one a card left behind')
+  assert.ok(source.includes("frameObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] })"), 'a card switch re-binds the measurement without touching the tree')
   assert.ok(source.includes('--lwb-rightbar-inset'), 'the overlay yields the column by width')
   assert.ok(source.includes('sidebarRight.mounted?.getSnapshot?.()'), 'an official open waits for the mounted seat to publish the focused Session')
   assert.ok(source.includes('restoreOpenResource?.();'))
