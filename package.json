@@ -14,7 +14,7 @@
     "start:desktop": "node lwb/desktop/dev.mjs --skip-build",
     "package:desktop": "node lwb/desktop/package.mjs",
     "package:desktop:dir": "node lwb/desktop/package.mjs --dir",
-    "package:desktop:portable": "node lwb/desktop/package.mjs --portable",
+    "package:desktop:portable": "node lwb/desktop/package.mjs --unsigned --portable",
     "package:desktop:commercial": "node lwb/desktop/package.mjs --edition commercial",
     "package:desktop:unsigned": "node lwb/desktop/package.mjs --unsigned --portable",
     "package:plan": "node lwb/desktop/package.mjs --plan",

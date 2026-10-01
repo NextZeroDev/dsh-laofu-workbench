@@ -63,6 +63,7 @@ if (unsigned) {
   Object.assign(env, {
     DSH_DESKTOP_APP_ID: `com.scitiger.laofu.workbench${edition.name === 'commercial' ? '.commercial' : ''}`,
     DSH_DESKTOP_UNSIGNED: '1',
+    LWB_DESKTOP_PORTABLE: portable ? '1' : '0',
     LWB_DESKTOP_UNSIGNED: '1',
     LWB_DESKTOP_UNSIGNED_DSH_ROOT: DSH_ROOT,
     CSC_IDENTITY_AUTO_DISCOVERY: 'false',
