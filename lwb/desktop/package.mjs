@@ -19,6 +19,7 @@ const { values } = parseArgs({
     plan: { type: 'boolean' },
     edition: { type: 'string' },
     unsigned: { type: 'boolean' },
+    portable: { type: 'boolean' },
   },
 })
 if (!['darwin', 'win32'].includes(process.platform)) throw new Error('Official Desktop packaging supports macOS and Windows build hosts.')
@@ -56,6 +57,7 @@ if (values.plan) {
 const appRoot = join(DSH_ROOT, 'apps/desktop')
 const { loadDesktopPackageEnvironment, validateDesktopPackageEnvironment } = await import(pathToFileURL(join(appRoot, 'scripts/desktop-package-environment.mjs')))
 const unsigned = values.unsigned === true
+const portable = values.portable === true
 const env = unsigned ? Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:DSH_DESKTOP_|APPLE_|CSC_|WIN_CSC_|DOWNLOAD_(?:TEST|PROD)_)/u.test(key))) : loadDesktopPackageEnvironment(process.platform)
 if (unsigned) {
   Object.assign(env, {
@@ -119,8 +121,9 @@ const buildNumber = env.GITHUB_RUN_NUMBER ?? '1'
 if (!/^\d+$/u.test(buildNumber)) throw new Error('Desktop test build number must be numeric')
 const identity = {
   productName: edition.productName,
-  artifactName: unsigned ? edition.artifactName.replace('.${ext}', '-unsigned.${ext}') : edition.artifactName,
+  artifactName: edition.artifactName.replace('.${ext}', `${portable ? '-portable' : ''}${unsigned ? '-unsigned' : ''}.${'${ext}'}`),
   protocolScheme: edition.protocolScheme,
+  portable,
   ...(unsigned ? { unsigned: true, version: `${productVersion}-test.${buildNumber}`, output: join(LWB_RUNTIME.projectRoot, '.tooling', 'artifacts', edition.name, `${process.platform === 'darwin' ? 'mac' : 'win'}-${arch}`) } : {}),
 }
 const config = join(stage, 'electron-builder.config.mjs')

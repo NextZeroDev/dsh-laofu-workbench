@@ -18,7 +18,7 @@ npm run dev -- --port 4173
 
 根目录依赖使用 npm 锁文件安装。`setup` 会克隆、检出并构建 [UPSTREAM.lock.json](../lwb/UPSTREAM.lock.json) 指定的 DSH，在上游目录使用其 pnpm 版本；不要在根目录另行初始化 pnpm 工作区。
 
-上面启动的是 Web 端。要使用桌面开发端，在完成 `npm ci` 和 `npm run setup` 后，运行 `npm run dev:desktop` 代替 `npm run dev -- --port 4173`。切换 Web/桌面端前先退出另一 Host；两端共用本机业务数据，不支持并发写入。当前签名安装包尚未验收，更多信息见 [Desktop 与 Web](37-desktop-parity.md)。
+上面启动的是 Web 端。要使用桌面开发端，在完成 `npm ci` 和 `npm run setup` 后，运行 `npm run dev:desktop` 代替 `npm run dev -- --port 4173`。切换 Web/桌面端前先退出另一 Host；两端共用本机业务数据，不支持并发写入。当前桌面发布使用未签名便携包，更多信息见 [Desktop 与 Web](37-desktop-parity.md)。
 
 Web 端应在浏览器打开老傅工作台，桌面端应打开工作台窗口，均显示“对话”“场景能力包”“设置”。首次启动没有预置业务账号、稿件或成片。Web 端若浏览器没有自动打开，用终端打印的完整带令牌 URL 访问；遇到错误先看[故障排查](troubleshooting.md)。
 

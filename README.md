@@ -6,7 +6,7 @@
 
 **社区版随仓库提供完整的「口播视频内容创作」能力包**：从发现素材、确定选题到写稿、配音字幕、制作视频和准备发布资料，也支持定时内容生产。
 
-> 当前为开发预览版，面向本机单用户使用，主要验证环境为 macOS。支持 Web 和桌面开发入口；签名安装包及 Linux / Windows 完整流程仍需验收。运行时锁定 DSH `dsh-v0.2.0-rc.2`，具体版本以 [UPSTREAM.lock.json](lwb/UPSTREAM.lock.json) 为准。
+> 当前为开发预览版，面向本机单用户使用，主要验证环境为 macOS。支持 Web 和桌面开发入口；当前桌面发布格式为 Windows x64 与 macOS Apple Silicon 未签名便携包。运行时锁定 DSH `dsh-v0.2.0-rc.2`，具体版本以 [UPSTREAM.lock.json](lwb/UPSTREAM.lock.json) 为准。
 
 [安装与启动](#快速开始) · [口播创作流程](#口播视频内容创作) · [社区版与商业版](#社区版与商业版) · [使用文档](#文档)
 
@@ -127,7 +127,7 @@ npm run dev -- --port 4173
 npm run dev:desktop
 ```
 
-两端使用同一套页面和能力包。切换前先退出另一 Host，避免同时写入同一数据目录；签名安装包尚未验收，详见 [Desktop 与 Web](docs/37-desktop-parity.md)。
+两端使用同一套页面和能力包。切换前先退出另一 Host，避免同时写入同一数据目录；当前桌面发布使用未签名便携包，详见 [Desktop 与 Web](docs/37-desktop-parity.md)。
 
 启动会自动打开浏览器。需要手动打开时运行 `npm run dev -- --no-open --port 4173`，使用终端输出的完整 `http://127.0.0.1:4173/?token=...` 地址完成首次鉴权。不要分享访问令牌。
 

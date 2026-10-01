@@ -47,9 +47,9 @@ npm run package:desktop
 
 安装版由 bootstrap 在系统 appData 下创建产品数据根（可显式覆盖，见下节），将本次构建的产品资源放到可写 runtime 中，再通过公共 Profile API 装配 LWB，最后在加载官方 main 时应用上述入口策略。业务工作区在 runtime 外，能力包不静态启用。发布上传被禁用。
 
-### 未签名测试构建
+### 便携版测试构建
 
-缺少正式发行证书时，可显式构建测试安装包：
+当前阶段发布便携版测试包，不需要安装器或管理员权限。缺少正式发行证书时，可构建未签名便携包：
 
 ```bash
 npm run package:desktop:unsigned
@@ -57,9 +57,16 @@ npm run package:desktop:unsigned
 npm run package:desktop:unsigned -- --edition commercial
 ```
 
-此模式不读取签名环境文件，不调用 Apple 公证或 Windows 签名硬件。macOS 原生组件使用临时 ad-hoc 签名满足 Apple Silicon 的加载要求，不代表 Developer ID 签名或公证。安装时可能受到 Gatekeeper 或 SmartScreen 提示。
+也可以显式构建便携版（正式签名环境仍需配置）：
 
-测试包关闭自动更新与强制更新服务，版本为 LWB 根版本加 `-test.<构建编号>`（Actions 使用 `GITHUB_RUN_NUMBER`，本机构建为 `1`），文件名明确带 `-unsigned`。两版使用不同 app ID，输出分开放在 `.tooling/artifacts/<edition>/<target>/`。
+```bash
+npm run package:desktop:portable
+npm run package:desktop:portable -- --edition commercial
+```
+
+Windows 产物是可直接运行的 portable `.exe`，macOS 产物是包含 `.app` 的 `.zip`，不生成 NSIS 安装器或 DMG。程序数据写入用户数据目录，不要求把压缩包目录作为可写目录。未签名模式不读取签名环境文件，不调用 Apple 公证或 Windows 签名硬件。macOS 原生组件使用临时 ad-hoc 签名满足 Apple Silicon 的加载要求，不代表 Developer ID 签名或公证；首次打开仍可能受到 Gatekeeper 或 SmartScreen 提示。
+
+测试包关闭自动更新与强制更新服务，版本为 LWB 根版本加 `-test.<构建编号>`（Actions 使用 `GITHUB_RUN_NUMBER`，本机构建为 `1`），文件名明确带 `-portable-unsigned`。两版使用不同 app ID，输出分开放在 `.tooling/artifacts/<edition>/<target>/`。
 
 官方源码保持原样。未签名模式通过仅在构建子进程启用的内存适配复用官方运行时准备、完整性校验与烟雾测试；适配与锁定的上游结构不匹配时会报错。此模式只用于测试分发，正式签名构建仍使用原有校验。
 

@@ -23,6 +23,7 @@ export async function createLwbPackageConfig(payload, identity) {
   config.productName = identity.productName
   config.artifactName = identity.artifactName
   config.protocols = [{ name: identity.productName, schemes: [identity.protocolScheme] }]
+  if (identity.portable) applyLwbPortableTargets(config)
   config.extraMetadata = { ...config.extraMetadata, main: 'lwb-bootstrap.mjs' }
   const entry = join(payload, '..', 'desktop-entry')
   await mkdir(entry, { recursive: true })
@@ -30,5 +31,11 @@ export async function createLwbPackageConfig(payload, identity) {
   await cp(fileURLToPath(new URL('./entry-policy.mjs', import.meta.url)), join(entry, 'lwb-entry-policy.mjs'))
   config.files.push({ from: entry, to: '.', filter: ['lwb-bootstrap.mjs', 'lwb-entry-policy.mjs'] })
   config.extraResources.push({ from: payload, to: 'lwb-product' })
+  return config
+}
+
+export function applyLwbPortableTargets(config) {
+  config.mac = { ...config.mac, target: ['zip'] }
+  config.win = { ...config.win, target: ['portable'] }
   return config
 }
