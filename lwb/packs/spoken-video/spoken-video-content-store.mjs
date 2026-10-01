@@ -46,6 +46,7 @@ import {
   dshChildStarted,
   dshTrace,
   ensureDshTrace,
+  lastDshFailureDetail,
   projectDshSessionEvent,
 } from './spoken-video-dsh-trace.mjs'
 
@@ -80,6 +81,23 @@ function uuid(value, label) { const result = text(value, label, 36); if (!UUID.t
 function sourceId(value, label = '来源标识') { const result = text(value, label, 63); if (!SOURCE_ID.test(result)) throw fail(`${label}无效。`); return result }
 function now() { return new Date().toISOString() }
 function ms(start, end) { const value = Date.parse(end) - Date.parse(start); return Number.isFinite(value) ? Math.max(0, value) : 0 }
+
+/**
+ * Compose the durable failure text for one generation record. The executor
+ * reports only that a child run did not finish normally; the concrete cause
+ * (a missing credential, an unsupported parameter, a refusal) is recorded in
+ * the child's DSH trace. Appending it keeps the task card and the execution
+ * detail panel telling the same story instead of the operator having to guess.
+ * @param error - the error the generation caught.
+ * @param trace - the record's `dsh` trace container.
+ * @returns one line, bounded by the callers' own field limits.
+ */
+function failureMessage(error, trace) {
+  const base = String(error?.message || error || '').trim() || '生成未完成。'
+  const detail = lastDshFailureDetail(trace)
+  if (!detail || base.includes(detail)) return base
+  return `${base}：${detail}`
+}
 
 async function workspaceFor(agent) {
   const cwd = agent?.workspacePath ?? agent?.session?.header?.cwd
@@ -869,14 +887,18 @@ export class SpokenVideoContentStore {
     if (!queue.length) this.topicQueues.delete(workspace)
   }
   async failTopicGeneration(workspace, path, id, startedAt, error, stepId = 'generate') {
-    const message = String(error?.message || error).slice(0, 500)
     return this.mutateGeneration(workspace, path, id, (record) => {
-      if (record.status === 'completed') return
+      // Only an in-flight record can be settled here. A record the startup
+      // recovery already failed carries the more accurate restart reason, and
+      // a teardown failure arriving later must not overwrite it — the run
+      // record and this record would otherwise disagree.
+      if (!ACTIVE_TOPIC_GENERATION_STATUSES.has(record.status)) return
+      const message = failureMessage(error, record.dsh)
       const step = (record.steps || []).find((item) => item.id === stepId)
         || (record.steps || []).find((item) => item.status === 'running')
         || (record.steps || []).find((item) => item.status === 'pending')
       if (step) { step.status = 'error'; step.detail = message.slice(0, 300) }
-      record.status = 'failed'; record.error = message; record.completedAt = this.now(); record.elapsedMs = ms(startedAt, record.completedAt)
+      record.status = 'failed'; record.error = message.slice(0, 500); record.completedAt = this.now(); record.elapsedMs = ms(startedAt, record.completedAt)
     })
   }
   async listGenerations(agent) { const { generations } = await this.paths(agent); const data = await this.topicGenerations(generations); return [...data.generations].sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt))) }
@@ -1220,8 +1242,12 @@ export class SpokenVideoContentStore {
       })
     } catch (error) {
       await this.mutateScriptGeneration(workspace, generationsPath, id, (record) => {
-        record.status = 'failed'; record.steps[1].status = 'error'; record.steps[1].detail = String(error?.message || error).slice(0, 300)
-        record.error = String(error?.message || error).slice(0, 500); record.completedAt = this.now(); record.elapsedMs = ms(record.startedAt, record.completedAt)
+        // Same rule as the topic path: never rewrite a record the startup
+        // recovery already settled.
+        if (!ACTIVE_SCRIPT_GENERATION_STATUSES.has(record.status)) return
+        const message = failureMessage(error, record.dsh)
+        record.status = 'failed'; record.steps[1].status = 'error'; record.steps[1].detail = message.slice(0, 300)
+        record.error = message.slice(0, 500); record.completedAt = this.now(); record.elapsedMs = ms(record.startedAt, record.completedAt)
       })
       return
     }

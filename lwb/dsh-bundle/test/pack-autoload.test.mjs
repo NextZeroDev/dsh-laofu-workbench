@@ -50,7 +50,7 @@ function runtimeContext(manifests) {
         entries: entries.length
           ? [...manifests.values()].map((manifest) => ({
             id: manifest.packageName,
-            url: `/plugins/${encodeURIComponent(manifest.packageName)}?rev=test`,
+            url: `plugins/${encodeURIComponent(manifest.packageName)}?rev=test`,
             rev: 'test',
             inject: [],
             external: [],
@@ -145,14 +145,11 @@ test('only workbench-loaded packs are enabled and restored at startup', async (t
   await assert.rejects(manager.marketplaceLwbPacks(), /schemaVersion must be 2/u)
 })
 
-test('spoken-video declares every direct DSH host import as a runtime peer', async () => {
+test('spoken-video pins DSH peers to the supported release and declares the LWB SDK', async () => {
   const packageJson = JSON.parse(await readFile(join(root, 'lwb', 'packs', 'spoken-video', 'package.json'), 'utf8'))
-  assert.deepEqual(packageJson.peerDependencies, {
-    '@deepseek-ai/schemastery': 'workspace:*',
-    '@deepseek-ai/dsh-credentials': 'workspace:*',
-    '@deepseek-ai/dsh-llm': 'workspace:*',
-    '@deepseek-ai/dsh-settings': 'workspace:*',
-    '@deepseek-ai/dsh-typert-protocol': 'workspace:*',
-    '@deepseek-ai/dsh-tools': 'workspace:*',
-  })
+  const lock = JSON.parse(await readFile(join(root, 'lwb', 'UPSTREAM.lock.json'), 'utf8'))
+  for (const [name, version] of Object.entries(packageJson.peerDependencies)) {
+    if (name.startsWith('@deepseek-ai/dsh-')) assert.equal(version, lock.tag.replace('dsh-v', ''))
+  }
+  assert.equal(packageJson.peerDependencies['@scitiger-ai/lwb-pack-sdk'], '0.1.0')
 })

@@ -1,4 +1,8 @@
+import { redactedDetail } from './spoken-video-redact.mjs'
+
 const MAX_TRACE_EVENTS = 32
+/** A failure line is a machine diagnostic, not model output; keep it short. */
+const FAILURE_DETAIL_MAX = 240
 
 function isoAt(value, fallback) {
   if (!Number.isFinite(value)) return fallback
@@ -71,9 +75,25 @@ export function dshChildStarted(at) {
 }
 
 /**
+ * Compose the operator-facing reason for a turn that did not complete. The
+ * cursor already carries the provider's own failure (a missing credential, an
+ * unsupported parameter, a refusal); without it every model-side failure reads
+ * as the same opaque wrapper. It is redacted and bounded before publication,
+ * and it is the only child-session text this projection ever emits.
+ */
+function failureDetail(reason) {
+  const failure = reason?.error
+  const code = typeof failure?.code === 'string' ? failure.code.trim() : ''
+  const message = typeof failure?.message === 'string' ? failure.message.trim() : ''
+  if (!code && !message) return null
+  return redactedDetail(code && message ? `${code}：${message}` : (message || code), FAILURE_DETAIL_MAX)
+}
+
+/**
  * Convert a raw DSH Session event into a deliberately small, user-safe execution update.
  * Text, reasoning, prompts, tool arguments, tool results, and unknown event payloads never leave
- * the host-side session log through this projection.
+ * the host-side session log through this projection. The one exception is a bounded, redacted
+ * failure line on `turn/end`, because a failure with no stated cause cannot be acted on.
  */
 export function projectDshSessionEvent(event, fallbackAt) {
   const id = eventId(event)
@@ -97,8 +117,25 @@ export function projectDshSessionEvent(event, fallbackAt) {
       const reason = event.data?.reason?.kind
       if (reason === 'completed') return { ...base, status: 'done', label: 'DSH 已完成生成' }
       if (reason === 'max-tokens') return { ...base, status: 'running', label: 'DSH 达到单次输出上限，正在继续' }
-      return { ...base, status: 'error', label: 'DSH 生成未正常结束' }
+      return { ...base, status: 'error', label: 'DSH 生成未正常结束', detail: failureDetail(event.data?.reason) }
     }
     default: return null
   }
+}
+
+/**
+ * Read the most recent recorded failure reason out of a trace. Generation
+ * hosts append this to the wrapper error they receive, so the durable record
+ * and the task card state why the child failed instead of only that it did.
+ * @param trace - a `dshTrace()` container, or any value that may hold one.
+ * @returns the last non-null error detail, or null when the trace has none.
+ */
+export function lastDshFailureDetail(trace) {
+  const events = Array.isArray(trace?.events) ? trace.events : []
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.status !== 'error') continue
+    if (typeof event.detail === 'string' && event.detail.trim()) return event.detail.trim()
+  }
+  return null
 }

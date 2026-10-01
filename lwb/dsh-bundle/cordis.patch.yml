@@ -7,8 +7,6 @@
       config:
         name: 老傅工作台
         version: 0.1.0
-        remoteSettings:
-          mode: auto
 
     # Browser half of the product shell. It is deliberately a normal DSH
     # client package, so the module graph and the official runtime own loading.
@@ -23,3 +21,23 @@
 # DSH activates its directory picker only when both workspace flow seats exist.
 - id: ui-sidebar
   disabled: true
+
+# ui-plugin-manager deliberately stays enabled: the Plugins page is an official
+# `main` panel, and its sidebar row is filled by the conversation module, whose
+# column declares `sidebar.panellist` on the LWB overlay entry. LWB owns only
+# the product navigation (`sidebar`), not the official panel rows.
+
+# The official Desktop now binds a local Web Host. Keep LWB separate from
+# an independently installed official Desktop without changing its source.
+- id: webserver
+  config:
+    host: !!js ctx.webStartup.host ?? '127.0.0.1'
+    port: !!js "process.env.LWB_PROFILE_ID === 'desktop' ? Number(process.env.LWB_DESKTOP_PORT || 19487) : (ctx.webStartup.port ?? 3080)"
+    compression: gzip
+    compressionLevel: 1
+    compressionThresholdBytes: 1024
+
+# Default only: native volatile settings persist user overrides in the profile.
+- id: ui-theme
+  config:
+    preference: light

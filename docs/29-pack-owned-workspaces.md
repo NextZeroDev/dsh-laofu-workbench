@@ -33,7 +33,7 @@ retained/<pack-id>-<reset-id>/...
 
 业务读写使用 `{ packId, workspaceId, workspacePath, generation, status }` 上下文，不构造伪 Agent。AI 执行时按需创建内部根 Agent，复用 DSH 原生预设和子代理；一个专属工作区可有多个内部执行会话。
 
-根会话 id 在发布前写入归属索引。LWB 普通列表、搜索、归档和计数按归属 id 与 cwd 过滤根会话；子代理沿用已有 `origin: subagent` 过滤。归属信息尚未读取时不展示会话，避免闪现。解除注册和清空后仍保留历史归属，不改写 DSH Session 格式。
+根会话 id 在发布前写入归属索引。包若绕过 `sessions.create`、自己用原生 Agent 服务创建根会话（例如口播的定时自动化身份），必须在发布任何工作之前调用 `sessions.adopt(agent)` 登记 —— 未登记的根会话不在归属索引里，普通对话历史就不会把它当成包内会话。普通对话左栏是官方 Workspace 浏览器，它按 LWB 传给该座位的 owner props 收到一份投影过的 `useSessions` / `useWorkspaces`：投影按归属 id 与「会话 cwd 落在包工作区之下」两条事实剔除根会话，并按工作区退掉已登记的包工作区。官方浏览器自身已经过滤 `origin: subagent`，并只保留当前空会话，LWB 不重复实现；因此**根会话且非空**的包内会话（模型博主评测的每个 run）只能靠 LWB 这两条事实隐藏。归属信息尚未读取时不渲染座位，避免闪现。解除注册和清空后仍保留历史归属，不改写 DSH Session 格式。机制与接缝见[对话模块使用官方左栏](42-conversation-history-official.md)。
 
 ## 能力包接入契约
 
@@ -47,9 +47,11 @@ Host 声明 `lwbPackServices` 依赖，通过 `getLwbPackScope(ctx, manifest)` �
 | `onStop(disposer)` | 登记计时器等停止回调 |
 | `signal` / `fetch` | 包级取消信号、自动合并取消信号的 HTTP 请求 |
 | `withAgent(operation, signal?)` | 按需创建、使用、释放包内 DSH Agent |
+| `sessions.create/resume/get` | 包自有会话：登记归属后由宿主登记并可从普通历史隐藏 |
+| `sessions.adopt(agent)` | 包自行用原生 Agent 服务创建的根会话，登记为包归属；Agent 的 cwd 必须等于包工作区 |
 | `assertAgent(agent)` | 工具调用只能来自该包目录 |
 | `credentials` | 把包自身业务接口的凭据操作限制到包命名空间；DSH 模型认证由原生适配器处理 |
-| `settingsNamespace(name)` | 分配包级设置名称；通过包自身的 `ctx.settings.register()` 注册，确保卸载释放 schema |
+| `settings(name, schema)` | 返回包工作区内的独立 JSON 设置；串行原子写入，卸载屏障等待正在进行的写入 |
 
 核心只向浏览器业务页传 `packId`、公开 pack/menu 和导航回调。数据 RPC 不接收用于选址的 `agentId`/`cwd`。业务 host 保留真实 Agent 入参兼容以供测试和内部工具复用，生产浏览器入口统一使用宿主上下文。
 
@@ -57,9 +59,11 @@ Host 声明 `lwbPackServices` 依赖，通过 `getLwbPackScope(ctx, manifest)` �
 
 ## 模型、任务与隔离
 
-内部 Agent 通过 `agentDefaultModel.currentSelection()` 读取 DSH 默认服务商、模型及推理强度，认证、图片输入等模型能力由 DSH 已有配置决定。用户只需在 DSH 设置中配置，无需在能力包详情重复填写。每个新任务读取最新默认选择，已开始的任务保持启动时的选择，不读取浏览器当前普通对话的局部覆盖。
+内部 Agent 通过宿主的场景任务模型服务读取服务商、模型及推理强度。默认模式由 `agentDefaultModel.currentSelection()` 跟随 DSH 默认选择；用户也可在「设置 → 场景任务默认模型」指定已配置的 LWB 或其他模型。认证、图片输入等模型能力由对应 DSH 适配器和服务配置决定。每个新任务读取最新的场景任务选择，已开始的任务保持启动时的选择，不读取浏览器当前普通对话的局部覆盖。
 
 能力包不创建模型路由、不检查专用模型 key，也不修改 DSH 模型配置。缺少默认选择时提示前往 DSH 设置；服务商不可用、认证失败、模型能力不足等由 DSH 原生执行返回。调度的就绪检查只判断默认选择是否存在，不把“存在默认选择”当作联网或认证成功。
+
+2026-09-30 增补：就绪检查与轮次预检会为**生效中的路由**读取它在自身设置里声明的凭据引用（例如 `deepseek-official` 的 `DEEPSEEK_API_KEY`、BYOK 服务商声明的 `BAILIAN_API_KEY`），**只在可证伪“该引用未配置”时**在任务表单给出警告、并在开始一轮之前失败且写明路由与引用。不声明凭据引用的账号、设备或 OAuth 路由按“无法证明”处理，永不拦截；探测本身报错也按无法证明处理。`executionStatus` 仍只判断选择是否存在，不读凭据。
 
 口播的 TTS、ASR 和封面生图目前直接调用供应商接口，这些业务连接继续使用独立命名空间；包内配音和发布可使用同一个供应商 key。它们与 DSH 的对话模型认证是不同用途，配置不相互覆盖。凭据引用使用符合 DSH shell identifier 规则的长度前缀，避免包/用途边界碰撞。
 

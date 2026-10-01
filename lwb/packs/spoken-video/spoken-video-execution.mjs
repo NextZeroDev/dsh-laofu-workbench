@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFile, realpath, stat, readdir } from 'node:fs/promises'
 import { resolve, relative, isAbsolute, sep, extname } from 'node:path'
 import { spokenVideoDataPath } from './spoken-video-paths.mjs'
+import { displayValue } from './spoken-video-redact.mjs'
 import { expandAssistantStream } from '@deepseek-ai/dsh-llm'
 
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u
@@ -13,24 +14,7 @@ const KINDS = {
   account: ['account-generations.json', 'generations', '账号定位'],
   source: ['signals.json', 'runs', '信号采集'],
 }
-const SECRET = /^(?:authorization|cookie|api[-_]?key|access[-_]?token|refresh[-_]?token|password|secret|credential)$/iu
-
-/** Display content is opt-in; credentials and transport blobs are never display fields. */
-export function displayValue(value) {
-  if (typeof value === 'string') {
-    if (/^\s*[{[]/u.test(value)) {
-      try { return JSON.stringify(displayValue(JSON.parse(value)), null, 2) } catch { /* A streaming fragment need not be complete JSON. */ }
-    }
-    return value
-      .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu, 'Bearer [已隐藏]')
-      .replace(/\bsk-[A-Za-z0-9_-]{12,}/gu, '[已隐藏]')
-      .replace(/(["']?(?:api[-_]?key|access[-_]?token|refresh[-_]?token|password|secret|authorization)["']?\s*[:=]\s*["']?)[^"'\s,}]+/giu, '$1[已隐藏]')
-  }
-  if (Array.isArray(value)) return value.map(displayValue)
-  if (!value || typeof value !== 'object') return value
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !['audio_base64', 'image_base64'].includes(key))
-    .map(([key, item]) => [key, SECRET.test(key) ? '[已隐藏]' : displayValue(item)]))
-}
+export { displayValue }
 
 export function executionEvent(record, label, { status = 'done', detail = null, actor = '主机', phase = null } = {}) {
   const events = record.executionEvents ||= []
@@ -69,6 +53,18 @@ async function readJson(context, file) {
   catch (error) { if (error.code === 'ENOENT') return null; throw error }
 }
 
+/** Resolve the immutable artifact saved by a media run, never the current stage. */
+export async function mediaRunArtifact(context, record, projectId = record.projectId) {
+  const pointer = record.result?.artifact
+  if (pointer?.data) return pointer.data
+  if (!pointer?.file) return null
+  if (!/^[a-f0-9-]{36}$/iu.test(projectId || '') || !/^artifacts\/[A-Za-z0-9._-]+\.json$/u.test(pointer.file)) throw new Error('媒体任务产物路径无效。')
+  const artifact = await readJson(context, `projects/${projectId}/${pointer.file}`)
+  if (!artifact) return null
+  if (artifact.id !== pointer.id || artifact.stage !== record.type || artifact.projectId !== projectId) throw new Error('媒体任务产物与记录不匹配。')
+  return artifact.data
+}
+
 function descriptor(request) {
   if (!request || !ID.test(request.id || '')) throw new Error('执行任务标识无效。')
   if (request.kind === 'media') {
@@ -93,6 +89,10 @@ export async function executionDetail(context, request) {
   const data = await readJson(context, file)
   const record = data?.[key]?.find((item) => item.id === request.id)
   if (!record) throw new Error('该执行记录已不存在或未保存。')
+  if (request.kind === 'media' && record.result?.artifact) {
+    const artifact = await mediaRunArtifact(context, record, request.projectId)
+    if (artifact) record.result.artifact = { ...record.result.artifact, data: artifact }
+  }
   const title = request.kind === 'media' ? ({ voiceover: '配音生成', subtitles: '字幕生成', video: '视频制作', qc: '技术质检' })[record.type] || fallbackTitle : fallbackTitle
   const sessions = record.dsh?.sessions?.length ? record.dsh.sessions : record.dsh?.childSessionId
     ? [{ role: 'agent', label: title, childSessionId: record.dsh.childSessionId, parentSessionId: record.dsh.parentSessionId }] : []

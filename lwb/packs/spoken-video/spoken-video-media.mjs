@@ -2,12 +2,11 @@ import { validateSrt } from './spoken-video-subtitles.mjs'
 
 export const MEDIA_OPERATION_TYPES = Object.freeze(['voiceover', 'subtitles', 'video', 'qc'])
 export const MEDIA_OPERATION_STATES = Object.freeze(['queued', 'running', 'succeeded', 'failed'])
-export const MEDIA_PROVIDERS = Object.freeze(['bailian', 'scitiger', 'legacy'])
-export const MEDIA_CONNECTION_PROVIDERS = Object.freeze(['bailian', 'scitiger'])
+export const MEDIA_PROVIDERS = Object.freeze(['lwb', 'bailian', 'legacy'])
+export const MEDIA_CONNECTION_PROVIDERS = Object.freeze(['lwb', 'bailian'])
 export const VIDEO_ORIENTATIONS = Object.freeze(['portrait', 'landscape'])
 export const MEDIA_PROVIDER_CREDENTIAL_REFS = Object.freeze({
   bailian: 'DASHSCOPE_API_KEY',
-  scitiger: 'LWB_SPOKEN_VIDEO_SCITIGER_API_KEY',
 })
 export const VOICE_SOURCES = Object.freeze(['system', 'upload', 'reference', 'preset'])
 export const DEFAULT_VOICE_PROFILE = Object.freeze({
@@ -105,7 +104,7 @@ function websocketEndpoint(value) {
 /** Reads only operator-owned environment configuration. Browser input never supplies an endpoint or credential. */
 export function mediaServiceConfig(environment = process.env) {
   const baseUrl = endpoint(environment.LWB_SPOKEN_VIDEO_TTS_BASE_URL || environment.TTS_SERVICE_BASE_URL)
-  const scitigerBaseUrl = endpoint(environment.LWB_SPOKEN_VIDEO_SCITIGER_BASE_URL || environment.SCITIGER_BASE_URL || 'https://link.scitiger.cn')
+  const scitigerBaseUrl = endpoint(environment.LWB_SPOKEN_VIDEO_SCITIGER_BASE_URL || environment.SCITIGER_BASE_URL || 'https://link.lwb.cn')
   const bailianBaseUrl = endpoint(environment.LWB_SPOKEN_VIDEO_BAILIAN_BASE_URL || 'https://dashscope.aliyuncs.com/api/v1')
   return {
     baseUrl,
@@ -120,8 +119,6 @@ export function mediaServiceConfig(environment = process.env) {
     bailianDefaultVoice: optionalText(environment.LWB_SPOKEN_VIDEO_BAILIAN_DEFAULT_VOICE, '百炼默认音色', 80) || 'Cherry',
     bailianVoiceEnrollmentModel: optionalText(environment.LWB_SPOKEN_VIDEO_BAILIAN_VOICE_ENROLLMENT_MODEL, '百炼声音复刻模型', 120) || 'qwen-voice-enrollment',
     bailianVoiceCloneModel: optionalText(environment.LWB_SPOKEN_VIDEO_BAILIAN_VOICE_CLONE_MODEL, '百炼复刻 TTS 模型', 120) || 'qwen3-tts-vc-2026-01-22',
-    scitigerBaseUrl,
-    scitigerConfigured: Boolean(scitigerBaseUrl),
   }
 }
 
@@ -143,7 +140,7 @@ export function normalizeVoiceoverRequest(value) {
     throw fail('SPOKEN_VIDEO_MEDIA_INVALID_INPUT', '使用自定义音色时请先上传参考音频。')
   }
   return {
-    provider: oneOf(input.provider, '生成方式', MEDIA_PROVIDERS, 'bailian'),
+    provider: oneOf(input.provider, '生成方式', MEDIA_PROVIDERS, 'lwb'),
     voiceSource,
     voiceId,
     voiceName: optionalText(input.voiceName, '音色名称', 120)
@@ -159,7 +156,7 @@ export function normalizeVoiceoverRequest(value) {
 export function normalizeSubtitleRequest(value) {
   const input = object(value ?? {}, '字幕请求')
   return {
-    provider: oneOf(input.provider, '生成方式', MEDIA_PROVIDERS, 'bailian'),
+    provider: oneOf(input.provider, '生成方式', MEDIA_PROVIDERS, 'lwb'),
     language: optionalText(input.language, '字幕语言', 16) || 'zh',
     aiOptimize: input.aiOptimize === true,
   }
@@ -167,7 +164,7 @@ export function normalizeSubtitleRequest(value) {
 
 export function mediaCredentialRef(provider) {
   const normalized = oneOf(provider, '生成方式', MEDIA_CONNECTION_PROVIDERS, null)
-  if (!normalized) throw fail('SPOKEN_VIDEO_MEDIA_INVALID_INPUT', '该生成方式不支持保存 API Key。')
+  if (!MEDIA_PROVIDER_CREDENTIAL_REFS[normalized]) throw fail('SPOKEN_VIDEO_MEDIA_INVALID_INPUT', '该生成方式不支持保存 API Key。')
   return MEDIA_PROVIDER_CREDENTIAL_REFS[normalized]
 }
 

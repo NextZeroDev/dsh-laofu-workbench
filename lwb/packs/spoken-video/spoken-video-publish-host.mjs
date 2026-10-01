@@ -137,10 +137,11 @@ function boundedUrl(value, label) {
 }
 
 export class SpokenVideoPublishHost {
-  constructor({ background = (work) => work, projectsStore, credentials, connectionSettings, packageExecutor, fetch = globalThis.fetch, environment = process.env, pollIntervalMs = 1500, maxPollMs = 15 * 60 * 1000 } = {}) {
+  constructor({ background = (work) => work, projectsStore, credentials, account, connectionSettings, packageExecutor, fetch = globalThis.fetch, environment = process.env, pollIntervalMs = 1500, maxPollMs = 15 * 60 * 1000 } = {}) {
     if (!projectsStore) throw new Error('SpokenVideoPublishHost requires projectsStore.')
     this.background = background
     this.projectsStore = projectsStore
+    this.account = account
     this.credentials = credentials || null
     this.connectionSettings = connectionSettings || null
     this.packageExecutor = typeof packageExecutor === 'function' ? packageExecutor : null
@@ -176,10 +177,10 @@ export class SpokenVideoPublishHost {
 
   async status() {
     const settings = this.connectionSettings?.get?.() || {}
-    const provider = ['bailian', 'scitiger'].includes(settings.provider) ? settings.provider : 'bailian'
+    const provider = ['bailian', 'lwb'].includes(settings.provider) ? settings.provider : 'lwb'
     const providers = {
       bailian: { label: '百炼 BYOK', credential: await this.#credentialStatus('bailian') },
-      scitiger: { label: 'SciTiger 云端', credential: await this.#credentialStatus('scitiger') },
+      lwb: { label: 'LWB 账号', credential: await this.account?.status('cover-image') || { configured: false, reason: '请先登录 LWB 账号。' } },
     }
     const configured = providers[provider].credential.configured === true
     return {
@@ -188,7 +189,7 @@ export class SpokenVideoPublishHost {
       enabled: configured,
       configured,
       provider,
-      model: typeof settings.model === 'string' && settings.model.trim() ? settings.model.trim() : publishImageConfig(this.environment).model,
+      model: provider === 'lwb' ? 'LWB 托管' : typeof settings.model === 'string' && settings.model.trim() ? settings.model.trim() : publishImageConfig(this.environment).model,
       providers,
       imageMaxBytes: MAX_IMAGE_BYTES,
     }
@@ -196,12 +197,13 @@ export class SpokenVideoPublishHost {
 
   async configureConnection(request) {
     const input = object(request, '生图配置')
-    const provider = text(input.provider || 'bailian', '生图渠道', 40).toLowerCase()
-    const ref = publishImageCredentialRef(provider)
+    const provider = text(input.provider || 'lwb', '生图渠道', 40).toLowerCase()
+    const ref = provider === 'lwb' ? null : publishImageCredentialRef(provider)
+    if (provider === 'lwb' && (input.apiKey || input.model)) fail('SPOKEN_VIDEO_PUBLISH_INVALID_INPUT', 'LWB 服务的模型与凭据由账号管理。')
     const apiKey = typeof input.apiKey === 'string' && input.apiKey.trim() ? text(input.apiKey, 'API Key', 512) : null
     if (!this.connectionSettings?.update) fail('SPOKEN_VIDEO_PUBLISH_CONNECTION_UNAVAILABLE', '当前环境不支持保存生图设置。')
-    if (apiKey) await this.#credentials().set(ref, apiKey)
-    await this.connectionSettings.update({ provider, model: text(input.model || publishImageConfig(this.environment).model, '生图模型', 120) })
+    if (apiKey && ref) await this.#credentials().set(ref, apiKey)
+    await this.connectionSettings.update(provider === 'lwb' ? { provider } : { provider, model: text(input.model || publishImageConfig(this.environment).model, '生图模型', 120) })
     return this.status()
   }
 
@@ -259,7 +261,7 @@ export class SpokenVideoPublishHost {
       id: randomUUID(), projectId: id, projectTitle: detail.title, account: detail.account || null,
       status: 'queued', phase: 'agent', error: null, expectedRevision, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), completedAt: null,
       sourceSnapshot: { script: detail.artifacts?.script?.data, topic: detail.artifacts?.topic?.data, video: detail.artifacts?.video?.data },
-      imageProvider: settings.configured ? { provider: settings.provider, model: settings.model } : null, coverErrors: {},
+      imageProvider: settings.configured ? { provider: settings.provider, model: settings.model, ...(settings.provider === 'lwb' ? { lwbUserId: settings.providers.lwb.credential.userId } : {}) } : null, coverErrors: {},
       dsh: dshTrace(),
     }
     await this.#serial(root, async () => { const data = await readTasks(root); data.tasks.unshift(task); await writeTasks(root, data) })
@@ -379,21 +381,27 @@ export class SpokenVideoPublishHost {
 
   async #generateCover(agent, task, kind, prompt, negativePrompt) {
     const provider = task.imageProvider.provider
-    const resolved = await this.#credentials().resolve(publishImageCredentialRef(provider))
-    if (!resolved?.value) fail('SPOKEN_VIDEO_PUBLISH_CREDENTIAL_REQUIRED', `${provider === 'bailian' ? '百炼 BYOK' : 'SciTiger 云端'}尚未保存 API Key。`)
-    const config = publishImageConfig(this.environment)
-    const baseUrl = provider === 'bailian' ? config.bailianBaseUrl : config.scitigerBaseUrl
-    // DashScope's async image API uses a different route from synchronous multimodal generation.
-    const generationPath = provider === 'bailian' ? 'image-generation/generation' : 'multimodal-generation/generation'
+    let call
+    if (provider === 'lwb') {
+      if (!task.imageProvider.lwbUserId) fail('SPOKEN_VIDEO_PUBLISH_CREDENTIAL_REQUIRED', '该任务缺少 LWB 账号归属，请重新创建。')
+      const service = await this.account.open('cover-image', { userId: task.imageProvider.lwbUserId })
+      call = (path, init) => service.request(path, init)
+    } else {
+      const resolved = await this.#credentials().resolve(publishImageCredentialRef(provider))
+      if (!resolved?.value) fail('SPOKEN_VIDEO_PUBLISH_CREDENTIAL_REQUIRED', '百炼 BYOK 尚未保存 API Key。')
+      const baseUrl = publishImageConfig(this.environment).bailianBaseUrl
+      call = (path, init) => this.#json(`${baseUrl}${path}`, { ...init, headers: { Authorization: `Bearer ${resolved.value}`, 'Content-Type': 'application/json', 'X-DashScope-Async': 'enable' } }, '百炼封面生成服务')
+    }
     const body = publishImageRequest({ model: task.imageProvider.model, prompt, negativePrompt, size: kind === 'landscape' ? '1280*720' : '720*1280' })
-    let result = await this.#json(`${baseUrl}/api/v1/services/aigc/${generationPath}`, { method: 'POST', headers: { Authorization: `Bearer ${resolved.value}`, 'Content-Type': 'application/json', ...(provider === 'bailian' ? { 'X-DashScope-Async': 'enable' } : {}) }, body: JSON.stringify(body) }, '封面生成服务')
+    if (provider === 'lwb') delete body.model
+    let result = await call(provider === 'lwb' ? '/api/lwb/cover-images' : '/api/v1/services/aigc/image-generation/generation', { method: 'POST', body: JSON.stringify(body) })
     const remoteTaskId = imageTaskId(result)
     await this.#mutateTask(await publishRootFor(agent), task.id, (item) => { executionEvent(item, `${kind === 'landscape' ? '横版' : '竖版'}封面请求已提交`, { actor: '封面生图服务', detail: { taskId: remoteTaskId || null, model: task.imageProvider.model, prompt, negativePrompt } }) })
     if (!extractPublishImageUrl(result) && remoteTaskId) {
       const deadline = Date.now() + this.maxPollMs
       while (Date.now() < deadline) {
         if (this.pollIntervalMs > 0) await new Promise((resolvePromise) => setTimeout(resolvePromise, this.pollIntervalMs))
-        result = await this.#json(`${baseUrl}/api/v1/tasks/${encodeURIComponent(remoteTaskId)}`, { method: 'GET', headers: { Authorization: `Bearer ${resolved.value}` } }, '封面生成任务')
+        result = await call(`/api/v1/tasks/${encodeURIComponent(remoteTaskId)}`, { method: 'GET' })
         const state = imageTaskState(result)
         if (['FAILED', 'CANCELED', 'CANCELLED', 'UNKNOWN'].includes(state)) fail('SPOKEN_VIDEO_PUBLISH_SERVICE_FAILED', '封面生成任务失败。')
         if (extractPublishImageUrl(result)) break
@@ -501,7 +509,7 @@ export class SpokenVideoPublishHost {
     const prompt = text(input.prompt, '封面提示词', 3000)
     const negativePrompt = typeof input.negativePrompt === 'string' ? input.negativePrompt.slice(0, 1000) : ''
     const settings = await this.status()
-    if (settings.configured !== true) fail('SPOKEN_VIDEO_PUBLISH_CONNECTION_UNAVAILABLE', '请先在「封面生图」里保存当前渠道的 API Key。')
+    if (settings.configured !== true) fail('SPOKEN_VIDEO_PUBLISH_CONNECTION_UNAVAILABLE', '请在「封面生图配置」中登录 LWB 账号或配置百炼 API Key。')
     const detail = await this.projectsStore.get(agent, { projectId: id })
     if (detail.revision !== expectedRevision) fail('SPOKEN_VIDEO_REVISION_CONFLICT', '项目已更新，请刷新后重试。')
     if (detail.artifacts?.qc?.data?.passed !== true) fail('SPOKEN_VIDEO_STAGE_BLOCKED', '只有质检通过的成片才能生成封面。')
@@ -511,7 +519,7 @@ export class SpokenVideoPublishHost {
       id: randomUUID(), projectId: id, projectTitle: detail.title, account: detail.account || null,
       status: 'queued', phase: 'covers', coverKind: kind, prompt, negativePrompt, error: null, expectedRevision,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), completedAt: null,
-      imageProvider: { provider: settings.provider, model: settings.model }, coverErrors: {},
+      imageProvider: { provider: settings.provider, model: settings.model, ...(settings.provider === 'lwb' ? { lwbUserId: settings.providers.lwb.credential.userId } : {}) }, coverErrors: {},
       dsh: dshTrace(),
     }
     await this.#serial(root, async () => { const data = await readTasks(root); data.tasks.unshift(task); await writeTasks(root, data) })

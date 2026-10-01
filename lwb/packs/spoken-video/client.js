@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     var module = { exports: {} };
     var exports = module.exports;
     const React = require('react');
-    const { IconSettingsOutline16, MarkdownText } = require('@deepseek-ai/dsh-client-ui-primitives');
+    const { IconSettingsOutlineRegular, MarkdownText } = require('@deepseek-ai/dsh-client-ui-primitives');
     const h = React.createElement;
     let connection; let executionRemote; let executionStreams;
     let audioCaptionsHandoff = null;
@@ -1413,7 +1413,7 @@ window.__ModuleLoader__.load({
     }
     function ExecutionResults({ detail, request }) {
       const record = detail.record;
-      const packageResult = record.result?.content ? record.result : record.result?.artifact?.data;
+      const packageResult = record.result?.content ? record.result : record.result?.artifact?.data?.content ? record.result.artifact.data : null;
       const draft = record.draft;
       const subtitle = record.subtitle?.current || (record.type === 'subtitles' ? record.result?.artifact?.data || record.result : null);
       return h('div', { className: 'sv-ex-results' },
@@ -3167,6 +3167,7 @@ window.__ModuleLoader__.load({
           ))),
           AS_APPROVING.has(form.depth) ? h('p', { className: 'sv-as-warn' }, h('strong', null, '将自动确认 AI 稿件，不再人工过稿。'), h('span', null, '深度到达「成片」或「发布资料」时，自动化会代为确认稿件后继续配音与渲染。想保留人工把关请选「写稿」档：跑完停在稿件等你确认。')) : null,
           runtimeBlockers.length ? h('div', { className: 'sv-as-blockers' }, runtimeBlockers.map((item, index) => h('p', { key: index, className: 'sv-as-warn' }, item.message))) : null,
+          runtime?.model?.provider ? h('p', { className: 'sv-meta' }, `本轮使用的场景任务模型：${runtime.model.provider} · ${runtime.model.model}${runtime.model.state === 'missing-credential' ? `，未配置凭据（${runtime.model.ref}）` : runtime.model.state === 'unverifiable' ? '，凭据状态未知' : ''}`) : null,
           runtime && runtime.automationAvailable === false ? h('p', { className: 'sv-error' }, '当前运行环境不提供执行自动化所需的 Agent 服务，任务保存后无法执行。') : null,
         ),
         h('div', { className: 'sv-as-adv' },
@@ -3271,7 +3272,7 @@ window.__ModuleLoader__.load({
     function mediaErrorText(error) {
       const value = String(error || '').replace(/^Error \[[A-Z0-9_]+\]\s*/u, '');
       return /(?:insufficient[ _-]*points|积分不足|余额不足)/iu.test(value)
-        ? 'SciTiger 账户积分不足，请充值后重试，或切换到百炼 BYOK。'
+        ? 'LWB 账户积分不足，请充值后重试，或切换到百炼 BYOK。'
         : value;
     }
     function videoPhaseLabel(phase) { return ({ preparing: '正在准备制作空间', directing: 'AI 视觉导演创作中', preflight: '正在检查 Remotion 工程', rendering: '正在渲染成片', 'technical-qc': '正在执行技术质检', 'editorial-review': '独立审片中', committing: '正在提交成片', completed: '已完成', failed: '失败' })[phase] || null; }
@@ -3506,7 +3507,7 @@ window.__ModuleLoader__.load({
       const providerId = provider || media.service?.connection?.provider || 'bailian';
       const selectedProvider = media.service?.providers?.[providerId];
       const providerCredential = selectedProvider?.credential;
-      const providerLabel = providerId === 'bailian' ? '百炼 BYOK' : '远端 · SciTiger';
+      const providerLabel = providerId === 'bailian' ? '百炼 BYOK' : 'LWB 账号';
       const referenceVoiceReady = selectedProvider?.referenceVoiceConfigured;
       const credentialStatus = !selectedProvider?.configured ? '服务不可用' : !referenceVoiceReady ? '默认音色未配置' : providerCredential?.configured ? '连接已保存' : '需要 API Key';
       const canGenerate = Boolean(selectedProvider?.configured && referenceVoiceReady && providerCredential?.configured);
@@ -3587,12 +3588,12 @@ window.__ModuleLoader__.load({
               h('h4', null, '生成方式'),
               h('div', { className: 'sv-media-provider-picker', role: 'tablist', 'aria-label': '生成方式' },
                 h('button', { type: 'button', className: 'sv-media-provider-choice', role: 'tab', 'aria-selected': providerId === 'bailian' ? 'true' : 'false', 'data-active': providerId === 'bailian' ? 'true' : 'false', disabled: Boolean(connectionBusy), onClick: () => { setProvider('bailian'); setApiKey(''); } }, '百炼 BYOK'),
-                h('button', { type: 'button', className: 'sv-media-provider-choice', role: 'tab', 'aria-selected': providerId === 'scitiger' ? 'true' : 'false', 'data-active': providerId === 'scitiger' ? 'true' : 'false', disabled: Boolean(connectionBusy), onClick: () => { setProvider('scitiger'); setApiKey(''); } }, '远端 · SciTiger'),
+                h('button', { type: 'button', className: 'sv-media-provider-choice', role: 'tab', 'aria-selected': providerId === 'lwb' ? 'true' : 'false', 'data-active': providerId === 'lwb' ? 'true' : 'false', disabled: Boolean(connectionBusy), onClick: () => { setProvider('lwb'); setApiKey(''); } }, 'LWB 账号'),
               ),
             ),
             h('section', { className: 'sv-media-settings-section' },
               h('h4', null, '访问凭据'),
-              h('label', { className: 'sv-media-field' }, h('span', null, providerId === 'bailian' ? '百炼 API Key' : 'SciTiger API Key'), h('input', { className: 'sv-input', type: 'password', value: apiKey, maxLength: 512, autoComplete: 'off', placeholder: providerCredential?.configured ? '已保存，输入新值可更新' : '输入后保存到私有凭据库', disabled: Boolean(connectionBusy), onChange: (event) => setApiKey(event.target.value) })),
+              h('label', { className: 'sv-media-field' }, h('span', null, providerId === 'bailian' ? '百炼 API Key' : 'LWB API Key'), h('input', { className: 'sv-input', type: 'password', value: apiKey, maxLength: 512, autoComplete: 'off', placeholder: providerCredential?.configured ? '已保存，输入新值可更新' : '输入后保存到私有凭据库', disabled: Boolean(connectionBusy), onChange: (event) => setApiKey(event.target.value) })),
               h('p', { className: 'sv-note' }, providerCredential?.configured ? (providerCredential.writable ? '密钥已保存。输入新值后可更新，密钥不会回显。' : '密钥由启动环境管理，当前页面不能修改或清除。') : '尚未保存密钥。保存后，后续启动无需重复输入。'),
             ),
           ),
@@ -3635,7 +3636,7 @@ window.__ModuleLoader__.load({
         const isVoice = task.type === 'voiceover';
         const audio = task.result?.audio || null;
         const taskMeta = [
-          mediaRunLabel(task.type), formatTime(task.createdAt), task.input?.provider === 'bailian' ? '百炼 BYOK' : task.input?.provider === 'scitiger' ? '远端 · SciTiger' : null,
+          mediaRunLabel(task.type), formatTime(task.createdAt), task.input?.provider === 'bailian' ? '百炼 BYOK' : task.input?.provider === 'lwb' ? 'LWB 账号' : null,
           task.input?.voiceId ? `音色 ${task.input.voiceId}` : task.input?.voiceName || null,
           task.input?.rate ? `语速 ${task.input.rate}` : null,
         ].filter(Boolean).join(' · ');
@@ -3687,7 +3688,44 @@ window.__ModuleLoader__.load({
         subtitlesDrawer,
       );
     }
-    function AudioCaptionsPageV2({ packId, openConversation }) {
+    const BAILIAN_REGION_NOTICE = '当前内置百炼接入使用中国内地·华北 2（北京）地域，请填写该地域的 API Key。其他地域的 API Key 不能直接用于当前默认地址。';
+    function availableMediaProvider(current, available, saved) {
+      return available.includes(current) ? current : available.includes(saved) ? saved : available[0] || null;
+    }
+    function lwbServiceUnavailableText(account, credential, serviceId) {
+      const location = serviceId === 'cover-image' ? '封面生图配置' : '连接配置';
+      const serviceName = serviceId === 'cover-image' ? '封面生图' : '配音 / 字幕';
+      if (account?.phase === 'loading') return '正在读取 LWB 账号状态…';
+      if (!account?.user) return account?.error || `尚未登录 LWB 账号。请在「${location}」中前往设置登录，或配置百炼 API Key。`;
+      const state = account.catalog?.services?.[serviceId];
+      const reason = account.error || account.serviceError || state?.reason || (credential?.authenticated ? credential.reason : null);
+      if (reason) return `已登录 LWB 账号。${reason}`;
+      if (!credential || credential.authenticated === false || (state?.available && !credential.configured)) return `已登录 LWB 账号，正在同步${serviceName}服务状态…`;
+      return `已登录 LWB 账号，但${serviceName}服务暂未开放。请在「${location}」中查看详情，或配置百炼 API Key。`;
+    }
+    function ServiceConnectionDrawer({ open, onClose, image, lwbAccount, provider, setProvider, credential, apiKey, setApiKey, model, setModel, busy, save, clear, selected }) {
+      if (!open) return null;
+      const title = image ? '封面生图配置' : '连接配置';
+      return h(React.Fragment, null,
+        h('button', { type: 'button', className: 'sv-drawer-backdrop', 'aria-label': `关闭${title}`, onClick: onClose }),
+        h('aside', { className: 'sv-drawer sv-media-config-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+          h('div', { className: 'sv-drawer-head' }, h('div', null, h('h3', { className: 'sv-media-drawer-title' }, title), h('p', { className: 'sv-media-drawer-copy' }, '选择 LWB 账号服务，或使用自己的百炼账户。')), h('button', { type: 'button', className: 'lwb-plain-button', onClick: onClose }, '关闭')),
+          h('div', { className: 'sv-media-drawer-body' },
+            h('div', { className: 'sv-media-provider-picker', role: 'tablist', 'aria-label': title }, ['lwb', 'bailian'].map(id => h('button', { key: id, type: 'button', role: 'tab', 'aria-selected': provider === id, className: 'sv-media-provider-choice', 'data-active': provider === id ? 'true' : 'false', disabled: Boolean(busy), onClick: () => { setProvider(id); setApiKey(''); } }, id === 'lwb' ? 'LWB 账号' : '百炼'))),
+            provider === 'lwb' ? (lwbAccount?.ServiceCard ? h(lwbAccount.ServiceCard, { service: image ? 'cover-image' : 'tts', description: image ? '可使用 LWB 提供的封面图片生成服务，无需配置 API Key。' : '可使用 LWB 提供的配音和字幕服务，无需配置 API Key。' }) : h('p', { className: 'sv-note' }, 'LWB 账号服务暂不可用。')) : h(React.Fragment, null,
+              h('p', { className: 'sv-note', role: 'note' }, BAILIAN_REGION_NOTICE),
+              h('label', { className: 'sv-media-field' }, h('span', null, '百炼 API Key'), h('input', { className: 'sv-input', type: 'password', value: apiKey, maxLength: 512, autoComplete: 'off', placeholder: credential?.configured ? '已保存；输入新值可更新' : '输入 API Key', onChange: event => setApiKey(event.target.value) })),
+              image && h('label', { className: 'sv-media-field' }, h('span', null, '生图模型（可选）'), h('input', { className: 'sv-input', value: model, maxLength: 120, placeholder: '默认模型', onChange: event => setModel(event.target.value) })),
+              h('p', { className: 'sv-note' }, credential?.configured ? '密钥已保存，不会回显。' : '密钥保存到私有凭据库，不会写入浏览器存储。')),
+            h('p', { className: 'sv-note' }, `当前默认服务：${selected === 'bailian' ? '百炼' : 'LWB 账号'}。如需切换，请选择页签后点击下方按钮确认。`),
+          ),
+          h('div', { className: 'sv-media-drawer-foot' },
+            provider === 'bailian' && h('button', { type: 'button', className: 'lwb-plain-button', disabled: Boolean(busy) || !credential?.configured || !credential?.writable, onClick: () => { void clear(); } }, busy === 'clear' ? '正在清除…' : '清除密钥'),
+            h('button', { type: 'button', className: 'lwb-primary-button', disabled: Boolean(busy) || (provider === 'lwb' ? !credential?.configured : !apiKey.trim() && !credential?.configured), onClick: () => { void save(); } }, busy === 'save' ? '正在保存…' : provider === 'lwb' ? '使用 LWB 账号服务' : '保存并使用百炼')),
+        ));
+    }
+    function AudioCaptionsPageV2({ packId, openConversation, lwbAccount }) {
+      const account = lwbAccount.useAccount();
       const { projects, refresh, error, setError } = useProjects(packId);
       const [service, setService] = React.useState(null);
       const [provider, setProvider] = React.useState(null);
@@ -3701,7 +3739,7 @@ window.__ModuleLoader__.load({
       const [subtitleEnabled, setSubtitleEnabled] = React.useState(true);
       const [submitting, setSubmitting] = React.useState(null);
       const [connectionOpen, setConnectionOpen] = React.useState(false);
-      const [connectionProvider, setConnectionProvider] = React.useState('bailian');
+      const [connectionProvider, setConnectionProvider] = React.useState('lwb');
       const [apiKey, setApiKey] = React.useState('');
       const [connectionBusy, setConnectionBusy] = React.useState(null);
       const [pickerOpen, setPickerOpen] = React.useState(false);
@@ -3723,7 +3761,7 @@ window.__ModuleLoader__.load({
         try { const next = await remoteStatic('mediaStatus'); setService(next); setError(null); return next; }
         catch (cause) { setError(cause.message); return null; }
       }, [setError]);
-      React.useEffect(() => { void refreshService(); }, [refreshService]);
+      React.useEffect(() => { void refreshService(); }, [refreshService, account.user?.id, account.phase, account.catalog, account.serviceError, account.error]);
       React.useEffect(() => {
         if (!packId) return;
         void remote(packId, 'listAccounts').then((next) => {
@@ -3738,11 +3776,10 @@ window.__ModuleLoader__.load({
         if (!node) return;
         node.style.height = 'auto'; node.style.height = `${Math.max(node.scrollHeight, 136)}px`;
       }, [text]);
-      const providerEntries = ['bailian', 'scitiger'].filter((id) => service?.providers?.[id]?.configured && service.providers[id].credential?.configured);
+      const providerEntries = ['lwb', 'bailian'].filter((id) => service?.providers?.[id]?.configured && service.providers[id].credential?.configured);
       React.useEffect(() => {
-        if (!providerEntries.length) { setProvider(null); return; }
-        setProvider((current) => providerEntries.includes(current) ? current : providerEntries[0]);
-      }, [providerEntries.join('|')]);
+        setProvider((current) => availableMediaProvider(current, providerEntries, service?.connection?.provider));
+      }, [providerEntries.join('|'), service?.connection?.provider]);
       React.useEffect(() => {
         if (!pickerOpen || !packId) return undefined;
         let cancelled = false;
@@ -3766,12 +3803,14 @@ window.__ModuleLoader__.load({
         }).catch((cause) => setError(cause.message));
       }, [packId, setError]);
       const taskFeed = useAudioTasks(packId, taskQuery, taskFilter, taskPage, activeTab === GENERAL_TAB ? { general: true } : { accountId: activeTab }, setError, refresh);
+      const settlement = (taskFeed.items || []).map(task => `${task.id}:${task.status}:${task.subtitle?.status || ''}`).join('|');
+      React.useEffect(() => { if (settlement) void lwbAccount.refresh(); }, [settlement, lwbAccount]);
 
       if (!packId) return h(NeedPack, { openConversation });
 
       const providerId = provider || null;
       const selectedProvider = providerId ? service?.providers?.[providerId] : null;
-      const providerName = providerId === 'bailian' ? '百炼' : providerId === 'scitiger' ? '远端 · SciTiger' : '尚未配置';
+      const providerName = providerId === 'bailian' ? '百炼' : providerId === 'lwb' ? 'LWB 账号' : '尚未配置';
       const referenceVoiceReady = voiceSource === 'upload' ? Boolean(voiceReference) : selectedProvider?.referenceVoiceConfigured;
       const canGenerate = Boolean(providerId && selectedProvider?.credential?.configured && selectedProvider?.configured && referenceVoiceReady);
       const inActiveTab = (project) => activeTab === GENERAL_TAB ? !project.account : project.account?.id === activeTab;
@@ -3835,9 +3874,8 @@ window.__ModuleLoader__.load({
         } catch (cause) { setError(cause.message); setSubtitleDrawer((current) => ({ ...current, saving: false })); }
       };
       const saveConnection = async () => {
-        if (!apiKey.trim()) return;
         setConnectionBusy('save');
-        try { await remoteStatic('configureMediaConnection', { provider: connectionProvider, apiKey }); setApiKey(''); await refreshService(); setError(null); }
+        try { await remoteStatic('configureMediaConnection', { provider: connectionProvider, ...(connectionProvider === 'bailian' && apiKey.trim() ? { apiKey } : {}) }); setProvider(connectionProvider); setApiKey(''); await refreshService(); setError(null); }
         catch (cause) { setError(cause.message); } finally { setConnectionBusy(null); }
       };
       const clearConnection = async () => {
@@ -3854,10 +3892,10 @@ window.__ModuleLoader__.load({
       const providerControl = !service
         ? h('p', { className: 'sv-note' }, '正在读取连接状态…')
         : providerEntries.length === 2
-          ? h('div', { className: 'sv-media-provider-picker', role: 'group', 'aria-label': '配音服务' }, providerEntries.map((id) => h('button', { key: id, type: 'button', className: 'sv-media-provider-choice', 'data-active': providerId === id ? 'true' : 'false', onClick: () => setProvider(id) }, id === 'bailian' ? '百炼' : '远端 · SciTiger')))
+          ? h('div', { className: 'sv-media-provider-picker', role: 'group', 'aria-label': '配音服务' }, providerEntries.map((id) => h('button', { key: id, type: 'button', className: 'sv-media-provider-choice', 'data-active': providerId === id ? 'true' : 'false', onClick: () => setProvider(id) }, id === 'bailian' ? '百炼' : 'LWB 账号')))
           : providerEntries.length === 1
-            ? h('p', { className: 'sv-note' }, `当前使用：${providerName}。仅此服务已完成 API Key 配置。`)
-            : h('p', { className: 'sv-error' }, '尚未配置百炼或远端 API Key。请在右上角「连接配置」中完成设置。');
+            ? h('p', { className: 'sv-note' }, providerId === 'lwb' ? '当前使用：LWB 账号服务，无需单独配置 API Key。' : '当前使用：百炼，API Key 已配置。')
+            : h('p', { className: 'sv-error', role: 'status' }, lwbServiceUnavailableText(account, service?.providers?.lwb?.credential, 'tts'));
       const scriptPickerDrawer = pickerOpen && h(React.Fragment, null,
         h('button', { type: 'button', className: 'sv-drawer-backdrop', 'aria-label': '关闭稿件选择', onClick: () => setPickerOpen(false) }),
         h('aside', { className: 'sv-drawer sv-audio-picker', role: 'dialog', 'aria-modal': 'true', 'aria-label': '选择稿件' },
@@ -3871,18 +3909,7 @@ window.__ModuleLoader__.load({
         ),
       );
       const connectionCredential = service?.providers?.[connectionProvider]?.credential;
-      const connectionDrawer = connectionOpen && h(React.Fragment, null,
-        h('button', { type: 'button', className: 'sv-drawer-backdrop', 'aria-label': '关闭连接配置', onClick: () => setConnectionOpen(false) }),
-        h('aside', { className: 'sv-drawer sv-media-config-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': '连接配置' },
-          h('div', { className: 'sv-drawer-head' }, h('div', null, h('h3', { className: 'sv-media-drawer-title' }, '连接配置'), h('p', { className: 'sv-media-drawer-copy' }, 'API Key 保存到 DSH 私有凭据库，不会写入稿件、任务或浏览器存储。')), h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => setConnectionOpen(false) }, '关闭')),
-          h('div', { className: 'sv-media-drawer-body' },
-            h('div', { className: 'sv-media-provider-picker', role: 'group', 'aria-label': '连接提供方' }, ['bailian', 'scitiger'].map((id) => h('button', { key: id, type: 'button', className: 'sv-media-provider-choice', 'data-active': connectionProvider === id ? 'true' : 'false', disabled: Boolean(connectionBusy), onClick: () => { setConnectionProvider(id); setApiKey(''); } }, id === 'bailian' ? '百炼' : '远端 · SciTiger'))),
-            h('label', { className: 'sv-media-field' }, h('span', null, connectionProvider === 'bailian' ? '百炼 API Key' : 'SciTiger API Key'), h('input', { className: 'sv-input', type: 'password', value: apiKey, maxLength: 512, autoComplete: 'off', placeholder: connectionCredential?.configured ? '已保存；输入新值可更新' : '输入 API Key', onChange: (event) => setApiKey(event.target.value) })),
-            h('p', { className: 'sv-note' }, connectionCredential?.configured ? '已保存连接；密钥不会回显。' : '保存后，可在新建任务中使用该服务。'),
-          ),
-          h('div', { className: 'sv-media-drawer-foot' }, h('button', { type: 'button', className: 'lwb-plain-button', disabled: Boolean(connectionBusy) || !connectionCredential?.configured || !connectionCredential?.writable, onClick: () => { void clearConnection(); } }, connectionBusy === 'clear' ? '正在清除…' : '清除密钥'), h('button', { type: 'button', className: 'lwb-primary-button', disabled: Boolean(connectionBusy) || !apiKey.trim(), onClick: () => { void saveConnection(); } }, connectionBusy === 'save' ? '正在保存…' : '保存连接')),
-        ),
-      );
+      const connectionDrawer = h(ServiceConnectionDrawer, { open: connectionOpen, onClose: () => setConnectionOpen(false), image: false, lwbAccount, provider: connectionProvider, setProvider: setConnectionProvider, credential: connectionCredential, apiKey, setApiKey, busy: connectionBusy, save: saveConnection, clear: clearConnection, selected: service?.connection?.provider });
       const newTaskPanel = h('section', { className: 'sv-form sv-audio-config' },
         h('div', { className: 'sv-section-head' }, h('h3', null, '新建配音任务'), h('span', null, source ? '已载入稿件' : '可直接输入文稿')),
         h('div', { className: 'sv-audio-source-row' }, source ? h('div', { className: 'sv-audio-project' }, h('strong', null, source.title), h('span', null, `当前稿件 · ${charCount(text)} 字 · 可继续修改`)) : h('p', { className: 'sv-note' }, '稿件为可选项。也可以直接输入自己的口播内容。'), h('div', { className: 'sv-actions' }, h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => { setPickerPage(0); setPickerOpen(true); } }, source ? '更换稿件' : '选择稿件'), source ? h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => setSource(null) }, '改为手动输入') : null)),
@@ -3908,11 +3935,11 @@ window.__ModuleLoader__.load({
         const audio = task.result?.audio;
         const activeSubtitle = ['queued', 'running'].includes(subtitle.status);
         const subtitleProgress = subtitleTaskProgress(task);
-        const subtitleButton = task.status !== 'succeeded' ? null : activeSubtitle
+        const subtitleButton = task.status !== 'succeeded' || task.current === false ? null : activeSubtitle
           ? h('button', { type: 'button', className: 'lwb-plain-button', disabled: true }, subtitleProgress?.button || '字幕生成中…')
           : h('button', { type: 'button', className: subtitle.status === 'succeeded' ? 'lwb-plain-button' : 'lwb-primary-button', disabled: !canGenerate || Boolean(submitting), onClick: () => ask({ title: subtitle.status === 'succeeded' ? '重新生成字幕' : '生成字幕', copy: subtitle.status === 'succeeded' ? '将基于这条音频重新生成字幕，现有字幕版本会保留为历史结果。' : '将基于这条音频的真实时间轴生成字幕。', confirm: subtitle.status === 'succeeded' ? '重新生成' : '生成字幕', onConfirm: () => { void startSubtitles(task); } }) }, submitting === `subtitle:${task.id}` ? '正在提交…' : subtitle.status === 'succeeded' ? '重新生成字幕' : '生成字幕');
         return h('article', { key: task.id, className: 'sv-audio-task', 'data-status': task.status },
-          h('div', { className: 'sv-audio-task-head' }, h('div', null, h('p', { className: 'sv-audio-task-title' }, task.source?.title || '手动输入文稿'), h('p', { className: 'sv-audio-task-meta' }, [formatTime(task.createdAt), task.input?.provider === 'bailian' ? '百炼' : task.input?.provider === 'scitiger' ? '远端 · SciTiger' : task.input?.provider, task.source?.kind === 'manual-text' ? '手动文稿' : task.source?.kind === 'edited-script-copy' ? '已保存稿件副本' : '已保存稿件'].filter(Boolean).join(' · '))), h('span', { className: `sv-tag ${task.status === 'failed' ? 'sv-status-error' : task.status === 'succeeded' ? 'sv-stage' : 'sv-status-manual'}` }, mediaStatusLabel(task.status))),
+          h('div', { className: 'sv-audio-task-head' }, h('div', null, h('p', { className: 'sv-audio-task-title' }, task.source?.title || '手动输入文稿'), h('p', { className: 'sv-audio-task-meta' }, [formatTime(task.createdAt), task.input?.provider === 'bailian' ? '百炼' : task.input?.provider === 'lwb' ? 'LWB 账号' : task.input?.provider, task.source?.kind === 'manual-text' ? '手动文稿' : task.source?.kind === 'edited-script-copy' ? '已保存稿件副本' : '已保存稿件'].filter(Boolean).join(' · '))), h('span', { className: `sv-tag ${task.status === 'failed' ? 'sv-status-error' : task.status === 'succeeded' ? 'sv-stage' : 'sv-status-manual'}` }, mediaStatusLabel(task.status))),
           audio ? h('div', { className: 'sv-audio-task-detail' }, h('span', null, `时长 ${formatMediaDuration(audio.durationSeconds)}`), h('span', null, formatMediaBytes(audio.bytes)), h('span', null, subtitle.status === 'succeeded' ? `字幕 ${subtitle.cueCount || 0} 条` : subtitle.status === 'failed' ? '字幕失败 · 配音可用' : activeSubtitle ? '字幕实时处理中' : '未生成字幕')) : null,
           subtitleProgress ? h('div', { className: 'sv-audio-subtitle-progress', role: 'status', 'aria-live': 'polite' },
             h('div', { className: 'sv-audio-subtitle-progress-head' }, h('strong', null, subtitleProgress.label), subtitleProgress.percent == null ? null : h('span', null, `${subtitleProgress.percent}%`)),
@@ -3922,10 +3949,10 @@ window.__ModuleLoader__.load({
           task.error ? h('p', { className: 'sv-error' }, mediaErrorText(task.error)) : null,
           subtitle.error ? h('p', { className: 'sv-error' }, `字幕生成失败，配音已保留：${mediaErrorText(subtitle.error)}`) : null,
           task.status === 'succeeded' && task.source?.projectId ? h('div', { className: 'sv-list' },
-            h('p', { className: task.projectSyncError || task.subtitleSyncError ? 'sv-error' : 'sv-note', role: 'status' }, task.projectSyncError || task.subtitleSyncError || (task.projectSync ? '配音已同步到项目，可在「视频 / 预览」中使用。' : '配音已生成，尚未同步到项目。同步后可在「视频 / 预览」中使用。')),
-            (!task.projectSync || task.projectSyncError || task.subtitleSyncError) ? h('div', { className: 'sv-actions' }, h('button', { type: 'button', className: 'lwb-plain-button', disabled: Boolean(submitting) || activeSubtitle, onClick: () => { void syncAudioResult(task); } }, submitting === `sync:${task.id}` ? '正在同步…' : '同步到视频'), h('span', { className: 'sv-meta' }, '复用已有音频和字幕，不会重新生成。')) : null,
+            h('p', { className: task.projectSyncError || task.subtitleSyncError ? 'sv-error' : 'sv-note', role: 'status' }, task.current === false ? '历史配音版本，可试听和查看字幕。当前项目已使用其他稿件或配音。' : task.projectSyncError || task.subtitleSyncError || (task.projectSync ? '配音已同步到项目，可在「视频 / 预览」中使用。' : '配音已生成，尚未同步到项目。同步后可在「视频 / 预览」中使用。')),
+            task.current !== false && (!task.projectSync || task.projectSyncError || task.subtitleSyncError) ? h('div', { className: 'sv-actions' }, h('button', { type: 'button', className: 'lwb-plain-button', disabled: Boolean(submitting) || activeSubtitle, onClick: () => { void syncAudioResult(task); } }, submitting === `sync:${task.id}` ? '正在同步…' : '同步到视频'), h('span', { className: 'sv-meta' }, '复用已有音频和字幕，不会重新生成。')) : null,
           ) : null,
-          h('div', { className: 'sv-actions' }, h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => setSourceDrawer(task) }, '查看稿件'), h(ExecutionButton, { kind: 'audio', id: task.id }), subtitleButton, subtitle.status === 'succeeded' ? h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => openSubtitles(task) }, '查看字幕') : null),
+          h('div', { className: 'sv-actions' }, h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => setSourceDrawer(task) }, '查看稿件'), h(ExecutionButton, { ...(task.execution || { kind: 'audio', id: task.id }), label: task.subtitleExecution ? '配音执行详情' : '执行详情' }), task.subtitleExecution ? h(ExecutionButton, { ...task.subtitleExecution, label: '字幕执行详情' }) : null, subtitleButton, subtitle.status === 'succeeded' ? h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => openSubtitles(task) }, '查看字幕') : null),
         );
       };
       const taskPanel = h('section', { className: 'sv-section' },
@@ -3935,9 +3962,9 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sv-audio-pagebar' }, h('span', { className: 'sv-meta' }, `第 ${taskPage + 1}/${taskPages} 页 · 共 ${taskFeed.total || 0} 条`), h('span', { className: 'sv-actions' }, h('button', { type: 'button', className: 'lwb-plain-button', 'aria-label': '上一页', disabled: taskPage === 0, onClick: () => setTaskPage((current) => Math.max(0, current - 1)) }, '上一页'), h('button', { type: 'button', className: 'lwb-plain-button', 'aria-label': '下一页', disabled: taskPage + 1 >= taskPages, onClick: () => setTaskPage((current) => current + 1) }, '下一页'))),
       );
       const sourceDrawerNode = sourceDrawer && h(React.Fragment, null, h('button', { type: 'button', className: 'sv-drawer-backdrop', 'aria-label': '关闭稿件内容', onClick: () => setSourceDrawer(null) }), h('aside', { className: 'sv-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': '稿件内容' }, h('div', { className: 'sv-drawer-head' }, h('div', null, h('h3', { style: { margin: 0, fontSize: 'var(--lwb-text-section,18px)' } }, sourceDrawer.source?.title || '稿件内容'), h('p', { className: 'sv-meta' }, sourceDrawer.source?.kind === 'manual-text' ? '手动输入文稿快照' : '任务创建时冻结的稿件快照')), h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => setSourceDrawer(null) }, '关闭')), h('div', { className: 'sv-drawer-scroll' }, h('article', { className: 'sv-sc-manuscript' }, sourceDrawer.source?.text || ''))));
-      const subtitleDrawerNode = subtitleDrawer && h(React.Fragment, null, h('button', { type: 'button', className: 'sv-drawer-backdrop', 'aria-label': '关闭字幕内容', onClick: () => setSubtitleDrawer(null) }), h('aside', { className: 'sv-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': '编辑字幕' }, h('div', { className: 'sv-drawer-head' }, h('div', null, h('h3', { style: { margin: 0, fontSize: 'var(--lwb-text-section,18px)' } }, `字幕 · ${subtitleDrawer.task.source?.title || '手动文稿'}`), h('p', { className: 'sv-meta' }, `${subtitleDrawer.cues.length} 条字幕，可直接校对错别字并保存。`)), h('button', { type: 'button', className: 'lwb-plain-button', disabled: subtitleDrawer.saving, onClick: () => setSubtitleDrawer(null) }, '关闭')), h('div', { className: 'sv-drawer-scroll sv-audio-subtitle-editor' }, h('div', { className: 'sv-subtitle-cues' }, subtitleDrawer.cues.map((cue, index) => h('article', { key: cue.id, className: 'sv-subtitle-cue' }, h('time', null, cue.time), h('textarea', { className: 'sv-textarea sv-subtitle-text', value: cue.text, maxLength: 30000, 'aria-label': `第 ${index + 1} 条字幕文本`, onChange: (event) => setSubtitleDrawer((current) => ({ ...current, cues: current.cues.map((currentCue, currentIndex) => currentIndex === index ? { ...currentCue, text: event.target.value } : currentCue) })) }))))), h('div', { className: 'sv-media-drawer-foot' }, h('span', { className: 'sv-meta' }, '时间码来自音频对齐结果，保存将更新字幕文本。'), h('button', { type: 'button', className: 'lwb-primary-button', disabled: subtitleDrawer.saving || !subtitleDrawer.cues.length || subtitleDrawer.cues.some((cue) => !cue.text.trim()), onClick: () => ask({ title: '保存字幕', copy: `将保存这 ${subtitleDrawer.cues.length} 条字幕的文本修改，时间码保持不变。`, confirm: '确认保存', onConfirm: () => { void saveSubtitles(); } }) }, subtitleDrawer.saving ? '正在保存…' : '保存字幕'))));
+      const subtitleDrawerNode = subtitleDrawer && h(React.Fragment, null, h('button', { type: 'button', className: 'sv-drawer-backdrop', 'aria-label': '关闭字幕内容', onClick: () => setSubtitleDrawer(null) }), h('aside', { className: 'sv-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': '编辑字幕' }, h('div', { className: 'sv-drawer-head' }, h('div', null, h('h3', { style: { margin: 0, fontSize: 'var(--lwb-text-section,18px)' } }, `字幕 · ${subtitleDrawer.task.source?.title || '手动文稿'}`), h('p', { className: 'sv-meta' }, `${subtitleDrawer.cues.length} 条字幕，可直接校对错别字并保存。`)), h('button', { type: 'button', className: 'lwb-plain-button', disabled: subtitleDrawer.saving, onClick: () => setSubtitleDrawer(null) }, '关闭')), h('div', { className: 'sv-drawer-scroll sv-audio-subtitle-editor' }, h('div', { className: 'sv-subtitle-cues' }, subtitleDrawer.cues.map((cue, index) => h('article', { key: cue.id, className: 'sv-subtitle-cue' }, h('time', null, cue.time), h('textarea', { className: 'sv-textarea sv-subtitle-text', value: cue.text, readOnly: subtitleDrawer.task.current === false, maxLength: 30000, 'aria-label': `第 ${index + 1} 条字幕文本`, onChange: (event) => setSubtitleDrawer((current) => ({ ...current, cues: current.cues.map((currentCue, currentIndex) => currentIndex === index ? { ...currentCue, text: event.target.value } : currentCue) })) }))))), h('div', { className: 'sv-media-drawer-foot' }, h('span', { className: 'sv-meta' }, subtitleDrawer.task.current === false ? '历史版本字幕，仅供查看。' : '保存校对会更新项目字幕，已有视频和发布资料需重新制作。'), h('button', { type: 'button', className: 'lwb-primary-button', disabled: subtitleDrawer.task.current === false || subtitleDrawer.saving || !subtitleDrawer.cues.length || subtitleDrawer.cues.some((cue) => !cue.text.trim()), onClick: () => ask({ title: '保存字幕', copy: `将保存这 ${subtitleDrawer.cues.length} 条字幕的文本修改，时间码保持不变。`, confirm: '确认保存', onConfirm: () => { void saveSubtitles(); } }) }, subtitleDrawer.saving ? '正在保存…' : '保存字幕'))));
       const accountTabs = h(AccountTabs, { accountLibrary, activeTab, onChange: setActiveTab, label: '按账号查看配音任务' });
-      return h(PackFrame, { packId, openConversation, title: '配音 / 字幕', accent: 'pink', copy: '按账号选择稿件并生成配音；默认同时生成字幕，也可取消；字幕失败不影响已完成的配音。每条任务保留执行记录并同步项目产物。', hero, introActions: h('button', { type: 'button', className: 'sv-media-config-trigger', 'data-attention': service && !providerEntries.length ? 'true' : 'false', onClick: () => setConnectionOpen(true) }, h(React.Fragment, null, h(IconSettingsOutline16, { size: 16, 'aria-hidden': true }), '连接配置', h('span', { className: 'sv-config-state' }, !service ? '读取中' : providerEntries.length ? '已连接' : '待配置'))) }, h(Notice, { error }), accountTabs, h('section', { className: 'sv-split sv-audio-workbench' }, newTaskPanel, taskPanel), scriptPickerDrawer, connectionDrawer, sourceDrawerNode, subtitleDrawerNode, confirmNode);
+      return h(PackFrame, { packId, openConversation, title: '配音 / 字幕', accent: 'pink', copy: '按账号选择稿件并生成配音；默认同时生成字幕，也可取消；字幕失败不影响已完成的配音。每条任务保留执行记录并同步项目产物。', hero, introActions: h('button', { type: 'button', className: 'sv-media-config-trigger', 'data-attention': service && !providerEntries.length ? 'true' : 'false', onClick: () => { setConnectionProvider('lwb'); setConnectionOpen(true); } }, h(React.Fragment, null, h(IconSettingsOutlineRegular, { size: 16, 'aria-hidden': true }), '连接配置', h('span', { className: 'sv-config-state' }, !service ? '读取中' : providerEntries.length ? '已就绪' : '待配置'))) }, h(Notice, { error }), accountTabs, h('section', { className: 'sv-split sv-audio-workbench' }, newTaskPanel, taskPanel), scriptPickerDrawer, connectionDrawer, sourceDrawerNode, subtitleDrawerNode, confirmNode);
     }
     function VideoPreviewPageV2({ packId, openConversation }) {
       const { projects, refresh, error, setError } = useProjects(packId);
@@ -4174,16 +4201,19 @@ window.__ModuleLoader__.load({
      * description/tags means publishable; there are no approval or queue
      * gates and nothing is ever sent to a platform.
      */
-    function PublishPageV4({ packId, openConversation }) {
+    function PublishPageV4({ packId, openConversation, lwbAccount }) {
+      const account = lwbAccount.useAccount();
       const { refresh, error, setError } = useProjects(packId);
       const [service, setService] = React.useState(null);
       const [accountLibrary, setAccountLibrary] = React.useState({ accounts: [], defaultAccountId: null });
       const [activeTab, setActiveTab] = React.useState(GENERAL_TAB);
       const [items, setItems] = React.useState([]);
+      const settlement = items.map(item => `${item.id}:${item.task?.status || ''}`).join('|');
+      React.useEffect(() => { if (settlement) void lwbAccount.refresh(); }, [settlement, lwbAccount]);
       const [page, setPage] = React.useState(0);
       const [busy, setBusy] = React.useState(false);
       const [connectionOpen, setConnectionOpen] = React.useState(false);
-      const [connectionProvider, setConnectionProvider] = React.useState('bailian');
+      const [connectionProvider, setConnectionProvider] = React.useState('lwb');
       const [connectionModel, setConnectionModel] = React.useState('');
       const [apiKey, setApiKey] = React.useState('');
       const [connectionBusy, setConnectionBusy] = React.useState(null);
@@ -4215,7 +4245,7 @@ window.__ModuleLoader__.load({
         catch (cause) { setError(cause.message); return []; }
       }, [packId, setError]);
 
-      React.useEffect(() => { void refreshService(); }, [refreshService]);
+      React.useEffect(() => { void refreshService(); }, [refreshService, account.user?.id, account.phase, account.catalog, account.serviceError, account.error]);
       React.useEffect(() => {
         if (!packId) return;
         void Promise.all([remote(packId, 'listAccounts'), loadItems()])
@@ -4234,8 +4264,7 @@ window.__ModuleLoader__.load({
       // Reflect the saved image-generation config into the drawer form.
       React.useEffect(() => {
         if (!service) return;
-        setConnectionProvider(['bailian', 'scitiger'].includes(service.provider) ? service.provider : 'bailian');
-        setConnectionModel(typeof service.model === 'string' ? service.model : '');
+        if (service.provider === 'bailian') setConnectionModel(typeof service.model === 'string' ? service.model : '');
       }, [service?.provider, service?.model]);
 
       const openItem = openProject ? items.find((item) => item.id === openProject) || null : null;
@@ -4346,7 +4375,7 @@ window.__ModuleLoader__.load({
       const saveConnection = async () => {
         setConnectionBusy('save');
         try {
-          await remoteStatic('configurePublishConnection', { provider: connectionProvider, model: connectionModel.trim(), ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) });
+          await remoteStatic('configurePublishConnection', { provider: connectionProvider, ...(connectionProvider === 'bailian' ? { model: connectionModel.trim(), ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) } : {}) });
           setApiKey(''); await refreshService(); setError(null);
         } catch (cause) { setError(cause.message); } finally { setConnectionBusy(null); }
       };
@@ -4443,6 +4472,9 @@ window.__ModuleLoader__.load({
       );
 
       // ---- lifecycle drawer ----
+      const coverUnavailableText = !service ? '正在读取封面生图服务状态…' : service.provider === 'bailian'
+        ? '百炼尚未配置 API Key，请在「封面生图配置」中配置。'
+        : lwbServiceUnavailableText(account, service.providers?.lwb?.credential, 'cover-image');
       const coverCard = (kind) => {
         const label = kind === 'landscape' ? '横屏封面 16:9' : '竖屏封面 9:16';
         const descriptor = packaging?.covers?.[kind] || null;
@@ -4458,10 +4490,10 @@ window.__ModuleLoader__.load({
           ),
           h('div', { className: 'sv-pb-cover-acts' },
             h('input', { ref: coverInputRef(kind), type: 'file', accept: 'image/png,image/jpeg,image/webp', style: { display: 'none' }, onChange: (event) => { const file = event.target.files?.[0] || null; event.target.value = ''; if (file) void uploadCover(kind, file); } }),
-            h('button', { type: 'button', className: 'lwb-primary-button', disabled: !packaging || coverBusy === kind || running || !prompts[kind].trim() || service?.configured !== true, title: service?.configured === true ? '按当前提示词重新生成这张封面' : '需先在「封面生图」里保存当前渠道的 API Key', onClick: () => { void regenerateCover(kind); } }, coverBusy === kind ? '生成中…' : '按此提示词生图'),
+            h('button', { type: 'button', className: 'lwb-primary-button', disabled: !packaging || coverBusy === kind || running || !prompts[kind].trim() || service?.configured !== true, title: service?.configured === true ? '按当前提示词重新生成这张封面' : coverUnavailableText, onClick: () => { void regenerateCover(kind); } }, coverBusy === kind ? '生成中…' : '按此提示词生图'),
             h('button', { type: 'button', className: 'lwb-plain-button', disabled: !packaging || coverBusy === kind || running, onClick: () => coverInputRef(kind).current?.click() }, coverBusy === kind ? '上传中…' : descriptor ? '上传替换' : '上传封面'),
           ),
-          service?.configured !== true ? h('p', { className: 'sv-pb-field-note' }, '当前生图渠道尚未配置 API Key；也可上传自己的封面图。') : null,
+          service?.configured !== true ? h('p', { className: 'sv-pb-field-note', role: 'status' }, `${coverUnavailableText}也可上传自己的封面图。`) : null,
         );
       };
       const tagEditor = h('div', { className: 'sv-pb-field' },
@@ -4520,7 +4552,7 @@ window.__ModuleLoader__.load({
                   h('textarea', { className: 'sv-textarea', style: { minHeight: '52px' }, value: prompts.negative, maxLength: 1000, disabled: busy || running, onChange: (event) => setPrompts((prev) => ({ ...prev, negative: event.target.value })) }),
                 ),
               ),
-              openTask ? h('section', { className: 'sv-pb-section sv-pb-generation' }, h('div', { className: 'sv-sc-view-head' }, h('h4', null, '最近一次生成'), h('p', null, `${openTask.status === 'succeeded' ? '已完成' : openTask.status === 'failed' ? '失败' : '进行中'} · ${formatTime(openTask.createdAt)}${openTask.imageProvider ? ` · 封面 ${openTask.imageProvider.provider === 'bailian' ? '百炼' : 'SciTiger'}` : ' · 未配置生图服务'}`)), openTask.status === 'failed' ? h('p', { className: 'sv-error' }, openTask.error || '生成失败。') : null, h(ExecutionButton, { kind: 'publish', id: openTask.id, projectId: openTask.projectId }), h(ExecutionHistory, { kind: 'publish', projectId: openTask.projectId, refreshKey: openTask.status })) : null,
+              openTask ? h('section', { className: 'sv-pb-section sv-pb-generation' }, h('div', { className: 'sv-sc-view-head' }, h('h4', null, '最近一次生成'), h('p', null, `${openTask.status === 'succeeded' ? '已完成' : openTask.status === 'failed' ? '失败' : '进行中'} · ${formatTime(openTask.createdAt)}${openTask.imageProvider ? ` · 封面 ${openTask.imageProvider.provider === 'bailian' ? '百炼' : 'LWB'}` : ' · 未配置生图服务'}`)), openTask.status === 'failed' ? h('p', { className: 'sv-error' }, openTask.error || '生成失败。') : null, h(ExecutionButton, { kind: 'publish', id: openTask.id, projectId: openTask.projectId }), h(ExecutionHistory, { kind: 'publish', projectId: openTask.projectId, refreshKey: openTask.status })) : null,
             ),
       );
       const drawerFoot = detail && h('div', { className: 'sv-tp-drawer-foot' },
@@ -4553,19 +4585,7 @@ window.__ModuleLoader__.load({
       );
 
       const connectionCredential = service?.providers?.[connectionProvider]?.credential;
-      const connectionDrawer = connectionOpen && h(React.Fragment, null,
-        h('button', { type: 'button', className: 'sv-drawer-backdrop', 'aria-label': '关闭连接配置', onClick: () => setConnectionOpen(false) }),
-        h('aside', { className: 'sv-drawer sv-media-config-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': '封面生图配置' },
-          h('div', { className: 'sv-drawer-head' }, h('div', null, h('h3', { className: 'sv-media-drawer-title' }, '封面生图配置'), h('p', { className: 'sv-media-drawer-copy' }, 'API Key 保存到 DSH 私有凭据库，不会写入发布资料或浏览器存储。保存当前渠道的 API Key 后，生成发布信息时会自动生成封面。')), h('button', { type: 'button', className: 'lwb-plain-button', onClick: () => setConnectionOpen(false) }, '关闭')),
-          h('div', { className: 'sv-media-drawer-body' },
-            h('div', { className: 'sv-media-provider-picker', role: 'group', 'aria-label': '生图渠道' }, ['bailian', 'scitiger'].map((id) => h('button', { key: id, type: 'button', className: 'sv-media-provider-choice', 'data-active': connectionProvider === id ? 'true' : 'false', disabled: Boolean(connectionBusy), onClick: () => { setConnectionProvider(id); setApiKey(''); } }, service?.providers?.[id]?.label || (id === 'bailian' ? '百炼 BYOK' : 'SciTiger 云端')))),
-            h('label', { className: 'sv-media-field' }, h('span', null, connectionProvider === 'bailian' ? '百炼 API Key' : 'SciTiger 云端生图 API Key'), h('input', { className: 'sv-input', type: 'password', value: apiKey, maxLength: 512, autoComplete: 'off', placeholder: connectionCredential?.configured ? '已保存；输入新值可更新' : '输入 API Key', onChange: (event) => setApiKey(event.target.value) })),
-            h('label', { className: 'sv-media-field' }, h('span', null, '生图模型（可选）'), h('input', { className: 'sv-input', value: connectionModel, maxLength: 120, placeholder: service?.model || '默认模型', onChange: (event) => setConnectionModel(event.target.value) })),
-            h('p', { className: 'sv-note' }, connectionCredential?.configured ? '已保存连接；密钥不会回显。' : '保存后，生成发布信息时会自动生成横竖封面，并支持按提示词单独重生。'),
-          ),
-          h('div', { className: 'sv-media-drawer-foot' }, h('button', { type: 'button', className: 'lwb-plain-button', disabled: Boolean(connectionBusy) || !connectionCredential?.configured || !connectionCredential?.writable, onClick: () => { void clearConnection(); } }, connectionBusy === 'clear' ? '正在清除…' : '清除密钥'), h('button', { type: 'button', className: 'lwb-primary-button', disabled: Boolean(connectionBusy), onClick: () => { void saveConnection(); } }, connectionBusy === 'save' ? '正在保存…' : '保存配置')),
-        ),
-      );
+      const connectionDrawer = h(ServiceConnectionDrawer, { open: connectionOpen, onClose: () => setConnectionOpen(false), image: true, lwbAccount, provider: connectionProvider, setProvider: setConnectionProvider, credential: connectionCredential, apiKey, setApiKey, busy: connectionBusy, save: saveConnection, clear: clearConnection, selected: service?.provider, model: connectionModel, setModel: setConnectionModel });
 
       const readyCount = items.filter((item) => publishStateOf(item) === 'ready').length;
       const pendingCount = items.filter((item) => publishStateOf(item) === 'none' || publishStateOf(item) === 'failed').length;
@@ -4573,10 +4593,10 @@ window.__ModuleLoader__.load({
         { label: '可发布成片', value: String(items.length), tone: 'brand' },
         { label: '发布资料就绪', value: String(readyCount), tone: 'green' },
         { label: '待生成', value: String(pendingCount), tone: pendingCount ? 'orange' : 'green' },
-        { label: '封面生图', value: service?.configured ? (service.provider === 'bailian' ? '百炼' : 'SciTiger') : '待配置', tone: service?.configured ? 'green' : undefined },
+        { label: '封面生图', value: service?.configured ? (service.provider === 'bailian' ? '百炼' : 'LWB') : '待配置', tone: service?.configured ? 'green' : undefined },
       ] });
 
-      return h(PackFrame, { packId, openConversation, title: '发布', accent: 'red', copy: '这里直接陈列上一模块生成的成片，可点开播放。点「发布」查看或生成发布资料：标题、文案、描述、标签与横竖封面。资料齐备即视为可发布，复制到平台即可；封面可按提示词重生，也可自行上传。本模块不会向任何平台直发。', hero, introActions: h('button', { type: 'button', className: 'sv-media-config-trigger', 'data-attention': service && !service.configured ? 'true' : 'false', onClick: () => setConnectionOpen(true) }, h(React.Fragment, null, h(IconSettingsOutline16, { size: 16, 'aria-hidden': true }), '封面生图', h('span', { className: 'sv-config-state' }, !service ? '读取中' : service.configured ? '已连接' : '待配置'))) },
+      return h(PackFrame, { packId, openConversation, title: '发布', accent: 'red', copy: '这里直接陈列上一模块生成的成片，可点开播放。点「发布」查看或生成发布资料：标题、文案、描述、标签与横竖封面。资料齐备即视为可发布，复制到平台即可；封面可按提示词重生，也可自行上传。本模块不会向任何平台直发。', hero, introActions: h('button', { type: 'button', className: 'sv-media-config-trigger', 'data-attention': service && !service.configured ? 'true' : 'false', onClick: () => { setConnectionProvider('lwb'); setConnectionOpen(true); } }, h(React.Fragment, null, h(IconSettingsOutlineRegular, { size: 16, 'aria-hidden': true }), '封面生图', h('span', { className: 'sv-config-state' }, !service ? '读取中' : service.configured ? '已就绪' : '待配置'))) },
         h(Notice, { error: error || detailError }),
         shelf,
         lifecycleDrawer,
@@ -4585,15 +4605,18 @@ window.__ModuleLoader__.load({
       );
     }
     async function apply(ctx) {
+      try {
       connection = ctx.get('connection'); executionStreams = ctx.get('remote');
       // Mount the pack's dynamic contract on the same native mux used by ordinary conversations.
       await executionStreams.$mount({ package: '@scitiger-ai/lwb-spoken-video', descriptors: [{
         id: '@scitiger-ai/lwb-spoken-video#spokenVideo/followExecution', service: 'spokenVideo', namespace: 'spokenVideo', method: 'followExecution', mode: 'stream', invocation: { kind: 'direct' },
-        parameters: [{ name: 'request', wire: 'request', source: 'json', codec: { mode: 'strict', typeSymbol: '@scitiger-ai/lwb-spoken-video#ExecutionRequest', schema: { parse(value) { if (!value || typeof value.id !== 'string' || typeof value.kind !== 'string' || typeof value.role !== 'string') throw new Error('执行会话请求无效。'); return value; } } } }],
+        parameters: [{ name: 'request', wire: 'request', source: 'json', codec: { mode: 'strict', typeSymbol: '@scitiger-ai/lwb-spoken-video#ExecutionRequest', create: () => ({ parse(value) { if (!value || typeof value.id !== 'string' || typeof value.kind !== 'string' || typeof value.role !== 'string') throw new Error('执行会话请求无效。'); return value; } }) } }],
         cancellation: { parameter: 'signal' }, result: { mode: 'src-json' },
       }] });
       await ctx.plugin({ name: 'spoken-video-execution-client', inject: ['remote.spokenVideo'], apply(scope) { executionRemote = scope.get('remote.spokenVideo'); scope.effect(() => () => { executionRemote = null; }); } });
-      installStyle(); ctx.effect(() => ctx.lwbPackClient.register({ packId: 'spoken-video', pages: { positioning: AccountPositioningPage, signals: SignalsPage, topics: TopicsPage, scripts: ScriptPage, 'audio-captions': AudioCaptionsPageV2, 'video-preview': VideoPreviewPageV2, publish: PublishPageV4, 'content-schedule': ContentSchedulePage } }), 'spoken-video: register capability pages'); }
+      installStyle(); ctx.effect(() => ctx.lwbPackClient.register({ packId: 'spoken-video', pages: { positioning: AccountPositioningPage, signals: SignalsPage, topics: TopicsPage, scripts: ScriptPage, 'audio-captions': AudioCaptionsPageV2, 'video-preview': VideoPreviewPageV2, publish: PublishPageV4, 'content-schedule': ContentSchedulePage } }), 'spoken-video: register capability pages');
+      } catch (error) { console.error('LWB capability page activation failed', error); throw error; }
+    }
     exports.inject = ['connection', 'lwbPackClient', 'remote']; exports.apply = apply; return module.exports;
   },
 });

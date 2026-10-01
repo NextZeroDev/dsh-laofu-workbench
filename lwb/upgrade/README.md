@@ -1,19 +1,15 @@
 # DSH Upgrade Workflow
 
-`vendor/deepseek-harness` 是 `lwb/UPSTREAM.lock.json` 指定 commit 的无源码修改 checkout。LWB 业务代码只位于 `lwb/`；不要为产品需求改写 vendor。
-
-先查看公开 refs：
+只支持 `lwb/UPSTREAM.lock.json` 的当前版本。官方 checkout 必须无源码修改；产品扩展通过 Profile、Bundle、SDK 和单一版本适配层实现。开发期不保留旧 API 分支或旧数据迁移。
 
 ```bash
-./lwb/upgrade/check-upstream.sh
+npm run upstream:refs     # 查看远端 refs，不改变锁
+npm run setup             # 安装并构建精确版本；保留旧 checkout
+npm run upstream:check    # 源码、锁、声明、UI 导出和构建检查
+npm test
+npm run test:integration  # 临时数据根，真实 Host 加载/卸载/重启验收
 ```
 
-升级流程：
+升级时同步锁文件、DSH peer 依赖及适配实现，再执行上述门禁和两种载体的 UI 回归。失败时修正 LWB 接缝；不能自动回退旧 API，也不能静默打补丁。只有新版本验收通过才更新产品基线。
 
-1. 新建升级分支并选择一个精确 commit；不要直接跟踪 `main` / `master`。
-2. 在干净临时 clone 中运行 `CI=true corepack pnpm install --frozen-lockfile` 与 `CI=true corepack pnpm run build`。
-3. 更新 vendor checkout 和 `UPSTREAM.lock.json`；若本地有旧 `lib/`、`.dsh-build/` 或已删除 package 的忽略产物，移至临时备份后重新构建，绝不编辑 DSH 源码迁就它们。
-4. 只在 LWB Bundle/Profile 中处理公开 API 变化，随后运行 `npm run test`、`npm run dsh:dump` 与浏览器验收。
-5. 人工确认普通对话、工作区、归档和文件附件保持可用。
-
-如果以后确实需要 vendor 修改，先判断能否通过 LWB Plugin seam 完成；不能时才新建一份独立、可审查、可上游化的补丁。
+源码不被修改并不保证上游接口不变。版本相关接缝和当前验证范围见 `docs/38-dsh-extension-boundary.md`。旧版本和历史数据留存不是受支持的兼容分支；需要回滚时使用对应版本代码与独立数据副本。

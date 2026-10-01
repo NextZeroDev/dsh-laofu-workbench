@@ -74,6 +74,16 @@ test('continues a max-token video creator in the same DSH child session', async 
   assert.deepEqual(continuations.map((item) => item.attempt), [1])
 })
 
+test('child execution explicitly inherits the captured scene model', async () => {
+  const harness = executorHarness(['completed'])
+  const start = harness.subagents.start
+  let captured
+  harness.subagents.start = async (mode, request) => { captured = request; return start(mode, request) }
+  const executor = createAgentExecutor(harness.ctx, harness.subagents, 'video-creator')
+  await executor({ prompt: 'create video', agent: { id: 'parent', options: { provider: 'lwb', model: 'lwb-fast', reasoningEffort: 'low' } } })
+  assert.deepEqual(captured.agentOptions, { provider: 'lwb', model: 'lwb-fast', reasoningEffort: 'low' })
+})
+
 test('fails clearly after the same creator session reaches three output ceilings', async () => {
   const harness = executorHarness(['max-tokens', 'max-tokens', 'max-tokens'])
   const executor = createAgentExecutor(harness.ctx, harness.subagents, 'video-creator', {

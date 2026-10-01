@@ -10,6 +10,7 @@ vendor/
 !.env.example
 lwb/local/
 .workbuddy/
+.lwb/
 
 # 构建产物
 lwb/lib/

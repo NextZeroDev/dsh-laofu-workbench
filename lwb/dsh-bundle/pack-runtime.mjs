@@ -2,8 +2,9 @@ import {
   loadMarketplaceLwbPack,
   marketplaceLwbPacks,
   unloadLwbPack,
-} from '../pack-manager.mjs'
-import { linkLwbPackForRuntime } from '../pack-runtime-links.mjs'
+} from './pack-manager.mjs'
+import { linkLwbPackForRuntime } from './pack-runtime-links.mjs'
+import { DshPackDriver } from './dsh-adapter/loader.mjs'
 
 function requestId(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('能力包操作请求无效。')
@@ -16,37 +17,7 @@ function clientOnly(entry) {
   return entry.options.config?.clientOnly === true
 }
 
-function stringList(value, field, packageName) {
-  if (value === undefined) return []
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
-    throw new Error(`能力包 ${JSON.stringify(packageName)} 的浏览器模块图 ${field} 无效。`)
-  }
-  return [...value]
-}
-
-/**
- * Project the host-owned, revisioned browser artifact for one mounted pack.
- * The URL comes from DSH's client-module registry, never from a pack manifest.
- */
-export function projectClientBundle(graph, packageName) {
-  const entries = graph?.entries
-  if (!Array.isArray(entries)) throw new Error('DSH 浏览器模块图尚未就绪。')
-  const row = entries.find((candidate) => candidate?.id === packageName)
-  if (!row) return undefined
-  if (typeof row.url !== 'string' || !row.url.startsWith('/plugins/')) {
-    throw new Error(`能力包 ${JSON.stringify(packageName)} 缺少受控浏览器 bundle。`)
-  }
-  if (typeof row.rev !== 'string' || !row.rev) {
-    throw new Error(`能力包 ${JSON.stringify(packageName)} 的浏览器 bundle 版本无效。`)
-  }
-  return Object.freeze({
-    id: packageName,
-    url: row.url,
-    rev: row.rev,
-    inject: stringList(row.inject, 'inject', packageName),
-    external: stringList(row.external, 'external', packageName),
-  })
-}
+export { projectClientBundle } from './dsh-adapter/loader.mjs'
 
 /**
  * Generic lifecycle manager for optional packages. It never imports a package
@@ -55,11 +26,11 @@ export function projectClientBundle(graph, packageName) {
  * restoring a previously enabled package at startup.
  */
 export class LwbPackRuntime {
-  static inject = ['lwbPackRegistry', 'clientModules', 'lwbPackServices', 'lwbPackWorkspaces']
+  static inject = ['lwbPackRegistry', 'clientModules', 'lwbPackServices', 'lwbPackWorkspaces', 'lwbPackEntitlements']
 
   constructor(ctx, options = {}) {
     this.ctx = ctx
-    this.group = options.group
+    this.driver = options.driver || new DshPackDriver(ctx, options.group)
     this.tail = Promise.resolve()
     this.restoreFailures = new Map()
     this.startupRestore = Promise.resolve()
@@ -75,24 +46,9 @@ export class LwbPackRuntime {
     return this.ctx.lwbPackRegistry.list().some((pack) => pack.id === id)
   }
 
-  entriesFor(packageName) {
-    const entries = this.group
-      ? [...this.group.tree.entries()].filter((entry) => entry.parent === this.group)
-      : [...this.ctx.loader.entries()]
-    return entries.filter((entry) => entry.options.name === packageName)
-  }
+  entriesFor(packageName) { return this.driver.entriesFor(packageName) }
 
-  async clientBundle(packageName) {
-    // clientModules reconciles Loader entry changes in a microtask. Loader.await()
-    // has settled the pack fiber by this point, so a short bounded yield is enough
-    // to observe its immutable, revisioned browser artifact.
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const bundle = projectClientBundle(this.ctx.clientModules?.graph?.(), packageName)
-      if (bundle) return bundle
-      await Promise.resolve()
-    }
-    throw new Error(`能力包 ${JSON.stringify(packageName)} 未能加入 DSH 浏览器模块图。`)
-  }
+  clientBundle(packageName) { return this.driver.clientBundle(packageName) }
 
   async removeCreatedEntries(packageName, previous) {
     const created = this.entriesFor(packageName)
@@ -103,19 +59,14 @@ export class LwbPackRuntime {
     }
   }
 
-  async awaitEntries(ids) {
-    for (const id of ids) {
-      const fiber = this.ctx.loader.resolve(id).fiber
-      if (!fiber) throw new Error(`能力包加载条目 ${JSON.stringify(id)} 未能创建运行实例。`)
-      await fiber.await()
-    }
-  }
+  awaitEntries(ids) { return this.driver.awaitEntries(ids) }
 
   async mount(pack) {
     const { id, packageName } = pack.manifest
     if (!pack.available) {
       throw new Error(`LWB pack ${JSON.stringify(id)} is unavailable: ${pack.error || 'source cannot be inspected'}`)
     }
+    await this.ctx.lwbPackEntitlements?.assertAllowed(pack.manifest)
     if (this.isMounted(id)) {
       return {
         id,
@@ -148,26 +99,9 @@ export class LwbPackRuntime {
     }
   }
 
-  async createEntry(options) {
-    if (this.group) {
-      // EntryGroup.create starts a fiber but does not add its config to data.
-      // Keep the group roster so unload and parent disposal own these entries.
-      this.group.data.push(options)
-      return this.group.create(options)
-    }
-    return this.ctx.loader.create(options)
-  }
+  createEntry(options) { return this.driver.createEntry(options) }
 
-  async removeEntry(entry) {
-    if (this.group && entry.parent === this.group) {
-      this.group.remove(entry.options.id)
-    } else {
-      await this.ctx.loader.remove(entry.id)
-    }
-    // Group.remove starts disposal synchronously but does not await effects.
-    // Wait before reporting success or registering replacement services.
-    while (entry.fiber?.inertia) await entry.fiber.inertia
-  }
+  removeEntry(entry) { return this.driver.removeEntry(entry) }
 
   setStartupRestore(task) {
     this.startupRestore = Promise.resolve(task).catch((error) => {
@@ -210,16 +144,18 @@ export class LwbPackRuntime {
   async market() {
     const mounted = new Set(this.ctx.lwbPackRegistry.list().map((pack) => pack.id))
     const packs = await marketplaceLwbPacks()
+    const projected = await Promise.all(packs.map(async (pack) => ({
+      ...pack.manifest,
+      status: mounted.has(pack.manifest.id) ? 'loaded' : pack.available ? 'available' : 'unavailable',
+      origin: pack.origin,
+      installedAt: pack.installedAt,
+      enabled: pack.enabled,
+      ...(await this.ctx.lwbPackEntitlements?.check(pack.manifest) || { allowed: true, required: false }),
+      ...((pack.error || this.restoreFailures.get(pack.manifest.id)) ? { error: pack.error || this.restoreFailures.get(pack.manifest.id) } : {}),
+    })))
     return {
       schemaVersion: 1,
-      packs: packs.map((pack) => ({
-        ...pack.manifest,
-        status: mounted.has(pack.manifest.id) ? 'loaded' : pack.available ? 'available' : 'unavailable',
-        origin: pack.origin,
-        installedAt: pack.installedAt,
-        enabled: pack.enabled,
-        ...((pack.error || this.restoreFailures.get(pack.manifest.id)) ? { error: pack.error || this.restoreFailures.get(pack.manifest.id) } : {}),
-      })),
+      packs: projected,
     }
   }
 

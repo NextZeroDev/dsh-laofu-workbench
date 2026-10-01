@@ -1,7 +1,10 @@
 const PACK_ID = /^[a-z][a-z0-9-]{1,62}$/u
 const MENU_ID = /^[a-z][a-z0-9-]{0,62}$/u
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u
+const DECLARATION_ID = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/u
+const HOST_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u
 const TONES = new Set(['blue', 'green', 'orange', 'pink', 'red', 'violet'])
+const PROVIDERS = new Set(['official', 'ats', 'custom'])
 
 export const LWB_PACK_SCHEMA_VERSION = 1
 
@@ -41,6 +44,42 @@ function optionalStringList(value, label, maxItems, maxLength) {
   const values = value.map((item, index) => text(item, `${label}[${index}]`, maxLength))
   if (new Set(values).size !== values.length) throw new LwbPackManifestError(`${label} must not contain duplicate entries`)
   return values
+}
+
+function optionalDeclarationList(value, label, maxItems, maxLength) {
+  const values = optionalStringList(value, label, maxItems, maxLength)
+  if (values === undefined) return undefined
+  values.forEach((item, index) => {
+    if (!DECLARATION_ID.test(item)) throw new LwbPackManifestError(`${label}[${index}] must use lowercase letters, digits, dots, and hyphens`)
+  })
+  return values
+}
+
+function optionalProviders(value) {
+  const providers = optionalStringList(value, 'providers', 3, 16)
+  if (providers === undefined) return undefined
+  providers.forEach((provider, index) => {
+    if (!PROVIDERS.has(provider)) throw new LwbPackManifestError(`providers[${index}] must be one of ${[...PROVIDERS].join(', ')}`)
+  })
+  return providers
+}
+
+function optionalAccess(value) {
+  if (value === undefined) return undefined
+  const input = record(value, 'access')
+  if (input.account !== undefined && input.account !== 'lwb') {
+    throw new LwbPackManifestError('access.account must be "lwb"')
+  }
+  if (input.membershipRequired !== undefined && typeof input.membershipRequired !== 'boolean') {
+    throw new LwbPackManifestError('access.membershipRequired must be boolean')
+  }
+  if (input.membershipRequired === true && input.account !== 'lwb') {
+    throw new LwbPackManifestError('access.account must be "lwb" when membershipRequired is true')
+  }
+  return {
+    ...(input.account === undefined ? {} : { account: input.account }),
+    ...(input.membershipRequired === undefined ? {} : { membershipRequired: input.membershipRequired }),
+  }
 }
 
 function optionalMarket(value) {
@@ -111,6 +150,14 @@ export function validateLwbPackManifest(value) {
   const name = text(input.name, 'name', 120)
   const version = text(input.version, 'version', 64)
   const description = text(input.description, 'description', 500)
+  const minHostVersion = optionalText(input.minHostVersion, 'minHostVersion', 64)
+  if (minHostVersion !== undefined && !HOST_VERSION.test(minHostVersion)) {
+    throw new LwbPackManifestError('minHostVersion must be a semantic version')
+  }
+  const requiredServices = optionalDeclarationList(input.requiredServices, 'requiredServices', 32, 64)
+  const providers = optionalProviders(input.providers)
+  const entitlements = optionalDeclarationList(input.entitlements, 'entitlements', 32, 96)
+  const access = optionalAccess(input.access)
   const market = optionalMarket(input.market)
   if (!Array.isArray(input.menus) || input.menus.length === 0 || input.menus.length > 16) {
     throw new LwbPackManifestError('menus must contain 1-16 entries')
@@ -145,6 +192,11 @@ export function validateLwbPackManifest(value) {
     name,
     version,
     description,
+    ...(minHostVersion === undefined ? {} : { minHostVersion }),
+    ...(requiredServices === undefined ? {} : { requiredServices }),
+    ...(providers === undefined ? {} : { providers }),
+    ...(entitlements === undefined ? {} : { entitlements }),
+    ...(access === undefined ? {} : { access }),
     ...(market === undefined ? {} : { market }),
     menus,
   })

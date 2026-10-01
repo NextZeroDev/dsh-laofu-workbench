@@ -1,15 +1,17 @@
 # 文档索引
 
-老傅工作台通过可动态加载的场景能力包扩展业务，口播视频内容创作是第一个已实现的业务包。以下区分当前使用/开发指南与历史设计记录，避免把过渡方案当作当前操作说明。
+本仓库文档以老傅工作台社区版为主，随仓库提供完整的口播视频内容创作能力包。商业版共用工作台核心，当前另随带私有的模型博主测评包；版本范围见[项目首页](../README.md#社区版与商业版)。以下区分当前使用/开发指南与历史设计记录，避免把过渡方案当作当前操作说明。
 
 ## 使用工作台
 
 | 文档 | 内容 |
 |---|---|
-| [项目首页](../README.md) | 产品定位、扩展机制、安装与当前能力 |
-| [快速开始](quickstart.md) | 从安装、模型配置到第一条口播视频 |
+| [项目首页](../README.md) | 社区版定位、版本对照、当前功能与安装入口 |
+| [快速开始](quickstart.md) | 从社区版双端启动、LWB/BYOK 配置到第一条口播视频 |
+| [Desktop 与 Web](37-desktop-parity.md) | 双端启动、版本构建清单、共享数据与当前验收范围 |
 | [故障排查](troubleshooting.md) | 安装、鉴权、包加载、模型和媒体问题 |
 | [运行数据目录](31-runtime-data-layout.md) | 状态、凭据、附件、业务产物及可恢复副本 |
+| [许可证与商业使用](licensing-and-commercial-use.md) | 当前许可、非商业边界、LWB 服务和第三方组件范围 |
 | [第三方组件与资源](../THIRD_PARTY_NOTICES.md) | 来源、许可边界及待补充的出处记录 |
 
 ## 开发与扩展
@@ -20,6 +22,10 @@
 | [能力包开发入门](develop-a-pack.md) | 最小独立包与注册、加载、卸载 |
 | [总体架构](01-architecture.md) | 工作台与 DSH、业务包的职责边界 |
 | [能力包契约](12-capability-packs.md) | 清单、host/client 贡献及当前口播流程 |
+| [能力包内的会话与官方右栏](41-capability-session-surface.md) | 包如何渲染官方对话并让官方右栏跟随焦点卡片 |
+| [对话模块使用官方左栏](42-conversation-history-official.md) | 会话历史如何交回官方 Workspace 浏览器，以及包会话如何被过滤 |
+| [对话模块内的官方面板行](44-official-panel-rows.md) | 官方面板行（插件）与新会话为何进对话模块那一列，而不进 LWB 产品导航 |
+| [ATS 服务、能力包权益与多模型来源方案](39-ats-capability-service-and-pack-entitlements.md) | 公开能力包、ATS 账号权益、Provider 路由与仓库边界 |
 | [工作区与执行作用域](29-pack-owned-workspaces.md) | 生命周期、默认模型复用、任务及凭据隔离 |
 | [统一执行详情](32-execution-details.md) | 业务任务与 DSH 原生会话展示 |
 | [上游锁定](08-base-lock.md) | 运行时版本、构建和回滚边界 |
@@ -27,6 +33,8 @@
 | [产品层目录](../lwb/README.md) | 源码结构与宿主实现 |
 
 ## 历史设计与验收记录
+
+当前新增功能与上线条件：[LWB 账号、模型档位与场景服务](40-lwb-account-model-and-media-services.md)。
 
 下面保留产品演进过程，用于理解设计背景，**不作为首次安装或当前功能说明**。其中的旧版本、`.lwb/` 路径、`file:test` 命令、个人参考工程和测试数量只代表记录时状态。当前命令见贡献指南，运行数据以目录契约为准；文中未提交的截图或私人参考项目不是构建依赖。
 
@@ -47,9 +55,11 @@
 - [26 发布模块简化：视频货架 + 单一发布资料抽屉（连根删除批准/入队/导出）](26-publish-module-simplification.md)
 - [27 内容安排模块重设计分析（定时全自动流水线）](27-content-schedule-module-analysis.md)
 - [DSH 0.1.6 升级与文件上传验收](28-dsh-016-upgrade.md)
+- [DSH 0.2.0 升级与验收](43-dsh-020-upgrade.md)
 - [UI 巡检与使用就绪评估](30-ui-audit-and-readiness.md)
 - [产品默认配置审计](32-product-defaults-audit.md)
 - [视频工程预检与修复](33-video-preflight-repair.md)
 - [34 账号 Tab 一致性（2026-09-17）](34-account-tabs-consistency.md)
 - [口播视频：配音、发布与内容安排交互细节](35-spoken-video-workflow-details.md)
+- [配音任务与内容安排的统一查询](36-audio-task-feed-integration.md)
 - [配音、字幕与视频的衔接](audio-video-handoff.md)

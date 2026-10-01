@@ -479,6 +479,51 @@ test('topic generation marks queued and running records interrupted by a host re
   assert.ok(records.every((record) => record.error.includes('主机在任务完成前已重启')))
 })
 
+test('topic generation records the child failure reason instead of only the wrapper', async (t) => {
+  const { currentAgent } = await setup(t)
+  const executor = async ({ onDshEvent }) => {
+    await onDshEvent({
+      seq: 16,
+      time: Date.parse(now()),
+      type: 'turn/end',
+      data: { turn: 1, reason: { kind: 'error', error: { code: 'MISSING_CREDENTIAL', message: 'llm-deepseek: no API key for provider route "deepseek-official"' } } },
+    })
+    throw new Error('生成未正常结束（error）')
+  }
+  const store = new SpokenVideoContentStore({ workspacePath: currentAgent.session.header.cwd, fetch: fetcher(), resolveHostname: resolver, now, topicExecutor: executor })
+  await store.collectSources(currentAgent, { sourceIds: ['36kr'] })
+  const started = await store.startTopicGeneration(currentAgent, { sourceIds: ['36kr'] })
+  const record = await settled(store, currentAgent, started.id)
+  assert.equal(record.status, 'failed')
+  assert.match(record.error, /生成未正常结束/u)
+  assert.match(record.error, /MISSING_CREDENTIAL/u, 'the durable record names the cause the operator must act on')
+  assert.match(record.error, /deepseek-official/u)
+  assert.match(record.steps[2].detail, /MISSING_CREDENTIAL/u, 'the failing step carries the same reason')
+})
+
+test('a late teardown failure never rewrites a record the restart recovery already settled', async (t) => {
+  const { workspace, currentAgent, store } = await setup(t)
+  await store.paths(currentAgent)
+  const generations = join(workspace, 'data', 'topic-generations.json')
+  const id = '33333333-3333-4333-8333-333333333333'
+  const step = (stepId, status, label) => ({ id: stepId, label, status, detail: null })
+  await writeFile(generations, `${JSON.stringify({ schemaVersion: 1, generations: [{
+    id, status: 'running', startedAt: now(), input: {}, account: null, candidates: [],
+    steps: [step('assemble', 'done', '确认渠道最新采集'), step('material', 'done', '组装渠道最新信号'), step('generate', 'running', 'DSH 生成候选'), step('normalize', 'pending', '校验并整理候选')],
+  }] })}\n`, 'utf8')
+
+  await store.recoverInterruptedTopicGenerations()
+  const recovered = await store.topicGenerationStatus(currentAgent, { id })
+  assert.equal(recovered.status, 'failed')
+  assert.match(recovered.error, /已重启/u)
+
+  await store.failTopicGeneration(workspace, generations, id, now(), new Error('生成未正常结束（aborted）'))
+  const after = await store.topicGenerationStatus(currentAgent, { id })
+  assert.equal(after.status, 'failed')
+  assert.match(after.error, /已重启/u, 'the restart reason survives a failure that arrives during teardown')
+  assert.equal(after.error.includes('aborted'), false)
+})
+
 test('topic generation history retains active tasks beyond the finished-history limit', async (t) => {
   const { workspace, currentAgent, store } = await setup(t)
   await store.paths(currentAgent)

@@ -65,5 +65,41 @@ test('rejects invalid detail references and oversized or incomplete detail conte
     { gettingStarted: ['重复', '重复'] },
     { gettingStarted: ['x'.repeat(241)] },
     { gettingStarted: Array.from({ length: 9 }, (_, i) => String(i)) },
-  ]) assert.throws(() => validateLwbPackManifest({ ...manifest, market }), LwbPackManifestError)
+]) assert.throws(() => validateLwbPackManifest({ ...manifest, market }), LwbPackManifestError)
+})
+
+test('normalizes optional service and entitlement declarations', () => {
+  const result = validateLwbPackManifest({
+    ...manifest,
+    minHostVersion: '0.1.0',
+    requiredServices: ['tts', 'cover-image'],
+    providers: ['official', 'ats', 'custom'],
+    entitlements: ['pack.spoken-video', 'feature.cover-image'],
+  })
+  assert.deepEqual(result.minHostVersion, '0.1.0')
+  assert.deepEqual(result.requiredServices, ['tts', 'cover-image'])
+  assert.deepEqual(result.providers, ['official', 'ats', 'custom'])
+  assert.deepEqual(result.entitlements, ['pack.spoken-video', 'feature.cover-image'])
+  assert.equal(Object.isFrozen(result.requiredServices), true)
+  assert.equal(Object.isFrozen(result.providers), true)
+  assert.equal(Object.isFrozen(result.entitlements), true)
+})
+
+test('normalizes the host-enforced LWB membership access policy', () => {
+  const result = validateLwbPackManifest({ ...manifest, access: { account: 'lwb', membershipRequired: true } })
+  assert.deepEqual(result.access, { account: 'lwb', membershipRequired: true })
+  assert.throws(() => validateLwbPackManifest({ ...manifest, access: { membershipRequired: true } }), /access\.account/u)
+  assert.throws(() => validateLwbPackManifest({ ...manifest, access: { account: 'other' } }), /access\.account/u)
+})
+
+test('rejects invalid service declarations and provider names', () => {
+  for (const candidate of [
+    { minHostVersion: '1.0' },
+    { minHostVersion: 'latest' },
+    { requiredServices: ['TTS'] },
+    { requiredServices: ['tts', 'tts'] },
+    { providers: ['bailian'] },
+    { providers: ['official', 'official'] },
+    { entitlements: ['pack/spoken-video'] },
+  ]) assert.throws(() => validateLwbPackManifest({ ...manifest, ...candidate }), LwbPackManifestError)
 })

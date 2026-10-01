@@ -104,7 +104,7 @@ async function writeJsonFile(path, value) {
 export class SpokenVideoScheduleHost {
   constructor({
     ctx,
-    context, executionStatus, background = (work) => work,
+    context, executionStatus, modelRoute, modelSelection, background = (work) => work,
     content,
     projects,
     media,
@@ -114,6 +114,7 @@ export class SpokenVideoScheduleHost {
     agentDefaultModel,
     agentPresets,
     sessionTitle,
+    adoptSession,
     presetId = 'standard',
     pollIntervalMs = SCHEDULE_POLL_INTERVAL_MS,
     tickIntervalMs = TICK_INTERVAL_MS,
@@ -125,7 +126,11 @@ export class SpokenVideoScheduleHost {
     if (!publish) throw new Error('SpokenVideoScheduleHost requires the publish host.')
     this.context = context
     this.executionStatus = executionStatus
+    // Readiness of the model route a round will actually use. Optional: a host
+    // without the probe simply reports no model state and never blocks.
+    this.modelRoute = typeof modelRoute === 'function' ? modelRoute : null
     this.background = background
+    this.modelSelection = modelSelection
     this.ctx = ctx || null
     this.content = content
     this.projects = projects
@@ -139,6 +144,10 @@ export class SpokenVideoScheduleHost {
     // unavailable here" into "the spoken-video pack never loads". An explicit
     // constructor argument still wins, which is what the tests inject.
     this.overrides = { agents, agentDefaultModel, agentPresets, sessionTitle }
+    // The unattended round creates its own root Agent, which the native service
+    // cannot attribute to this pack. Adoption is what records that ownership, so
+    // it is a hard requirement for a round rather than an optional nicety.
+    this.adoptSession = typeof adoptSession === 'function' ? adoptSession : null
     this.presetId = presetId
     // The defaults are the production cadence. A caller may pass anything
     // positive — the tests do, to keep a whole round under a second — but the
@@ -256,26 +265,43 @@ export class SpokenVideoScheduleHost {
     const automationAvailable = this.context
       ? (await this.executionStatus?.())?.configured === true
       : this.#automationAvailable()
+    const model = await this.#modelReadiness()
     return {
       automationAvailable,
+      model,
       remotion: media?.renderers?.remotion === true,
       tts: { configured: media?.ttsConfigured === true, provider, credential: ttsCredential },
       coverImage: publish?.configured === true,
       // Deepest depth the current environment can actually reach end to end.
-      blockers: this.#runtimeBlockers(media, publish, ttsCredential, automationAvailable),
+      blockers: this.#runtimeBlockers(media, publish, ttsCredential, automationAvailable, model),
     }
+  }
+
+  /**
+   * The effective model route of the next AI step, or null when no probe is
+   * wired or it could not answer. A failed probe must never be read as a
+   * missing credential: only an explicit classification blocks a round.
+   */
+  async #modelReadiness() {
+    if (!this.modelRoute) return null
+    try { return await this.modelRoute() } catch { return null }
   }
 
   #automationAvailable() {
     const agents = this.#service('agents')
     const agentPresets = this.#service('agentPresets')
     const agentDefaultModel = this.#service('agentDefaultModel')
-    return Boolean(agents?.create && agentPresets?.mount && agentDefaultModel?.currentSelection)
+    // Adoption belongs in "available": a round that cannot state its ownership
+    // would leave its execution identity in the operator's ordinary history.
+    return Boolean(agents?.create && agentPresets?.mount && agentDefaultModel?.currentSelection && this.adoptSession)
   }
 
-  #runtimeBlockers(media, publish, ttsCredential, automationAvailable) {
+  #runtimeBlockers(media, publish, ttsCredential, automationAvailable, model) {
     const blockers = []
-    if (!automationAvailable) blockers.push({ depth: 'topic', message: this.context ? 'DSH 尚未选择默认模型，请在“设置 → 系统设置 → 模型”中完成配置。' : '当前运行环境不提供 Agent 服务，自动化不可用。' })
+    if (!automationAvailable) blockers.push({ depth: 'topic', message: this.context ? 'DSH 尚未选择默认模型，请在“设置 → 系统设置 → 模型”中完成配置。' : '当前运行环境不提供自动化所需的 DSH 服务。' })
+    // A route that is proven to lack its credential dies on the topic child's
+    // first model request. Warn where the task is saved instead of at 3am.
+    else if (model?.state === 'missing-credential') blockers.push({ depth: 'topic', message: `场景任务模型「${model.provider} · ${model.model}」当前不可用：${model.reason}` })
     if (!media) blockers.push({ depth: 'video', message: '媒体服务不可用，无法配音或渲染。' })
     else {
       if (!ttsCredential && media?.providers?.legacy?.configured !== true) {
@@ -523,18 +549,24 @@ export class SpokenVideoScheduleHost {
     if (!agents || typeof agents.create !== 'function') {
       fail('SPOKEN_VIDEO_SCHEDULE_UNAVAILABLE', '当前运行环境不提供 Agent 服务，无法执行自动化任务。')
     }
+    if (!this.adoptSession) {
+      fail('SPOKEN_VIDEO_SCHEDULE_UNAVAILABLE', '当前运行环境不提供能力包会话归属服务，无法执行自动化任务。')
+    }
     if (!agentPresets || typeof agentPresets.mount !== 'function') {
       fail('SPOKEN_VIDEO_SCHEDULE_UNAVAILABLE', '当前运行环境不提供 Agent 预设服务，无法执行自动化任务。')
     }
-    if (!agentDefaultModel || typeof agentDefaultModel.currentSelection !== 'function') {
+    if (!this.modelSelection && (!agentDefaultModel || typeof agentDefaultModel.currentSelection !== 'function')) {
       fail('SPOKEN_VIDEO_SCHEDULE_UNAVAILABLE', '当前运行环境不提供默认模型服务，无法执行自动化任务。')
     }
-    const selection = agentDefaultModel.currentSelection()
-    const agentOptions = { provider: selection.provider, model: selection.model }
+    const selection = this.modelSelection ? this.modelSelection() : agentDefaultModel.currentSelection()
+    const agentOptions = { ...selection }
     const preset = await agentPresets.resolve(this.presetId)
     const setup = async (agentCtx) => { await agentPresets.mount(agentCtx, preset.id) }
-    // One identity per task, reused across rounds, so the sidebar gains a
-    // single recognizable session per schedule instead of one per run.
+    // One identity per task, reused across rounds, so a schedule keeps a single
+    // durable execution identity instead of one Session per run. It is
+    // pack-internal: adoption below records the ownership that keeps it out of
+    // the operator's ordinary conversation list, and the pack's own run history
+    // is where a round is inspected.
     const sessionId = `sv-auto-${schedule.id}`
     let handle
     try {
@@ -542,6 +574,9 @@ export class SpokenVideoScheduleHost {
     } catch {
       handle = await agents.create({ sessionId, meta: { cwd: workspace, agentPreset: preset.id }, agentOptions, setup, signal })
     }
+    // The native Agent service carries no pack identity, so the round states its
+    // own ownership before any work is published in the identity.
+    await this.adoptSession(handle.agent)
     try {
       this.#service('sessionTitle')?.rename(handle.agent.session, `自动化 · ${schedule.name}`)
     } catch { /* a title is presentation only; never fail a round over it */ }
@@ -579,12 +614,30 @@ export class SpokenVideoScheduleHost {
 
   /* ------------------------------- orchestrator ---------------------------- */
 
+  /**
+   * Refuse to spend a slot on a round whose model route is proven to have no
+   * credential. Without this the round starts, the topic child dies on its
+   * first model request within milliseconds, and the operator reads the whole
+   * thing as a failing stage — the least actionable form of the same fact.
+   *
+   * Only a proven missing credential stops a round. An unverifiable or
+   * account-authenticated route proceeds, because DSH owns authentication and
+   * the pack must not guess.
+   */
+  async #assertModelRoute() {
+    if (!this.context) return
+    const model = await this.#modelReadiness()
+    if (model?.state !== 'missing-credential') return
+    fail('SPOKEN_VIDEO_SCHEDULE_MODEL_UNAVAILABLE', `本轮未开始：场景任务模型「${model.provider} · ${model.model}」缺少凭据；${model.reason}`)
+  }
+
   async #execute(paths, runId, schedule, signal) {
     let handle = null
     try {
       handle = this.context ? { agent: this.context, dispose: async () => {} } : await this.#acquireAgent(paths.workspace, schedule, signal)
       const agent = handle.agent
       await this.#patch(paths, runId, (run) => { run.sessionId = agent.id ? String(agent.id) : null })
+      await this.#assertModelRoute()
       await this.#runRound(paths, runId, agent, schedule, signal)
     } catch (error) {
       const cancelled = signal.aborted

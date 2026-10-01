@@ -1,51 +1,24 @@
-const PROFILE_ID = 'lwb'
-const FIBER_ACTIVE = 2
+import { LWB_RUNTIME } from './runtime-config.mjs'
+import { createPackGroup, restoreEnabledPacks } from './dsh-adapter/loader.mjs'
+
+const PROFILE_ID = LWB_RUNTIME.profileId
 
 // The pack runtime projects Loader-managed browser bundles through DSH's
 // client-module graph. Declare both host services at the bundle boundary.
-export const inject = ['loader', 'clientModules', 'settings', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel']
+export const inject = ['loader', 'clientModules', 'agents', 'agentPresets', 'permissionPresets', 'credentials', 'agentDefaultModel', 'webServer', 'llm', 'sessionController']
 
-import { join, resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { LwbPackWorkspaces } from './pack-workspaces.mjs'
 import { LwbPackServices } from './pack-services.mjs'
+import { LwbPackEntitlements } from './pack-entitlements.mjs'
 
-import z from '@deepseek-ai/schemastery'
 import LwbArchiveGateway from './archive-gateway.mjs'
 import LwbPackGateway from './pack-gateway.mjs'
-import LwbRemoteSettingsGateway, { normalizeRemoteSettingsMode } from './remote-settings-gateway.mjs'
 import { LwbPackRegistry } from './pack-registry.mjs'
 import { LwbPackRuntime } from './pack-runtime.mjs'
-
-const WORKBENCH_NS = 'lwb-workbench'
-const WorkbenchSettings = z.object({
-  state: z.any().default({}),
-})
-
-function restoreEnabledPacks(ctx, packRuntime) {
-  let started = false
-  ctx.on('internal/status', (fiber) => {
-    if (started || fiber !== ctx.fiber || fiber.state !== FIBER_ACTIVE) return
-    started = true
-    // Cordis treats callback results as disposal effects, not task results.
-    const restore = ctx.inject(['subagents', 'tools'], async () => { await packRuntime.restore() })
-    packRuntime.setStartupRestore(restore.await())
-  }, { global: true })
-}
-
-async function createPackGroup(ctx) {
-  const Group = ctx.loader?.builtins?.group
-  if (typeof Group !== 'function') {
-    throw new Error('LWB capability pack loader group is unavailable.')
-  }
-  const fiber = ctx.plugin(Group, [])
-  await fiber.await()
-  const group = ctx.fiber.entry?.subgroup
-  if (!group || typeof group.create !== 'function') {
-    throw new Error('LWB capability pack loader group failed to initialize.')
-  }
-  return group
-}
+import { LwbAtsClient } from './ats-client.mjs'
+import LwbAccountGateway from './account-gateway.mjs'
+import { openTaskModel } from './task-model.mjs'
+import { registerLwbModels } from './dsh-adapter/lwb-model.mjs'
 
 /**
  * Host-side product identity for the LWB DSH composition.
@@ -67,22 +40,22 @@ export async function apply(ctx, config = {}) {
   })
   ctx.provide('lwbProfile', identity)
   ctx.provide('lwbPackRegistry', new LwbPackRegistry())
-  const dshHome = resolve(process.env.DSH_HOME || process.env.LWB_DSH_HOME || join(dirname(fileURLToPath(import.meta.url)), '..', 'local', 'dsh-home'))
-  const workspaces = new LwbPackWorkspaces({ root: join(dshHome, 'profiles', PROFILE_ID, 'pack-state') })
+  const workspaces = new LwbPackWorkspaces({ root: LWB_RUNTIME.packStateDir })
   ctx.provide('lwbPackWorkspaces', workspaces)
-  ctx.provide('lwbPackServices', new LwbPackServices(ctx, workspaces))
+  const account = new LwbAtsClient({ credentials: ctx.credentials, baseUrl: LWB_RUNTIME.atsBaseUrl })
+  const entitlements = new LwbPackEntitlements(account)
+  const taskModel = await openTaskModel(LWB_RUNTIME.productHome, ctx)
+  ctx.provide('lwbAtsClient', account)
+  ctx.provide('lwbPackEntitlements', entitlements)
+  ctx.provide('lwbTaskModel', taskModel)
+  ctx.provide('lwbPackServices', new LwbPackServices(ctx, workspaces, { account, taskModel, entitlements }))
+  registerLwbModels(ctx, account)
   const packGroup = await createPackGroup(ctx)
   const packRuntime = new LwbPackRuntime(ctx, { group: packGroup })
   ctx.provide('lwbPackRuntime', packRuntime)
-  ctx.settings.installSection(ctx, WORKBENCH_NS, WorkbenchSettings, { state: {} }, {
-    setSource: () => {},
-    onChange: () => {},
-  })
   ctx.plugin(LwbArchiveGateway)
   ctx.plugin(LwbPackGateway)
-  ctx.plugin(LwbRemoteSettingsGateway, {
-    mode: normalizeRemoteSettingsMode(config.remoteSettings?.mode),
-  })
+  ctx.plugin(LwbAccountGateway)
   // The bundle's own services are only injectable once this fiber is active.
   // Start restoration on that transition, after the baseline pack dependencies
   // are available, and let the gateway await the resulting task.

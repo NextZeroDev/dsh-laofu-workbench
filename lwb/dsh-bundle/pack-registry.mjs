@@ -45,6 +45,11 @@ export class LwbPackRegistry {
       name: manifest.name,
       version: manifest.version,
       description: manifest.description,
+      ...(manifest.minHostVersion === undefined ? {} : { minHostVersion: manifest.minHostVersion }),
+      ...(manifest.requiredServices === undefined ? {} : { requiredServices: [...manifest.requiredServices] }),
+      ...(manifest.providers === undefined ? {} : { providers: [...manifest.providers] }),
+      ...(manifest.entitlements === undefined ? {} : { entitlements: [...manifest.entitlements] }),
+      ...(manifest.access === undefined ? {} : { access: { ...manifest.access } }),
       menus: manifest.menus.map((menu) => ({ ...menu })),
     }))
   }

@@ -25,6 +25,37 @@ async function exists(path) {
   try { await lstat(path); return true } catch (error) { if (error.code === 'ENOENT') return false; throw error }
 }
 
+/** One caller-named path segment: portable, non-hidden, no separators. */
+const DIRECTORY_SEGMENT = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/u
+
+/**
+ * Create one caller-named directory below an owned pack workspace.
+ *
+ * Segments are created and inspected one at a time, so a symlink placed below
+ * the root can never redirect a Session's working directory outside the
+ * workspace. Pack-written children are the first paths a model may choose, so
+ * the root's own rule is applied to every segment rather than only to the root.
+ * @param root - existing pack workspace root.
+ * @param relative - `/`-separated relative directory.
+ * @returns the created absolute directory.
+ */
+async function ownedDirectory(root, relative) {
+  if (typeof relative !== 'string' || relative === '' || isAbsolute(relative) || relative.includes('\\')) {
+    fail('PACK_WORKSPACE_INVALID', `A workspace-relative directory is required, received ${JSON.stringify(relative)}.`)
+  }
+  const segments = relative.split('/')
+  if (segments.some((segment) => !DIRECTORY_SEGMENT.test(segment))) {
+    fail('PACK_WORKSPACE_INVALID', `Invalid workspace-relative directory: ${relative}`)
+  }
+  let current = root
+  for (const segment of segments) {
+    current = join(current, segment)
+    await directory(current, true)
+  }
+  if (await realpath(current) !== current) fail('PACK_WORKSPACE_UNSAFE', `Refusing a redirected directory: ${relative}`)
+  return current
+}
+
 async function readState(path) {
   if (!await exists(path)) return { schemaVersion: 1, packs: {} }
   const info = await lstat(path)
@@ -204,6 +235,25 @@ export class LwbPackWorkspaces {
     })
   }
 
+  /**
+   * Create and return one workspace-relative directory owned by a pack.
+   *
+   * A pack names such a directory as an internal Session's cwd so parallel runs
+   * of one pack cannot overwrite each other's files; the workspace's own
+   * symlink rules still apply to every segment.
+   * @param id - capability pack id.
+   * @param relative - `/`-separated directory below the pack workspace.
+   * @returns the created absolute directory.
+   */
+  ownedDirectory(id, relative) {
+    return this.serial(async () => {
+      const runtime = this.active.get(packId(id))
+      if (!runtime || runtime.closing) fail('PACK_WORKSPACE_INACTIVE', 'Capability pack is not active.')
+      this.requireRecord(await this.state(), id)
+      return ownedDirectory(await directory(this.path(id)), relative)
+    })
+  }
+
   /** Track a complete operation, including background execution and final writes. */
   async run(id, operation) {
     let task
@@ -311,9 +361,17 @@ export class LwbPackWorkspaces {
   }
 
   /** Host-owned facts for all ordinary conversation projections, including archives. */
-  visibility() {
+  visibility(id) {
     return this.serial(async () => {
       const state = await this.state()
+      if (id !== undefined) {
+        const record = this.requireRecord(state, id)
+        return {
+          workspaceIds: record.workspaceId ? [record.workspaceId] : [],
+          workspacePaths: [this.path(id)],
+          sessionIds: [...record.sessionIds],
+        }
+      }
       return {
         workspaceIds: Object.values(state.packs).map((item) => item.workspaceId).filter(Boolean),
         workspacePaths: Object.keys(state.packs).map((id) => this.path(id)),

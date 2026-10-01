@@ -47,6 +47,23 @@ test('assets are task-bound, contained through symlinks, and include project sub
   await assert.rejects(executionAsset(ctx, { ...request, assetId: detail.assets[0].id }), /不属于/u)
 })
 
+test('project media execution resolves its saved artifact pointer and rejects mismatched artifacts', async (t) => {
+  const ctx = await fixture(t)
+  const file = 'artifacts/4-subtitles-original.json'
+  const srt = '1\n00:00:00,000 --> 00:00:01,000\n原始字幕。\n'
+  await ctx.write(`projects/${projectId}/${file}`, { id: 'original', projectId, stage: 'subtitles', revision: 4, data: { srt, srtFile: 'media/subtitles/original.srt', cueCount: 1 } })
+  await ctx.write(`projects/${projectId}/media/subtitles/original.srt`, srt)
+  await ctx.write(`projects/${projectId}/media/runs.json`, { runs: [{ id: 'subtitle', type: 'subtitles', projectId, status: 'succeeded', result: { artifact: { id: 'original', file, revision: 4 } } }] })
+  const request = { kind: 'media', projectId, id: 'subtitle' }
+  const detail = await executionDetail(ctx, request)
+  assert.equal(detail.record.result.artifact.data.srt, srt)
+  assert.equal((await executionAsset(ctx, { ...request, assetId: detail.assets[0].id })).text, srt)
+  const stored = JSON.parse(await readFile(join(ctx.workspacePath, 'data', `projects/${projectId}/media/runs.json`), 'utf8'))
+  assert.equal(stored.runs[0].result.artifact.data, undefined, 'reading a pointer never rewrites stored history')
+  await ctx.write(`projects/${projectId}/${file}`, { id: 'wrong', projectId, stage: 'subtitles', data: { srt } })
+  await assert.rejects(executionDetail(ctx, request), /产物与记录不匹配/u)
+})
+
 test('native history and assistant baseline preserve actual content, positions and redact credentials', () => {
   const stream = [{ type: 'reasoning-chunks', time0: 100, index: 0, dt: [], texts: ['核对来源'] }]
   const frame = executionFrame({ type: 'snapshot', cursor: 4, hasMore: true, records: [

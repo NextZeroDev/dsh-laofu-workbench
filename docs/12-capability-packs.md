@@ -55,7 +55,25 @@ ctx.effect(() => ctx.lwbPackClient.register({
 
 核心只向页面传入公开的 pack/menu 信息、`packId` 与基础导航回调。包不能 import `lwb/dsh-bundle/client.js`，也不能假定核心了解它的业务路由或数据模型。加载时宿主自动创建该包专属工作区；数据 RPC 使用宿主分配的上下文，不依赖普通 DSH 对话。Host 声明 `lwbPackServices` 依赖，通过 SDK `getLwbPackScope(ctx, manifest)` 获取包级目录、任务与凭据服务。完整契约见 [29 能力包专属工作区](29-pack-owned-workspaces.md)。
 
-包应在 `peerDependencies` 或 `dependencies` 中声明所需 DSH 运行时包。装载器会为声明的受控 DSH peer 建立同版本本机链接；其他第三方依赖仍由包自己的包管理流程负责。
+### 会话与产物
+
+包的业务页面是宿主 overlay 里的整页界面，**不包含**官方对话区与官方右栏。需要展示原生会话时，页面使用宿主下发的两个能力，自己决定摆在哪里：
+
+```js
+h('article', { onPointerDownCapture: () => focusSession(run.sessionId) },
+  h('div', { className: 'example-conversation' }, renderConversation({ sessionId: run.sessionId })),
+)
+```
+
+- `renderConversation({ sessionId })` 渲染该会话的官方对话：原始回答、工具调用、文件 chip，以及可直接继续对话的官方输入框。它使用官方 `conversation.content` Factory 与该会话自己的作用域，**不改变 frame 的当前会话**，也不进入对话模块的历史。
+- `focusSession(sessionId)` 把 frame 的当前会话指向该会话，于是**官方右栏**（文档预览、文件、终端、浏览器、改动评审、插件注册的 tab 类型、快捷键、开合与全屏）以及 frame 为当前会话渲染的一切，原样适用于这条会话。宿主只在会话确实由本页面渲染时接受聚焦，并在页面卸载后恢复进入前的会话。
+- 页面所在的 overlay 会从右边缘让出右栏列宽，因此右栏打开时页面自动让位（多列布局会随之收窄）。
+
+因此包页面**不重画**任何官方内容：右栏的每一项能力都由官方提供，官方升级即自动获得。宿主侧还有一层窄路由：嵌入对话里的文件 chip 会先聚焦该会话，再走官方 `sidebarRight.openResource`，文件在官方预览里打开。
+
+完整背景、边界与被否掉的替代路线见 [41 能力包内的会话与官方右栏](41-capability-session-surface.md)。
+
+Host 侧的会话目录：`sessions.create({ provider, model, cwd })` 的 `cwd` 是能力包工作区内的 `/` 分隔相对路径（例如 `runs/<taskId>/<runId>`），宿主逐段创建并拒绝符号链接与越界路径。省略时仍使用包工作区根目录。`resume` 必须传入该会话创建时使用的同一个 `cwd`，因为 DSH 只在创建时决定会话位置。
 
 ## 首个包：口播视频内容创作
 
@@ -65,7 +83,7 @@ ctx.effect(() => ctx.lwbPackClient.register({
 - 信号：17 个内置来源，包括 16 个公开来源及 SciTiger AI 内容日报。来源默认启用；支持采集、启停、查看记录、收藏和忽略信号，不提供来源增删改或手动日报导入页面。当前存储 schema 为 10，结果按来源去重并保留最近 7 天记录。
 - 选题：按账号 Tab 选择参与渠道、填写角度、按需排除信号。确认启动后补采当天缺失渠道，并由 DSH 生成候选；推荐候选自动加入待写稿，其他候选可自行选择。
 - 写稿：选择选题、篇幅与要求，点击“写稿”并确认后启动；失败任务重试也需确认。AI 稿件自动保存，可直接进入配音；编辑、润色和检查在稿件抽屉中完成，人工编辑通过“保存并进入配音”提交。
-- 配音 / 字幕：从项目稿件或直接输入的文稿创建音频任务，使用百炼或 SciTiger；支持系统参考音色或用户上传的参考音频。默认同时生成字幕，字幕失败不影响已经完成的配音，可单独重试。
+- 配音 / 字幕：从项目稿件或直接输入的文稿创建音频任务，可选择 LWB 账号服务或百炼 BYOK；支持系统参考音色或用户上传的参考音频。默认同时生成字幕，字幕失败不影响已经完成的配音，可单独重试字幕。LWB 服务按账号积分和会员权益执行，BYOK 费用由用户自己的供应商承担。
 - 视频 / 预览：从关联项目的配音继续制作，配置横竖屏、字幕、BGM 与画面要求。DSH 创作 Agent 编写 Remotion 工程，经过渲染、确定性技术质检和独立 DSH 审片后提交成片。没有人工制作说明或手工质检覆盖失败的兜底路径。
 - 发布：展示通过质检的成片，生成和编辑标题、文案、标签与横竖封面，支持预览、下载和封面重生/上传。资料齐备后由用户自行到平台发布；没有平台直发或发布队列。
 - 内容安排：持久化的主机侧定时任务，支持账号、来源、执行日/时间、每轮条数和执行深度，并保留每轮记录。服务必须运行才会调度，不自动补跑错过的时刻。
@@ -80,6 +98,6 @@ signals -> topic -> script -> voiceover -> subtitles -> video -> qc -> packaging
 
 信号池和内容安排位于 `data/signals.json` 与 `data/schedules.json`。调度器运行在主机进程中；来源采集仅访问公开 HTTPS 地址，并检查 DNS 与重定向，拒绝本机和私网地址。
 
-AI 创作通过 DSH 内部 Agent 使用系统默认模型和原生认证。TTS、ASR 和封面生图是包内供应商接口，使用独立业务配置与凭据；用户在页面确认的媒体任务不等同于每次网络请求都触发 DSH 工具审批。具体边界见[工作区与执行作用域](29-pack-owned-workspaces.md)。
+AI 创作通过 DSH 内部 Agent 使用工作台的「场景任务默认模型」；它可以跟随 DSH 默认模型，也可以指定已配置的 LWB 或其他模型。TTS、ASR 和封面生图是包内供应商接口，使用独立业务配置与凭据；用户在页面确认的媒体任务不等同于每次网络请求都触发 DSH 工具审批。具体边界见[工作区与执行作用域](29-pack-owned-workspaces.md)。
 
 源码入口：`index.mjs` 装配服务；`gateway.mjs` 提供 RPC；各 store/host 文件处理持久化和任务；`client.js` 注册八个业务页面。首次使用见[快速开始](quickstart.md)，原生会话和产物展示见[统一执行详情](32-execution-details.md)。

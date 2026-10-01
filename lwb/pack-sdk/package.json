@@ -2,11 +2,16 @@
   "name": "@scitiger-ai/lwb-pack-sdk",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Public manifest and host registration contract for Laofu Workbench capability packs",
   "type": "module",
   "main": "index.mjs",
   "exports": {
     ".": "./index.mjs",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./execution": "./dsh-execution.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2"
   }
 }

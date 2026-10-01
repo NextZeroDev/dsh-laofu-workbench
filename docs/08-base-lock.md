@@ -1,15 +1,15 @@
 # 08 Harness 基座锁定与升级核验
 
-> **状态（2026-09-15）**：LWB 基础版锁定 DeepSeek Harness `dsh-v0.1.6-alpha.1`。这是 developer preview，必须以精确 commit 复现，不跟随浮动分支或 tag 名自动更新。
+> **状态（2026-09-30）**：LWB 基础版锁定 DeepSeek Harness `dsh-v0.2.0-rc.2`。这是 developer preview，必须以精确 commit 复现，不跟随浮动分支或 tag 名自动更新。
 
 ## 锁定锚点
 
 | 项 | 值 |
 |---|---|
 | 上游仓库 | `https://github.com/deepseek-ai/deepseek-harness.git` |
-| tag | `dsh-v0.1.6-alpha.1` |
-| commit | `0a15e36e7f82b6ed45af6fa9759f29b40dcd965d` |
-| 核验日期 | `2026-09-15` |
+| tag | `dsh-v0.2.0-rc.2` |
+| commit | `639ed015397290b3745d163aafe02ffee4aa3f84` |
+| 核验日期 | `2026-09-30` |
 | Node | `^22.19.0 || >=24.0.0` |
 | 包管理器 | `pnpm@11.7.0` |
 
@@ -27,7 +27,7 @@
 
 ```bash
 git clone https://github.com/deepseek-ai/deepseek-harness.git vendor/deepseek-harness
-git -C vendor/deepseek-harness checkout --detach 0a15e36e7f82b6ed45af6fa9759f29b40dcd965d
+git -C vendor/deepseek-harness checkout --detach 639ed015397290b3745d163aafe02ffee4aa3f84
 cd vendor/deepseek-harness
 CI=true corepack pnpm install --frozen-lockfile
 CI=true corepack pnpm run build
@@ -48,7 +48,7 @@ npm run test
 1. 在专用升级分支选择精确上游 commit，先在干净临时 checkout 安装并构建。
 2. 只更新 `UPSTREAM.lock.json`、Profile / LWB 适配代码和测试；禁止在 `vendor/deepseek-harness` 留下业务源码改动。
 3. 重新执行构建与 LWB 回归，并人工验证普通对话、工作区、归档和文件附件。
-4. 若未来确实需要上游改动，应先尝试 LWB 插件接缝，再以单独、可上游化的补丁提出。
+4. 当前只维护单一版本适配层，不修改官方源码，不保留旧 API 回退；具体门禁见 [扩展边界](38-dsh-extension-boundary.md)。
 
 ## 当前附件与数据边界
 
@@ -56,4 +56,4 @@ npm run test
 
 更新前应停止服务并备份完整 `lwb/local/`，以及通过环境变量指定的其他状态目录。回滚必须恢复相匹配的代码、上游构建和数据副本；只回退 Git commit 不会回退运行数据格式。
 
-从 DSH 0.1.2 升级时的过程与验收证据保存在[历史升级记录](28-dsh-016-upgrade.md)，其中过渡期适配器和旧目录描述不代表当前实现。首次安装请使用[快速开始](quickstart.md)。
+从 DSH 0.1.2 升级时的过程与验收证据保存在[0.1.6 升级记录](28-dsh-016-upgrade.md)，0.2.0 的升级与接缝复核证据见[0.2.0 升级与验收](43-dsh-020-upgrade.md)；两份记录都包含当时的过渡方案，不代表当前实现。若上游全量 clone 过慢，可用增量 `git fetch` 精确 tag 后 `git clean -xdf` 得到等价干净树，再执行 `npm run setup`。首次安装请使用[快速开始](quickstart.md)。
