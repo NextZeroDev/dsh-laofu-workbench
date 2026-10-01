@@ -9,7 +9,8 @@ const vendor = join(root, 'vendor', 'deepseek-harness')
 const lock = JSON.parse(await readFile(join(root, 'lwb', 'UPSTREAM.lock.json'), 'utf8'))
 
 const run = (cmd, args, cwd = root) => new Promise((resolveRun, reject) => {
-  const child = spawn(cmd, args, { cwd, stdio: 'inherit', shell: false })
+  // Corepack is a .cmd shim on Windows; its fixed build arguments need cmd.exe.
+  const child = spawn(cmd, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' && cmd === 'corepack' })
   child.once('error', reject)
   child.once('exit', code => code === 0 ? resolveRun() : reject(new Error(`${cmd} exited with code ${code}`)))
 })

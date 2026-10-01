@@ -57,10 +57,11 @@ LWB 的左区有两列，归属不同：
 
 ## 上游接缝（升级必查）
 
-新增两项，均由 `npm run upstream:check` 断言（见 [42 的上游接缝](42-conversation-history-official.md#上游接缝升级必查) 第 6、7 项）：
+新增三项，均由 `npm run upstream:check` 断言（见 [42 的上游接缝](42-conversation-history-official.md#上游接缝升级必查) 第 6、7、8 项）：
 
 1. `ui-plugin-manager` 仍注册 `sidebar.panellist` 行与 `main` 座位的 `plugins` 面板。
 2. `AppFrame` 的 `main` 仍以 `entryKey: panelId ?? 'conversation'` 派发。
+3. `layout` 服务仍发布 `panelInfo` 与 `selectPanel`，并以同名服务暴露：行的高亮与点击都读它。
 
 另外这条实现依赖 `ctx.slots.entriesOfSlot` / `subscribe` 的行为，以及"注册者可把 `label` 传成函数"这一契约（`resolveSlotLabel` 目前就是一行 `typeof label === 'function' ? label() : label`，因此本地内联而不是再请求一个模块）；行数据按内容比较 identity 这一点不能退化，否则面板行会无限重渲染。
 

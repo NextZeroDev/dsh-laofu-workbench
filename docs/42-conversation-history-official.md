@@ -73,7 +73,7 @@
 
 ## 上游接缝（升级必查）
 
-这条实现不改上游源码，但依赖七处没有跨版本稳定性保证的事实；`npm run upstream:check` 已经把其中六项变成加载期断言：
+这条实现不改上游源码，但依赖十处没有跨版本稳定性保证的事实；`npm run upstream:check` 已经把其中九项变成加载期断言：
 
 1. `ui-workspace` 仍然把浏览器注册进 `sidebar.workspaces`（`src/client/index.ts`）。
 2. 渲染器的 props 合并仍然是 owner props 最后展开（`ui-renderer/src/client/scoped-slots.tsx`）。
@@ -82,8 +82,11 @@
 5. 客户端会话列表概要仍投影 `cwd`（`api/session-controller/src/client/sessions/service.ts` 的 `projectList`）。目录规则读的就是它；上游一旦停止投影，规则退化为静默失效，包会话会重新出现在历史里。`npm run upstream:check` 已把这一项变成断言。
 6. `ui-plugin-manager` 仍注册 `sidebar.panellist` 行（label 为「插件」）与 `main` 座位的 `plugins` 面板。这是「插件」行与插件页的接缝；两者任一变，面板行要么消失要么点不开。
 7. `AppFrame` 的 `main` 仍以 `entryKey: panelId ?? 'conversation'` 派发（`ui-layout/src/client/AppFrame.tsx`）。`selectPanel(null)` 回到对话这一行为依赖它；上游一旦把默认条目换成别的键，返回对话就会落空。
+8. 对话模块的面板行靠 `layout` 服务渲染选中态与执行选择：`ILayout.panelInfo` 与 `selectPanel(panelId: MainPanelId | null)`（`ui-layout/src/client/service.ts`），并仍以 `ctx.reflect.provide('layout', layout)`（`ui-layout/src/client/index.ts`）暴露。
+9. 官方右栏以 `activePanelId === null` 且已选中的会话为在屏会话：`show(layout.panelInfo.getSnapshot().activePanelId === null ? selected?.sessionId : undefined)`（`ui-sidebar-right/src/client/index.ts`）。包页面保留这两个状态；替换被覆盖的 Conversation 内容不会改变它们。
+10. 官方仍注册 `main.conversation` 内容入口。包页面通过公开 slot 优先级暂时替换它，避免 frame 与卡片同时挂载同一会话的 composer；最后一条嵌入会话卸载时恢复官方入口。当前选择由 `uiSession.adapter.current` 提供。见 [41](41-capability-session-surface.md#一个会话一份输入框只挂载卡片中的-conversation)。
 
-第 6、7 项同样由 `npm run upstream:check` 断言。面板行的 id 由注册者提供、不写死在 LWB 里，所以新增面板行无需改 LWB；但**行内必须存在同名 `main` 面板**，否则 LWB 会按 `layout.selectPanel` 的契约跳过这次选择而不是抛错（`conversationPanelRegistered` 守卫）。
+第 6、7、8、9、10 项同样由 `npm run upstream:check` 断言。面板行的 id 由注册者提供、不写死在 LWB 里，所以新增面板行无需改 LWB；但**行内必须存在同名 `main` 面板**，否则 LWB 会按 `layout.selectPanel` 的契约跳过这次选择而不是抛错（`conversationPanelRegistered` 守卫）。
 
 第 2 项同时是 [`packages/client/AGENTS.md`](../../vendor/deepseek-harness/packages/client/AGENTS.md) 明确禁止的模式（"Business code never creates a hook or selector as a prop value"）。它在这个装配下可用，但不是官方为 `sidebar.workspaces` 座位声明的契约——该座位声明的 owner share 只有 `wide` / `expandSidebar`。升级后如果官方为该座位补上真正的过滤入口，应当改用它。
 

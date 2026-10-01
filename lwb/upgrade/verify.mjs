@@ -60,5 +60,27 @@ const appFrame = readFileSync(join(dshPackageDirectory('@deepseek-ai/dsh-client-
 if (!/renderSlot\('main', \{\}, \{ entryKey: panelId \?\? 'conversation' \}\)/u.test(appFrame)) {
   throw new Error('the main column no longer falls back to the conversation entry; a selected panel would replace the Conversation permanently')
 }
+// The conversation module renders the official global panel rows, whose selection
+// state and click both ride this service. Both halves are version-sensitive: a
+// row's highlight reads the published selection, and its click must reach the
+// layout controller as a method call.
+const layoutService = readFileSync(join(dshPackageDirectory('@deepseek-ai/dsh-client-ui-layout'), 'src/client/service.ts'), 'utf8')
+if (!/readonly panelInfo: HostObservable<PanelInfo>/u.test(layoutService) || !/selectPanel\(panelId: MainPanelId \| null\): void/u.test(layoutService)) {
+  throw new Error('ui-layout no longer publishes its central-panel selection; the conversation module’s panel rows could neither highlight nor open a panel')
+}
+const layoutIndex = readFileSync(join(dshPackageDirectory('@deepseek-ai/dsh-client-ui-layout'), 'src/client/index.ts'), 'utf8')
+if (!/reflect\.provide\('layout', layout\)/u.test(layoutIndex)) {
+  throw new Error('the layout selection is no longer provided as the `layout` service; the workbench reads it by that name')
+}
+// Pack mode keeps the Conversation panel selected for the official right Sidebar,
+// while replacing only its covered main.conversation content through the registry.
+const sidebarRightIndex = readFileSync(join(dshPackageDirectory('@deepseek-ai/dsh-client-ui-sidebar-right'), 'src/client/index.ts'), 'utf8')
+if (!/show\(layout\.panelInfo\.getSnapshot\(\)\.activePanelId === null \? selected\?\.sessionId : undefined\)/u.test(sidebarRightIndex)) {
+  throw new Error('ui-sidebar-right no longer ties the on-screen Session to the Conversation filling the main column; the pack-Session surface must be re-derived')
+}
+const conversationApply = readFileSync(join(dshPackageDirectory('@deepseek-ai/dsh-client-ui-conversation'), 'src/client/apply.ts'), 'utf8')
+if (!/name: 'main\.conversation'/u.test(conversationApply)) {
+  throw new Error('ui-conversation no longer registers main.conversation; pack mode must be re-derived to avoid duplicate composers')
+}
 applyLwbEntryPolicy(readFileSync(join(DSH_ROOT, 'apps/desktop/lib/main.js'), 'utf8'))
 console.log(`LWB upstream contract passed: ${UPSTREAM.tag} (${result.commit}); official source clean.`)

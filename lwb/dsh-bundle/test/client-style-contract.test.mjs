@@ -293,7 +293,7 @@ test('capability packs render their own Sessions without touching the conversati
   // Sessions, and the frame's current Session only moves when the pack focuses
   // a card. The shell's conversation page keeps rendering the official surfaces.
   assert.ok(source.includes('function EmbeddedConversationHost({ sessionId, SessionProvider, renderFactorySlot })'), 'the host must offer an embedded conversation')
-  assert.ok(source.includes("services.sessions.retain(sessionId, { source: 'gateway' })"), 'an embedded conversation retains its own Session')
+  assert.ok(source.includes("services.sessions.retain(sessionId, { source: 'gateway', signal: controller.signal })"), 'an embedded conversation retains its own Session with cancellation')
   assert.ok(source.includes("renderFactorySlot('conversation.content', {"), 'it renders the official conversation factory')
   assert.ok(source.includes("variant: 'embedded', phase: 'active', hero: false"))
   assert.ok(source.includes("renderSlot('conversation.session', { view: 'chat' })"))
@@ -301,6 +301,8 @@ test('capability packs render their own Sessions without touching the conversati
   assert.ok(source.includes('h(CapabilityPage, { renderConversation, focusSession })'), 'both host faces reach the pack page')
   assert.doesNotMatch(source, /openSessionSurface|sessionSurface|selectSurfaceSession/u)
   assert.doesNotMatch(source, /installEmbeddedSidebarRuntime|lwb\.embedded\.rightbar/u)
+  assert.doesNotMatch(source, /claimComposerSurface|editor\.setRootElement|editor\.registerRootListener/u, 'the host must not compete with official composer roots')
+  assert.doesNotMatch(source, /lwb-pack-stage|holdPackStage|releasePackStage/u, 'pack mode must not change the main panel selection')
 })
 
 test('an embedded conversation carries its own right-Sidebar control', async () => {
@@ -315,7 +317,7 @@ test('an embedded conversation carries its own right-Sidebar control', async () 
   assert.ok(source.includes('panelControlState(mounted, sessionId, open)'), 'state is the rendered column, for this card alone')
   assert.ok(source.includes('function subscribePanelOpen(listener)') && source.includes("attributeFilter: ['data-sidebar-right-open']"), 'the column marker is observed, not guessed from the service')
   assert.ok(source.includes('sidebarRight.toggleExpanded()'), 'the action is the official toggle')
-  assert.ok(source.includes('function toggleEmbeddedRightbar(sessionId)') && source.includes('focusSession(sessionId, { keepExpanded: true });'), 'the card is focused before the official toggle')
+  assert.ok(source.includes('function toggleEmbeddedRightbar(sessionId, expanded)') && source.includes('focusSession(sessionId, { keepExpanded: true });'), 'the card is focused before setting the requested panel state')
   assert.ok(source.includes('if (mounted() === sessionId) {'), 'a wait that ran out never toggles another Session')
   assert.ok(source.includes('openPackResource(sidebarRight, openResource, sessionId, address, options);'), 'an official open is routed through the surface-aware route')
   assert.ok(source.includes('PACK_SURFACE_PENDING'), 'a surface the seat has not minted yet is waited for, and a wiring mistake is not')
@@ -331,7 +333,6 @@ test('the official right Sidebar follows the pack card in use', async () => {
   assert.ok(source.includes('services?.uiWorkspace?.openSession?.(sessionId)'), 'focusing is official navigation')
   assert.ok(source.includes('function armPackSession(sessionId)') && source.includes('function releasePackSession(sessionId)'))
   assert.ok(source.includes('if (count === 0 && !packSessionArmed()) {'), 'the previous Session is captured when the mode arms')
-  assert.ok(source.includes('if (!current || !packSessionRendered.has(current)) return;'), 'a later navigation of the user wins over the restore')
   // One surface, one open panel: a card switch closes the panel it leaves, and
   // a plainly focused card never inherits a remembered expansion.
   assert.ok(source.includes('function collapsePackPanel()'), 'the host can close the panel through the official toggle')
@@ -341,7 +342,6 @@ test('the official right Sidebar follows the pack card in use', async () => {
   assert.ok(source.includes('if (epoch !== packPanelEpoch) return;'), 'a queued collapse never closes a panel a later gesture asked for')
   assert.ok(source.includes('function collapseWhenSettled(sessionId, epoch)'), 'a plainly focused card is collapsed once its seat mounts')
   assert.ok(source.includes('focusSession(sessionId, { keepExpanded: true });'), 'panel gestures keep their target expanded')
-  assert.ok(source.includes('collapsePackPanel();\n      packSessionInset?.();'), 'leaving the page closes the panel it left open')
   assert.ok(source.includes('function onScreenPanel()') && source.includes("panel.closest('[hidden]') === null"), 'the column read is the panel in view, not a hidden one a card left behind')
   assert.ok(source.includes("frameObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] })"), 'a card switch re-binds the measurement without touching the tree')
   assert.ok(source.includes('--lwb-rightbar-inset'), 'the overlay yields the column by width')

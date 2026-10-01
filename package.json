@@ -15,6 +15,7 @@
     "package:desktop": "node lwb/desktop/package.mjs",
     "package:desktop:dir": "node lwb/desktop/package.mjs --dir",
     "package:desktop:commercial": "node lwb/desktop/package.mjs --edition commercial",
+    "package:desktop:unsigned": "node lwb/desktop/package.mjs --unsigned",
     "package:plan": "node lwb/desktop/package.mjs --plan",
     "setup": "node scripts/setup-upstream.mjs",
     "pack:list": "node lwb/pack-manager.mjs list",

@@ -1811,9 +1811,8 @@ window.__ModuleLoader__.load({
      *
      * This uses the official `conversation.content` factory — the seam DSH
      * publishes for embedding a Session conversation in another surface — with
-     * its own Session scope. The frame's own conversation, its right Sidebar and
-     * the user's current Session are untouched: this is a second, independent
-     * view of one of the pack's own Sessions.
+     * its own Session scope. Pack mode replaces the frame Conversation with a
+     * placeholder while the official right Sidebar follows the focused card.
      */
     function FixedEmbeddedConversationView({ renderSlot }) {
       return renderSlot('conversation.session', { view: 'chat' });
@@ -1839,6 +1838,18 @@ window.__ModuleLoader__.load({
     let packSessionRestore = null;
     /** Pending right-Sidebar inset observer, armed with pack Session mode. */
     let packSessionInset = null;
+    let packConversationDispose;
+
+    function currentSessionId() {
+      return services?.uiSession?.adapter?.current?.getSnapshot?.()?.key
+        ?? services?.sessions?.list?.getSnapshot?.()?.current;
+    }
+
+    // Keep the main panel selection intact for the official right Sidebar,
+    // but mount the Conversation itself only in the pack's visible cards.
+    function PackConversationPlaceholder() {
+      return h('div', { 'data-lwb-pack-conversation': '' });
+    }
 
     /**
      * The Session one resource address names, when it names one at all.
@@ -1913,16 +1924,20 @@ window.__ModuleLoader__.load({
      */
     function focusSession(sessionId, options) {
       if (!embeddedHostSessions.has(sessionId)) return;
-      // Every focus invalidates a queued collapse; an explicit panel gesture also
-      // owns the result even when the Session is already mounted.
-      packPanelEpoch += 1;
+      // An explicit panel gesture supersedes a queued collapse. Repeated plain
+      // focus in the same pointer gesture must leave its owed collapse intact.
       if (options?.keepExpanded) {
+        packPanelEpoch += 1;
         pendingPanelCollapse = undefined;
-        return services?.uiWorkspace?.openSession?.(sessionId);
       }
-      if (services?.sidebarRight?.mounted?.getSnapshot?.() === sessionId) return;
+      const current = currentSessionId();
+      if ((current ?? services?.sidebarRight?.mounted?.getSnapshot?.()) === sessionId) {
+        if (services?.layout?.panelInfo?.getSnapshot?.()?.activePanelId != null) services.layout.selectPanel(null);
+        return;
+      }
+      if (!options?.keepExpanded) packPanelEpoch += 1;
       services?.uiWorkspace?.openSession?.(sessionId);
-      pendingPanelCollapse = { sessionId, epoch: packPanelEpoch };
+      if (!options?.keepExpanded) pendingPanelCollapse = { sessionId, epoch: packPanelEpoch };
     }
     /**
      * Start the collapse a card focus owes, once its gesture has ended.
@@ -2047,8 +2062,11 @@ window.__ModuleLoader__.load({
     function armPackSession(sessionId) {
       const count = embeddedHostSessions.get(sessionId) || 0;
       if (count === 0 && !packSessionArmed()) {
-        const current = services?.sessions?.list?.getSnapshot?.().current;
+        const current = currentSessionId();
         packSessionRestore = typeof current === 'string' && current ? current : null;
+        packConversationDispose = services.slots.inject('main.conversation', () => services.slots.register({
+          name: 'main.conversation', priority: -10, registrant: 'lwb-pack-conversation',
+        }, PackConversationPlaceholder));
         installPackSessionInset();
       }
       embeddedHostSessions.set(sessionId, count + 1);
@@ -2060,18 +2078,22 @@ window.__ModuleLoader__.load({
         embeddedHostSessions.set(sessionId, count - 1);
         return;
       }
+      if (embeddedHostSessions.size === 1) collapsePackPanel();
       embeddedHostSessions.delete(sessionId);
       if (packSessionArmed()) return;
-      collapsePackPanel();
       packSessionInset?.();
       const restore = packSessionRestore;
       packSessionRestore = null;
-      if (!restore) return;
       // Only hand the frame back while it still shows one of our Sessions: a
       // navigation the user made in the meantime must win.
-      const current = services?.sessions?.list?.getSnapshot?.().current;
-      if (!current || !packSessionRendered.has(current)) return;
-      if (services?.sessions?.list?.getSnapshot?.().byId?.[restore]) services.uiWorkspace.openSession(restore);
+      const current = currentSessionId();
+      try {
+        if (restore && current && packSessionRendered.has(current)
+          && services?.sessions?.list?.getSnapshot?.().byId?.[restore]) services.uiWorkspace.openSession(restore);
+      } finally {
+        packConversationDispose?.();
+        packConversationDispose = undefined;
+      }
     }
     /**
      * Toggle the official right Sidebar for one embedded Session.
@@ -2081,15 +2103,19 @@ window.__ModuleLoader__.load({
      * the file-chip route uses, and the reason a keyboard-activated click works
      * as well as a pointer one.
      */
-    function toggleEmbeddedRightbar(sessionId) {
+    function toggleEmbeddedRightbar(sessionId, expanded) {
       const sidebarRight = services?.sidebarRight;
       if (typeof sidebarRight?.toggleExpanded !== 'function') return;
       focusSession(sessionId, { keepExpanded: true });
+      const epoch = packPanelEpoch;
       const mounted = () => sidebarRight.mounted?.getSnapshot?.();
       let attempts = 0;
       const run = () => {
+        if (epoch !== packPanelEpoch || !embeddedHostSessions.has(sessionId)) return;
         if (mounted() === sessionId) {
-          try { sidebarRight.toggleExpanded(); } catch (_) { /* no surface mounted yet */ }
+          try {
+            if (sidebarRight.isExpanded() !== expanded) sidebarRight.toggleExpanded();
+          } catch (_) { /* no surface mounted yet */ }
           return;
         }
         // Never toggle whatever else is mounted: a wait that ran out simply
@@ -2153,48 +2179,65 @@ window.__ModuleLoader__.load({
         h('strong', { className: 'lwb-embedded-conversation-title', title }, title),
         h('button', {
           type: 'button', className: 'lwb-embedded-rightbar-toggle',
+          'data-lwb-session-control': '',
           'data-on': expanded ? 'true' : undefined,
           'aria-pressed': expanded ? 'true' : 'false',
           'aria-label': label,
           title: keys ? `${label} · ${keys}` : label,
-          onClick: () => toggleEmbeddedRightbar(sessionId),
+          onClick: () => toggleEmbeddedRightbar(sessionId, !expanded),
         }, expanded ? '收起右栏' : '右侧栏'));
+    }
+
+    function retainEmbeddedSession(sessionId, onReady, onError, timeoutMs = 15000) {
+      let active = true;
+      let reference;
+      const controller = new AbortController();
+      const release = () => {
+        if (!active) return;
+        active = false;
+        clearTimeout(timer);
+        controller.abort();
+        reference?.release();
+      };
+      const fail = (error) => {
+        if (!active) return;
+        release();
+        onError(error);
+      };
+      const timer = setTimeout(() => fail(new Error('会话加载超时，请重试。')), timeoutMs);
+      try {
+        reference = services.sessions.retain(sessionId, { source: 'gateway', signal: controller.signal });
+        Promise.resolve(reference.ready).then(() => {
+          if (!active) return;
+          clearTimeout(timer);
+          onReady(reference);
+        }, fail);
+      } catch (error) {
+        fail(error);
+      }
+      return release;
     }
 
     function EmbeddedConversationHost({ sessionId, SessionProvider, renderFactorySlot }) {
       const renderSlot = arguments[0].renderSlot;
       const [state, setState] = React.useState({ reference: null, error: null });
+      const [attempt, setAttempt] = React.useState(0);
       React.useEffect(() => {
         packSessionRendered.add(sessionId);
         armPackSession(sessionId);
-        let active = true;
-        let released = false;
-        let reference;
-        const release = () => {
-          if (released || !reference) return;
-          released = true;
-          reference.release();
-        };
-        try {
-          reference = services.sessions.retain(sessionId, { source: 'gateway' });
-          Promise.resolve(reference.ready).then(() => {
-            if (active) setState({ reference, error: null });
-            else release();
-          }, (error) => {
-            release();
-            if (active) setState({ reference: null, error: error?.message || '会话加载失败。' });
-          });
-        } catch (error) {
-          setState({ reference: null, error: error?.message || '会话加载失败。' });
-        }
-        return () => {
-          active = false;
-          release();
-          releasePackSession(sessionId);
-        };
+        return () => releasePackSession(sessionId);
       }, [sessionId]);
-      if (state.error) return h('div', { className: 'lwb-embedded-conversation-state', role: 'alert' }, state.error);
-      if (!state.reference || !SessionProvider || !renderFactorySlot) return h('div', { className: 'lwb-embedded-conversation-state' }, '正在加载对话…');
+      React.useEffect(() => {
+        setState({ reference: null, error: null });
+        const release = retainEmbeddedSession(sessionId,
+          (reference) => setState({ reference, error: null }),
+          (error) => setState({ reference: null, error: error?.message || '会话加载失败。' }));
+        return release;
+      }, [sessionId, attempt]);
+      if (state.error) return h('div', { className: 'lwb-embedded-conversation-state', role: 'alert' },
+        h('p', null, state.error), button('lwb-plain-button', '重试', () => setAttempt(value => value + 1)));
+      if (!SessionProvider || !renderFactorySlot) return h('div', { className: 'lwb-embedded-conversation-state', role: 'alert' }, '当前环境无法显示会话。');
+      if (!state.reference || state.reference.sessionId !== sessionId) return h('div', { className: 'lwb-embedded-conversation-state' }, '正在加载对话…');
       return h('div', { className: 'lwb-embedded-conversation-shell', 'data-session-id': sessionId },
         h(EmbeddedConversationHead, { sessionId }),
         h(SessionProvider, { session: state.reference },
@@ -2286,6 +2329,7 @@ window.__ModuleLoader__.load({
         // Both are looked up rather than injected: an embedded conversation only
         // loses its right-Sidebar control when the composition lacks them.
         sidebarRight: ctx.get('sidebarRight'), shortcuts: ctx.get('shortcuts'),
+        uiSession: ctx.get('uiSession'),
       };
       installStyle();
       // A file chip inside an embedded conversation asks the Sidebar to open a
@@ -2386,6 +2430,8 @@ window.__ModuleLoader__.load({
           conversationPanels.rows = [];
           disposeRuntimeSettingsTrigger?.();
           disposeOverlay?.();
+          packConversationDispose?.();
+          packConversationDispose = undefined;
           disposePackCatalogReset?.();
           restoreOpenResource?.();
           disposeDshAccount?.();
