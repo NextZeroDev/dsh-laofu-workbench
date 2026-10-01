@@ -120,6 +120,67 @@ test('model catalog marks only the unconfigured DeepSeek API route unavailable',
   assert.match(groups[0].unavailableReason, /无法确认/)
 })
 
+test('scene model readiness names an unconfigured route and never blocks on an unprovable one', async (t) => {
+  const { first, services, ctx, keys, setSelection } = await setup(t)
+  // No selection yet.
+  setSelection(null)
+  assert.equal((await services.modelRoute(first.id)).state, 'unselected')
+  // Nothing is registered as configurable for the default route, so nothing
+  // can be proven and the round must not be blocked.
+  setSelection({ provider: 'ordinary', model: 'dsh-default' })
+  assert.equal((await services.modelRoute(first.id)).state, 'not-applicable')
+  assert.equal((await services.modelRoute(first.id)).reason, null)
+
+  ctx.get = (name) => name === 'settings' ? { describe: () => [{ ns: 'llm-deepseek', value: { apiKeyEnv: 'DEEPSEEK_API_KEY' } }] } : undefined
+  ctx.llm = {
+    listProviders: () => [{ id: 'deepseek-official' }],
+    listConfigurableProviders: () => [{ provider: 'deepseek-official', settingsNs: 'llm-deepseek', settingsPath: [] }],
+    listModels: async () => [],
+  }
+  setSelection({ provider: 'deepseek-official', model: 'deepseek-flash' })
+  const missing = await services.modelRoute(first.id)
+  assert.equal(missing.state, 'missing-credential')
+  assert.equal(missing.provider, 'deepseek-official')
+  assert.equal(missing.ref, 'DEEPSEEK_API_KEY')
+  assert.match(missing.reason, /DEEPSEEK_API_KEY/)
+  keys.set('DEEPSEEK_API_KEY', 'configured')
+  assert.equal((await services.modelRoute(first.id)).state, 'ready')
+})
+
+test('a BYOK provider is classified from its own declared credential reference', async (t) => {
+  const { first, services, ctx, keys, setSelection } = await setup(t)
+  ctx.get = (name) => name === 'settings' ? {
+    describe: () => [
+      { ns: 'llm-deepseek', value: { apiKeyEnv: 'DEEPSEEK_API_KEY' } },
+      { ns: 'llm-pi-ai', value: { providers: { bailian: { apiKeyEnv: 'BAILIAN_API_KEY' } } } },
+      { ns: 'llm-deepseek-account', value: {} },
+    ],
+  } : undefined
+  ctx.llm = {
+    listProviders: () => [{ id: 'deepseek-official' }, { id: 'bailian' }, { id: 'deepseek-account' }],
+    listConfigurableProviders: () => [
+      { provider: 'deepseek-official', settingsNs: 'llm-deepseek', settingsPath: [] },
+      { provider: 'bailian', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'bailian'] },
+      { provider: 'deepseek-account', settingsNs: 'llm-deepseek-account', settingsPath: [] },
+    ],
+    listModels: async () => [],
+  }
+  keys.delete('BAILIAN_API_KEY')
+  setSelection({ provider: 'bailian', model: 'glm-5.3' })
+  const bailian = await services.modelRoute(first.id)
+  assert.equal(bailian.state, 'missing-credential')
+  assert.equal(bailian.ref, 'BAILIAN_API_KEY')
+  keys.set('BAILIAN_API_KEY', 'configured')
+  assert.equal((await services.modelRoute(first.id)).state, 'ready')
+
+  // An account route declares no credential reference: DSH resolves its
+  // authentication, so the pack reports it as not applicable, never as missing.
+  setSelection({ provider: 'deepseek-account', model: 'deepseek-v4-pro' })
+  const account = await services.modelRoute(first.id)
+  assert.equal(account.state, 'not-applicable')
+  assert.equal(account.reason, null)
+})
+
 test('AI roots use DSH defaults without pack model credentials and keep owned cwd and permissions', async (t) => {
   const { first, second, calls, services, ctx, settings, keys } = await setup(t)
   // Authentication belongs to the DSH adapter, including OAuth/environment
@@ -212,6 +273,40 @@ test('pack sessions use the official controller and remain resumable after facad
   assert.equal(resumed.id, session.id)
   assert.equal(calls.filter(([kind]) => kind === 'session.create').length, 2)
   await resumed.whenIdle()
+})
+
+test('a pack adopts the root Sessions it created through the native Agent service', async (t) => {
+  const { first, second, workspaces } = await setup(t)
+  const workspacePath = (await first.context()).workspacePath
+  const otherPath = (await second.context()).workspacePath
+  const adopted = 'sv-auto-schedule-1'
+  const agent = { id: adopted, session: { header: { cwd: workspacePath }, id: adopted } }
+
+  assert.equal((await first.sessions.adopt(agent)).workspacePath, workspacePath, 'adoption resolves with the owning workspace')
+  assert.ok((await workspaces.visibility(first.id)).sessionIds.includes(adopted), 'the adopted Session is pack-owned')
+  assert.ok(!(await workspaces.visibility(second.id)).sessionIds.includes(adopted), 'no other pack gains ownership')
+
+  // Reuse across rounds must not duplicate the record.
+  await first.sessions.adopt(agent)
+  assert.deepEqual((await workspaces.visibility(first.id)).sessionIds, [adopted])
+
+  // The Agent's cwd is the ownership proof: a foreign or unknown directory is refused.
+  for (const cwd of [otherPath, '/tmp/elsewhere', undefined]) {
+    await assert.rejects(first.sessions.adopt({ id: 'sv-auto-other', session: { header: { cwd } } }), /只能登记/)
+  }
+  await assert.rejects(first.sessions.adopt(null), /只能登记/)
+  assert.deepEqual((await workspaces.visibility(first.id)).sessionIds, [adopted], 'a refused adoption records nothing')
+
+  // The official controller's own Session may be adopted only by its owner.
+  await assert.rejects(
+    second.sessions.adopt({ id: adopted, session: { header: { cwd: otherPath } } }),
+    { code: 'PACK_WORKSPACE_COLLISION' },
+  )
+
+  // The Agent id must be resolvable; the Session header is the fallback.
+  await first.sessions.adopt({ session: { header: { cwd: workspacePath }, id: 'sv-auto-fallback' } })
+  assert.ok((await workspaces.visibility(first.id)).sessionIds.includes('sv-auto-fallback'))
+  await assert.rejects(first.sessions.adopt({ session: { header: { cwd: workspacePath } } }), /无法确认/)
 })
 
 test('pack sessions can own one directory each below the pack workspace', async (t) => {

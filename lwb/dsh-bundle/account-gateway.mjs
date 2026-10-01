@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { modelRouteState } from './pack-services.mjs'
 const remoteInitializers = []
 const PAYMENT_ROUTE = '/lwb/ats/payment'
 const PAYMENT_FORM_TTL_MS = 10 * 60 * 1000
@@ -28,8 +29,12 @@ export class LwbAccountGateway extends TypertRemoteService {
   }
   async taskModel() {
     const groups = await Promise.all(this.ctx.llm.listProviders().map(async provider => {
-      try { return { ...provider, models: await this.ctx.llm.listModels(provider.id) } }
-      catch { return { ...provider, models: [] } }
+      // The route's authentication state is display-only here: saving a model
+      // whose credential is not configured yet stays allowed, because the
+      // operator may configure it afterwards. `setTaskModel` is unchanged.
+      const auth = await modelRouteState(this.ctx, provider.id)
+      try { return { ...provider, auth, models: await this.ctx.llm.listModels(provider.id) } }
+      catch { return { ...provider, auth, models: [] } }
     }))
     return { config: this.ctx.lwbTaskModel.get(), selection: this.ctx.lwbTaskModel.selection(), groups }
   }

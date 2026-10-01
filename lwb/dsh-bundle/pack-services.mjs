@@ -3,22 +3,69 @@ import { packCredentialRef } from './pack-workspaces.mjs'
 import { PackTaskScope } from './pack-task-scope.mjs'
 import { openPackSettings } from './pack-settings.mjs'
 
-async function modelRouteAvailability(ctx, provider) {
-  if (provider.id !== 'deepseek-official') return {}
-  const unavailableReason = '未配置 DeepSeek API Key，请先在“设置 → 模型”中配置。'
-  try {
-    const route = ctx.llm.listConfigurableProviders().find((item) => item.provider === provider.id)
-    const settings = ctx.get('settings')
-    if (!route || !settings) throw new Error('Model settings unavailable')
-    const namespace = settings.describe({ redactSecrets: true }).find((item) => item.ns === route.settingsNs)
-    if (!namespace) throw new Error('Model route settings unavailable')
-    const profile = route.settingsPath.reduce((value, key) => value?.[key], namespace.value)
-    const ref = profile?.apiKeyEnv || 'DEEPSEEK_API_KEY'
-    const status = await ctx.credentials.describe(ref)
-    return status.configured ? { selectable: true } : { selectable: false, unavailableReason }
-  } catch {
-    return { selectable: false, unavailableReason: '无法确认 DeepSeek API Key 状态，请检查模型设置后刷新。' }
+/** How far one model route's authentication can be established without calling the provider. */
+export const MODEL_ROUTE_STATES = Object.freeze({
+  READY: 'ready',
+  MISSING_CREDENTIAL: 'missing-credential',
+  UNVERIFIABLE: 'unverifiable',
+  NOT_APPLICABLE: 'not-applicable',
+})
+
+function unverifiable(ref) {
+  return {
+    state: MODEL_ROUTE_STATES.UNVERIFIABLE,
+    ref: ref || null,
+    reason: ref
+      ? `无法确认 API Key（${ref}）的状态，请检查模型设置后刷新。`
+      : '无法确认该模型服务的凭据状态，请检查模型设置后刷新。',
   }
+}
+
+/**
+ * Classify one model route's authentication readiness.
+ *
+ * Only a provider that declares a credential reference in its own settings
+ * schema can be proven unconfigured: `deepseek-official` declares
+ * `apiKeyEnv = DEEPSEEK_API_KEY`, and a BYOK provider declares its own. A
+ * route that authenticates by account, device token or OAuth declares none,
+ * so it is reported as not applicable rather than as unavailable — the pack
+ * never inspects or rewrites DSH model authentication.
+ * @param ctx - host context exposing `llm`, `settings` and `credentials`.
+ * @param providerId - the provider id to classify.
+ * @returns a `MODEL_ROUTE_STATES` value with the credential reference and a display reason.
+ */
+export async function modelRouteState(ctx, providerId) {
+  const id = typeof providerId === 'string' ? providerId : ''
+  try {
+    const registrations = typeof ctx?.llm?.listConfigurableProviders === 'function' ? ctx.llm.listConfigurableProviders() : null
+    const route = Array.isArray(registrations) ? registrations.find((item) => item?.provider === id) || null : null
+    if (!route) return { state: MODEL_ROUTE_STATES.NOT_APPLICABLE, ref: null, reason: null }
+    const settings = ctx.get('settings')
+    if (!settings) return unverifiable()
+    const namespace = settings.describe({ redactSecrets: true }).find((item) => item.ns === route.settingsNs)
+    if (!namespace) return unverifiable()
+    const profile = route.settingsPath.reduce((value, key) => value?.[key], namespace.value)
+    const ref = typeof profile?.apiKeyEnv === 'string' && profile.apiKeyEnv.trim() ? profile.apiKeyEnv.trim() : null
+    if (!ref) return { state: MODEL_ROUTE_STATES.NOT_APPLICABLE, ref: null, reason: null }
+    try {
+      const status = await ctx.credentials.describe(ref)
+      if (status.configured) return { state: MODEL_ROUTE_STATES.READY, ref, reason: null }
+      return { state: MODEL_ROUTE_STATES.MISSING_CREDENTIAL, ref, reason: `未配置 API Key（${ref}），请先在“设置 → 模型”中完成该模型服务的配置。` }
+    } catch {
+      return unverifiable(ref)
+    }
+  } catch {
+    return { state: MODEL_ROUTE_STATES.NOT_APPLICABLE, ref: null, reason: null }
+  }
+}
+
+/** Project a route classification onto the pack model catalog's display fields. */
+function routeAvailability(route) {
+  if (route.state === MODEL_ROUTE_STATES.READY) return { selectable: true }
+  if (route.state === MODEL_ROUTE_STATES.MISSING_CREDENTIAL || route.state === MODEL_ROUTE_STATES.UNVERIFIABLE) {
+    return { selectable: false, unavailableReason: route.reason }
+  }
+  return {}
 }
 
 /** Scoped services issued by the host to one actually mounted package. */
@@ -44,7 +91,7 @@ export class LwbPackServices {
       models: Object.freeze({
         list: async () => Promise.all((this.ctx.llm?.listProviders?.() || []).map(async (provider) => ({
           ...provider,
-          ...await modelRouteAvailability(this.ctx, provider),
+          ...routeAvailability(await modelRouteState(this.ctx, provider.id)),
           models: await this.ctx.llm.listModels(provider.id).catch(() => []),
         }))),
       }),
@@ -76,6 +123,9 @@ export class LwbPackServices {
       sessions: Object.freeze({
         create: (options = {}) => tasks.track(this.createSession(id, options, tasks.signal, sessions)),
         resume: (sessionId, options = {}) => tasks.track(this.resumeSession(id, sessionId, options, tasks.signal, sessions)),
+        // A pack that owns its own Agent lifecycle (an unattended round, for
+        // example) bypasses create/resume, so it adopts the root it made.
+        adopt: (agent) => this.adoptSession(id, agent),
         get: (sessionId) => sessions.get(sessionId)?.public || null,
       }),
       assertAgent: async (agent) => {
@@ -117,8 +167,34 @@ export class LwbPackServices {
   async executionStatus(id) {
     this.forPack(id)
     // This checks selection only. Provider availability and authentication are
-    // validated by native DSH execution (including non-API-key auth methods).
+    // validated by native DSH execution (including non-API-key auth methods),
+    // and the pack must not read model credentials on this path.
     return { configured: this.defaultSelection() !== null }
+  }
+
+  /**
+   * Readiness of the model route the next pack AI task will actually use, so a
+   * scheduled round can state "this route has no credential" instead of dying
+   * on its first model request and reading as a stage failure.
+   *
+   * This is deliberately separate from `executionStatus`: that seam answers
+   * "is a model selected" without touching credentials, while this one may
+   * read one credential reference. Only a route proven to lack its declared
+   * credential is reported as unavailable; every unprovable case is reported
+   * as unverifiable or not applicable and must not block a task.
+   * @param id - capability pack id.
+   * @returns the effective selection with its `modelRouteState` classification.
+   */
+  async modelRoute(id) {
+    this.forPack(id)
+    const selection = this.defaultSelection()
+    if (!selection) {
+      return {
+        provider: null, model: null, state: 'unselected', ref: null,
+        reason: '尚未选择场景任务模型，请在“设置 → 系统设置 → 模型”中完成配置。',
+      }
+    }
+    return { provider: selection.provider, model: selection.model, ...await modelRouteState(this.ctx, selection.provider) }
   }
 
   async assertAccess(manifest) {
@@ -244,6 +320,31 @@ export class LwbPackServices {
     })
     sessions.set(sessionId, session)
     return session.public
+  }
+
+  /**
+   * Record one root Session a pack created through the native Agent service.
+   *
+   * Ordinary conversation projections hide pack-owned Sessions, and the
+   * ownership index is the host's durable record of them. A pack that creates
+   * its own root Agent bypasses `sessions.create`, so without this call the
+   * Session is owned only by convention and would surface in the operator's
+   * history. The Agent's own cwd is the proof: only a root inside the pack
+   * workspace may be adopted, so a pack can never adopt a user's Session.
+   * @param id - capability pack id.
+   * @param agent - live root Agent the pack created in its own workspace.
+   * @returns the pack workspace projection the Agent belongs to.
+   */
+  async adoptSession(id, agent) {
+    const context = await this.workspaces.context(id)
+    if (agent?.session?.header?.cwd !== context.workspacePath) {
+      throw new Error('只能登记该能力包工作区内的内部会话。')
+    }
+    const sessionId = typeof agent?.id === 'string' && agent.id !== '' ? agent.id
+      : typeof agent?.session?.id === 'string' ? agent.session.id : ''
+    if (!sessionId) throw new Error('无法确认需要登记的能力包会话标识。')
+    await this.workspaces.recordSession(id, sessionId)
+    return context
   }
 
   assertSession(id, address) {
