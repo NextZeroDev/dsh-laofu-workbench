@@ -7,7 +7,9 @@ import { installLwbEntryPolicy } from './lwb-entry-policy.mjs'
 
 const payload = join(process.resourcesPath, 'lwb-product')
 const build = JSON.parse(await readFile(join(payload, 'build.json'), 'utf8'))
-const productHome = process.env.LWB_PRODUCT_HOME || join(app.getPath('appData'), 'LaofuWorkbench')
+// Each edition owns a separate product root, so installing one edition never
+// rewrites the other edition's registry, credentials or pack workspaces.
+const productHome = process.env.LWB_PRODUCT_HOME || join(app.getPath('appData'), build.productHome || 'LaofuWorkbench')
 const runtime = join(productHome, 'runtime', build.id)
 // The writable copy owns peer links and dynamic pack code. Business data is
 // outside it; replacing a product build never rewrites a pack workspace.
@@ -29,7 +31,7 @@ Object.assign(process.env, {
   LWB_PACKS_DIR: join(runtime, 'lwb', 'packs'),
   DSH_DESKTOP_USER_DATA_DIR: join(productHome, 'electron-user-data'),
 })
-app.setName('Laofu Workbench')
+app.setName(build.productName || 'Laofu Workbench')
 app.setPath('userData', join(productHome, 'electron-user-data'))
 const { prepareLwbProfile } = await import(pathToFileURL(join(runtime, 'lwb', 'profile-setup.mjs')))
 await prepareLwbProfile()

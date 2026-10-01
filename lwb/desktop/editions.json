@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "default": "community",
+  "editions": {
+    "community": {
+      "productName": "Laofu Workbench",
+      "artifactName": "laofu-workbench-${version}-${os}-${arch}.${ext}",
+      "productHome": "LaofuWorkbench",
+      "protocolScheme": "lwb",
+      "packs": [
+        { "id": "spoken-video" }
+      ]
+    },
+    "commercial": {
+      "productName": "Laofu Workbench Commercial",
+      "artifactName": "laofu-workbench-commercial-${version}-${os}-${arch}.${ext}",
+      "productHome": "LaofuWorkbenchCommercial",
+      "protocolScheme": "lwb-commercial",
+      "packs": [
+        { "id": "spoken-video" },
+        { "id": "model-review", "source": "${LWB_COMMERCIAL_PACK_DIR}" }
+      ]
+    }
+  }
+}

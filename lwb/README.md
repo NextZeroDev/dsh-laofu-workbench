@@ -22,6 +22,7 @@
 | `pack-sdk/` | 第三方场景能力包的 manifest 与 host 注册契约 |
 | `pack-manager.mjs` | 本机能力包目录、安装状态与命令 |
 | `packs/` | 可独立安装的场景能力包源码 |
+| `desktop/` | 桌面打包入口、版本（edition）清单与产物组装 |
 | `upgrade/` | 上游检查和升级流程 |
 
 ## 场景能力包
