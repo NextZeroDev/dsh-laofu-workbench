@@ -1,10 +1,10 @@
 /** Package LWB around the unmodified official shell and verified runtime. */
-import { spawn } from 'node:child_process'
-import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { execFile, spawn } from 'node:child_process'
+import { cp, mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join, relative, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { parseArgs } from 'node:util'
+import { parseArgs, promisify } from 'node:util'
 import { assertUpstream, DSH_ROOT, UPSTREAM } from '../upstream.mjs'
 import { LWB_RUNTIME } from '../dsh-bundle/runtime-config.mjs'
 import { desktopPnpmInvocation } from './toolchain.mjs'
@@ -12,6 +12,22 @@ import { desktopPnpmInvocation } from './toolchain.mjs'
 assertUpstream()
 const { values } = parseArgs({ options: { dir: { type: 'boolean' }, check: { type: 'boolean' } } })
 if (!['darwin', 'win32'].includes(process.platform)) throw new Error('Official Desktop packaging supports macOS and Windows build hosts.')
+const execFileAsync = promisify(execFile)
+// A capability pack ships only when this repository owns its manifest. A pack
+// cloned or copied into lwb/packs/ is a local installation, not product source;
+// packaging it would ship unversioned third-party code inside the app. The
+// registry is the supported way to install an external or private pack.
+const packsDir = join(LWB_RUNTIME.projectRoot, 'lwb', 'packs')
+const ownedPacks = new Set(
+  (await execFileAsync('git', ['ls-files', 'lwb/packs/*/lwb-pack.json'], { cwd: LWB_RUNTIME.projectRoot }))
+    .stdout.split('\n').filter(Boolean).map(line => line.split('/')[2]),
+)
+for (const entry of await readdir(packsDir, { withFileTypes: true })) {
+  if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+  if (!ownedPacks.has(entry.name)) {
+    throw new Error(`lwb/packs/${entry.name} is not owned by this repository; remove it, or register it as an external pack with "npm run pack:install -- <directory>".`)
+  }
+}
 const appRoot = join(DSH_ROOT, 'apps/desktop')
 const { loadDesktopPackageEnvironment, validateDesktopPackageEnvironment } = await import(pathToFileURL(join(appRoot, 'scripts/desktop-package-environment.mjs')))
 const env = loadDesktopPackageEnvironment(process.platform)
@@ -43,7 +59,7 @@ for (const path of ['dsh-bundle', 'pack-sdk', 'packs', 'profile-setup.mjs']) {
     recursive: true,
     filter: async source => {
       const parts = relative(join(LWB_RUNTIME.projectRoot, 'lwb'), source).split(sep)
-      if (parts.includes('node_modules') || parts.includes('test')) return false
+      if (parts.includes('node_modules') || parts.includes('test') || parts.includes('.git')) return false
       const { stat } = await import('node:fs/promises')
       if ((await stat(source)).isFile()) digest.update(relative(LWB_RUNTIME.projectRoot, source)).update(await readFile(source))
       return true
