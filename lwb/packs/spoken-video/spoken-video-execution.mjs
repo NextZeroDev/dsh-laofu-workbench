@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFile, realpath, stat, readdir } from 'node:fs/promises'
 import { resolve, relative, isAbsolute, sep, extname } from 'node:path'
 import { spokenVideoDataPath } from './spoken-video-paths.mjs'
+import { displayValue } from './spoken-video-redact.mjs'
 import { expandAssistantStream } from '@deepseek-ai/dsh-llm'
 
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u
@@ -13,24 +14,7 @@ const KINDS = {
   account: ['account-generations.json', 'generations', '账号定位'],
   source: ['signals.json', 'runs', '信号采集'],
 }
-const SECRET = /^(?:authorization|cookie|api[-_]?key|access[-_]?token|refresh[-_]?token|password|secret|credential)$/iu
-
-/** Display content is opt-in; credentials and transport blobs are never display fields. */
-export function displayValue(value) {
-  if (typeof value === 'string') {
-    if (/^\s*[{[]/u.test(value)) {
-      try { return JSON.stringify(displayValue(JSON.parse(value)), null, 2) } catch { /* A streaming fragment need not be complete JSON. */ }
-    }
-    return value
-      .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu, 'Bearer [已隐藏]')
-      .replace(/\bsk-[A-Za-z0-9_-]{12,}/gu, '[已隐藏]')
-      .replace(/(["']?(?:api[-_]?key|access[-_]?token|refresh[-_]?token|password|secret|authorization)["']?\s*[:=]\s*["']?)[^"'\s,}]+/giu, '$1[已隐藏]')
-  }
-  if (Array.isArray(value)) return value.map(displayValue)
-  if (!value || typeof value !== 'object') return value
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !['audio_base64', 'image_base64'].includes(key))
-    .map(([key, item]) => [key, SECRET.test(key) ? '[已隐藏]' : displayValue(item)]))
-}
+export { displayValue }
 
 export function executionEvent(record, label, { status = 'done', detail = null, actor = '主机', phase = null } = {}) {
   const events = record.executionEvents ||= []

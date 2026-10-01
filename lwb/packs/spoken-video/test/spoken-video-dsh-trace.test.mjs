@@ -5,6 +5,7 @@ import {
   appendDshSessionTrace,
   dshTrace,
   ensureDshTrace,
+  lastDshFailureDetail,
   projectDshSessionEvent,
   startDshTraceSession,
 } from '../spoken-video-dsh-trace.mjs'
@@ -66,4 +67,60 @@ test('projects max-token turn endings as a recoverable continuation state', () =
     label: 'DSH 达到单次输出上限，正在继续',
     detail: null,
   })
+})
+
+test('states why a failed turn failed, with credentials stripped and the line bounded', () => {
+  const at = '2026-09-29T13:00:41.319Z'
+  const failed = projectDshSessionEvent({
+    seq: 16,
+    time: Date.parse(at),
+    type: 'turn/end',
+    data: {
+      turn: 1,
+      reason: {
+        kind: 'error',
+        error: {
+          code: 'MISSING_CREDENTIAL',
+          message: 'llm-deepseek: no API key for provider route "deepseek-official"; store DEEPSEEK_API_KEY through the credentials service',
+        },
+      },
+    },
+  }, at)
+  assert.equal(failed.status, 'error')
+  assert.equal(failed.label, 'DSH 生成未正常结束')
+  assert.match(failed.detail, /^MISSING_CREDENTIAL：/)
+  assert.match(failed.detail, /deepseek-official/)
+
+  const leaked = projectDshSessionEvent({
+    seq: 17,
+    time: Date.parse(at),
+    type: 'turn/end',
+    data: { turn: 2, reason: { kind: 'error', error: { message: 'upstream rejected Bearer abc.def-ghi with sk-abcdefghijklmnop\nand api_key: supersecret' } } },
+  }, at)
+  assert.equal(leaked.detail.includes('abc.def-ghi'), false)
+  assert.equal(leaked.detail.includes('sk-abcdefghijklmnop'), false)
+  assert.equal(leaked.detail.includes('supersecret'), false)
+  assert.equal(leaked.detail.includes('\n'), false)
+
+  const bounded = projectDshSessionEvent({
+    seq: 18,
+    time: Date.parse(at),
+    type: 'turn/end',
+    data: { turn: 3, reason: { kind: 'error', error: { message: 'x'.repeat(2000) } } },
+  }, at)
+  assert.equal(bounded.detail.length, 240)
+
+  const bare = projectDshSessionEvent({ seq: 19, time: Date.parse(at), type: 'turn/end', data: { turn: 4, reason: { kind: 'aborted' } } }, at)
+  assert.equal(bare.status, 'error')
+  assert.equal(bare.detail, null, 'a reason with no failure object states nothing rather than inventing text')
+})
+
+test('reads the most recent recorded failure out of a trace for the durable record', () => {
+  const trace = dshTrace()
+  assert.equal(lastDshFailureDetail(trace), null)
+  appendDshTrace(trace, { id: 'session-1', at: '2026-09-29T13:00:41.000Z', status: 'running', label: 'DSH 正在请求模型生成', detail: null })
+  appendDshTrace(trace, { id: 'session-2', at: '2026-09-29T13:00:41.100Z', status: 'error', label: '一个工具步骤未完成', detail: null })
+  assert.equal(lastDshFailureDetail(trace), null, 'an error without a stated cause contributes nothing')
+  appendDshTrace(trace, { id: 'session-3', at: '2026-09-29T13:00:41.200Z', status: 'error', label: 'DSH 生成未正常结束', detail: 'MISSING_CREDENTIAL：no API key for route "deepseek-official"' })
+  assert.equal(lastDshFailureDetail(trace), 'MISSING_CREDENTIAL：no API key for route "deepseek-official"')
 })
