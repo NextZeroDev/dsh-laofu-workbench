@@ -118,7 +118,7 @@ await writeFile(join(payload, 'build.json'), JSON.stringify({
   upstream: UPSTREAM,
 }))
 const productVersion = JSON.parse(await readFile(join(LWB_RUNTIME.projectRoot, 'package.json'), 'utf8')).version
-const buildNumber = env.GITHUB_RUN_NUMBER ?? '1'
+const buildNumber = env.LWB_DESKTOP_BUILD_NUMBER ?? env.GITHUB_RUN_NUMBER ?? '1'
 if (!/^\d+$/u.test(buildNumber)) throw new Error('Desktop test build number must be numeric')
 const identity = {
   productName: edition.productName,

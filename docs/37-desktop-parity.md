@@ -66,7 +66,19 @@ npm run package:desktop:portable -- --edition commercial
 
 Windows 产物是可直接运行的 portable `.exe`，macOS 产物是包含 `.app` 的 `.zip`，不生成 NSIS 安装器或 DMG。程序数据写入用户数据目录，不要求把压缩包目录作为可写目录。未签名模式不读取签名环境文件，不调用 Apple 公证或 Windows 签名硬件。macOS 原生组件使用临时 ad-hoc 签名满足 Apple Silicon 的加载要求，不代表 Developer ID 签名或公证；首次打开仍可能受到 Gatekeeper 或 SmartScreen 提示。
 
-测试包关闭自动更新与强制更新服务，版本为 LWB 根版本加 `-test.<构建编号>`（Actions 使用 `GITHUB_RUN_NUMBER`，本机构建为 `1`），文件名明确带 `-portable-unsigned`。两版使用不同 app ID，输出分开放在 `.tooling/artifacts/<edition>/<target>/`。
+测试包关闭自动更新与强制更新服务，版本为 LWB 根版本加 `-test.<构建编号>`。构建编号优先使用 `LWB_DESKTOP_BUILD_NUMBER`，其次为 Actions 的 `GITHUB_RUN_NUMBER`，默认 `1`；同一 Release 的 Windows 和 macOS 构建必须使用相同编号。文件名明确带 `-portable-unsigned`。两版使用不同 app ID，输出分开放在 `.tooling/artifacts/<edition>/<target>/`。
+
+Windows 两版在商业私有仓库的自托管 Windows x64 Runner 上构建，通过 Actions 的 `Desktop portable test builds` 手动触发，填写构建编号。macOS 两版在本机 Apple Silicon Mac 构建：
+
+```bash
+export LWB_DESKTOP_BUILD_NUMBER=20261002
+npm run package:desktop:unsigned
+LWB_COMMERCIAL_PACK_DIR=/absolute/path/to/commercial-pack npm run package:desktop:unsigned -- --edition commercial
+node scripts/collect-desktop-artifacts.mjs --edition community --target mac-arm64
+node scripts/collect-desktop-artifacts.mjs --edition commercial --target mac-arm64
+```
+
+每组产物必须通过实际打包宿主的能力包加载、卸载、重新加载、浏览器模块注册和重启恢复验收。Windows workflow 将成品、SHA256 校验值和构建报告上传到私有仓库 Draft Release，不使用 Actions Artifact 存储。macOS 验收完成后汇总同版本产物：社区版发布到公开仓库，商业版发布到私有仓库。正式发布前核对两端文件和校验值；未签名测试包标记为预发布。
 
 官方源码保持原样。未签名模式通过仅在构建子进程启用的内存适配复用官方运行时准备、完整性校验与烟雾测试；适配与锁定的上游结构不匹配时会报错。此模式只用于测试分发，正式签名构建仍使用原有校验。
 

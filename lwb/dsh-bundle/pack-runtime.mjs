@@ -78,8 +78,10 @@ export class LwbPackRuntime {
     }
 
     await linkLwbPackForRuntime(pack)
+    await this.driver.refreshResolution()
     const before = new Set(this.entriesFor(packageName).map((entry) => entry.id))
     try {
+      await this.driver.importPackage(packageName)
       await this.ctx.lwbPackServices?.mount(pack.manifest)
       const entries = [
         await this.createEntry({ name: packageName }),
