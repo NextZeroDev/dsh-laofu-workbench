@@ -20,10 +20,14 @@ for (const file of files) {
 }
 const upstream = JSON.parse(await readFile('lwb/UPSTREAM.lock.json', 'utf8'))
 const product = JSON.parse(await readFile('package.json', 'utf8'))
+const buildNumber = process.env.LWB_DESKTOP_BUILD_NUMBER ?? process.env.GITHUB_RUN_NUMBER ?? '1'
+if (!/^\d+$/u.test(buildNumber)) throw new Error('Desktop test build number must be numeric')
 const report = {
-  edition: values.edition, target: values.target, version: `${product.version}-test.${process.env.GITHUB_RUN_NUMBER ?? '1'}`,
+  edition: values.edition, target: values.target, version: `${product.version}-test.${buildNumber}`,
   unsigned: true, portable: true, notarized: false, autoUpdate: false,
   workflowCommit: process.env.GITHUB_SHA ?? null, upstream, artifacts: records,
+  runner: process.env.RUNNER_NAME ?? null,
+  packagedPackAcceptance: true,
 }
 await writeFile(join(directory, 'SHA256SUMS.txt'), records.map(record => `${record.sha256}  ${record.file}\n`).join(''))
 await writeFile(join(directory, 'build-report.json'), `${JSON.stringify(report, null, 2)}\n`)
