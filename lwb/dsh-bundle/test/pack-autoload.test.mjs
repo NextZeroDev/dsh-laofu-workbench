@@ -120,6 +120,8 @@ test('only workbench-loaded packs are enabled and restored at startup', async (t
 
   const harness = runtimeContext(new Map([[live.manifest.id, live.manifest], [broken.manifest.id, broken.manifest]]))
   const runtime = new LwbPackRuntime(harness.ctx)
+  runtime.driver.refreshResolution = async () => {}
+  runtime.driver.importPackage = async () => {}
   const restored = await runtime.restore()
 
   assert.deepEqual(restored.loaded.map((item) => item.id), [live.manifest.id])

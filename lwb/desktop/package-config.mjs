@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { cp, mkdir } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DSH_ROOT } from '../upstream.mjs'
+import { verifyPackagedPacks } from './pack-smoke.mjs'
 
 /**
  * Extend the official builder configuration without modifying its source.
@@ -30,7 +31,25 @@ export async function createLwbPackageConfig(payload, identity) {
   await cp(fileURLToPath(new URL('./bootstrap.mjs', import.meta.url)), join(entry, 'lwb-bootstrap.mjs'))
   await cp(fileURLToPath(new URL('./entry-policy.mjs', import.meta.url)), join(entry, 'lwb-entry-policy.mjs'))
   config.files.push({ from: entry, to: '.', filter: ['lwb-bootstrap.mjs', 'lwb-entry-policy.mjs'] })
-  config.extraResources.push({ from: payload, to: 'lwb-product' })
+  applyLwbProductResources(config, payload)
+  const afterPack = config.afterPack
+  config.afterPack = async context => {
+    await afterPack?.(context)
+    const filename = context.packager.appInfo.productFilename
+    const executable = context.electronPlatformName === 'darwin'
+      ? join(context.appOutDir, `${filename}.app`, 'Contents', 'MacOS', filename)
+      : join(context.appOutDir, `${filename}.exe`)
+    await verifyPackagedPacks({ executable, resources: context.packager.getResourcesDir(context.appOutDir) })
+  }
+  return config
+}
+
+export function applyLwbProductResources(config, payload) {
+  config.extraResources.push(
+    { from: payload, to: 'lwb-product', filter: ['**/*'] },
+    // electron-builder excludes a FileSet source's root node_modules.
+    { from: join(payload, 'node_modules'), to: 'lwb-product/node_modules', filter: ['**/*'] },
+  )
   return config
 }
 

@@ -1,4 +1,9 @@
 /** The one supported DSH Loader contract. No version fallbacks. */
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { LWB_RUNTIME } from '../runtime-config.mjs'
+import { dshPackageDirectory } from './package-paths.mjs'
+
 const FIBER_ACTIVE = 2
 
 export function restoreEnabledPacks(ctx, packRuntime) {
@@ -60,6 +65,20 @@ export function projectClientBundle(graph, packageName) {
 
 export class DshPackDriver {
   constructor(ctx, group) { this.ctx = ctx; this.group = group }
+
+  async refreshResolution() {
+    const { createRuntimeResolution, loadProfileDirectory } = await import(pathToFileURL(join(dshPackageDirectory('@deepseek-ai/dsh-app-boot'), 'lib', 'index.js')))
+    const installAnchor = join(dshPackageDirectory('@deepseek-ai/dsh'), 'package.json')
+    const profile = loadProfileDirectory('dsh', LWB_RUNTIME.profileHome, installAnchor)
+    // New profile links must enter the host's routing table before imports.
+    this.ctx.pluginPackages.replace(await createRuntimeResolution({ installAnchor, profile, home: LWB_RUNTIME.dshHome }))
+  }
+
+  async importPackage(packageName) {
+    // Entry.init logs import errors and returns without a fiber. Import through
+    // the same tree first so the caller receives the original dependency error.
+    await (this.group?.tree ?? this.ctx.loader).import(packageName)
+  }
 
   entriesFor(packageName) {
     const entries = this.group

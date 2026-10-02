@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { LwbPackRuntime } from '../pack-runtime.mjs'
+import { DshPackDriver } from '../dsh-adapter/loader.mjs'
+
+test('dependency import failures reach the caller before Loader hides them', async () => {
+  const error = new Error('Cannot find package ws')
+  const driver = new DshPackDriver({}, { tree: { import: async () => { throw error } } })
+  await assert.rejects(driver.importPackage('@test/pack'), failure => failure === error)
+})
 
 test('dynamic group entries remain owned and removal awaits asynchronous service disposal', async () => {
   const entries = new Map()

@@ -1,6 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyLwbPortableTargets } from './package-config.mjs'
+import { applyLwbPortableTargets, applyLwbProductResources } from './package-config.mjs'
+import { join } from 'node:path'
+
+test('product resources explicitly include installed production dependencies', () => {
+  const config = applyLwbProductResources({ extraResources: [] }, '/product')
+  assert.ok(config.extraResources.some(resource => resource.from === join('/product', 'node_modules') && resource.to === 'lwb-product/node_modules' && resource.filter.includes('**/*')))
+})
 
 test('portable targets emit a macOS app zip and a Windows portable executable', () => {
   const config = applyLwbPortableTargets({

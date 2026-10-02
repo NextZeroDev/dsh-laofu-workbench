@@ -60,5 +60,6 @@ export async function prepareLwbProfile(profileDir = LWB_RUNTIME.profileHome) {
   const bundle = join(LWB_RUNTIME.projectRoot, 'lwb', 'dsh-bundle')
   await linkProductPeers(join(LWB_RUNTIME.projectRoot, 'lwb', 'pack-sdk'))
   await linkProductPeers(bundle)
+  await ensureLink(join(profileDir, 'node_modules', '@scitiger-ai', 'lwb-pack-sdk'), join(LWB_RUNTIME.projectRoot, 'lwb', 'pack-sdk'))
   await ensureLink(join(profileDir, 'node_modules', '@scitiger-ai', 'lwb-dsh-bundle'), bundle)
 }

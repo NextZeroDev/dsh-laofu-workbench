@@ -12,6 +12,11 @@
     "./lwb-pack.json": "./lwb-pack.json",
     "./package.json": "./package.json"
   },
+  "dependencies": {
+    "@babel/parser": "7.24.1",
+    "postcss": "8.5.28",
+    "ws": "8.18.3"
+  },
   "peerDependencies": {
     "@deepseek-ai/schemastery": "3.18.4",
     "@deepseek-ai/dsh-credentials": "0.2.0-rc.2",
