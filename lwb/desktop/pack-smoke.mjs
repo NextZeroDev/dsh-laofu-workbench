@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { execFile, fork } from 'node:child_process'
 import { once } from 'node:events'
-import { cp, mkdtemp, readFile, readdir, realpath, rm } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { request } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -30,7 +30,7 @@ export function requestPackagedHost(address, { method = 'GET', headers, body, ti
 
 export async function verifyPackagedPacks({ executable, resources }) {
   const home = await realpath(await mkdtemp(join(tmpdir(), 'lwb-packaged-packs-')))
-  const runtime = join(home, 'runtime')
+  const runtime = join(home, 'runtime', 'current-build')
   const dsh = join(resources, 'app.asar', 'dsh')
   let child, output = '', starts = 0
   const env = { ...process.env }
@@ -46,6 +46,7 @@ export async function verifyPackagedPacks({ executable, resources }) {
     LWB_PROFILE_DIR: join(home, 'dsh-home', 'profiles', 'desktop'),
     LWB_DSH_RUNTIME_DIR: dsh,
     LWB_PACKS_DIR: join(runtime, 'lwb', 'packs'),
+    LWB_PACK_RUNTIME_DIR: join(runtime, 'lwb', 'packs'),
     LWB_SMOKE_RUNTIME: runtime,
     DSH_CLIENT_VERSION: 'packaged-acceptance',
   })
@@ -112,21 +113,54 @@ export async function verifyPackagedPacks({ executable, resources }) {
       return result.value
     }
   }
-  try {
-    await cp(join(resources, 'lwb-product'), runtime, { recursive: true })
+  async function prepareProfile() {
     await execFileAsync(executable, ['--expose-internals', '--input-type=module', '--eval', `
       import { pathToFileURL } from 'node:url'
       import { join } from 'node:path'
+      const { migrateRuntimePackRegistry } = await import(pathToFileURL(join(${JSON.stringify(resources)}, 'app.asar', 'registry-migration.mjs')))
+      await migrateRuntimePackRegistry(join(process.env.LWB_PRODUCT_HOME, 'packs.json'), {
+        productHome: process.env.LWB_PRODUCT_HOME, currentRuntime: process.env.LWB_SMOKE_RUNTIME,
+      })
       const { prepareLwbProfile } = await import(pathToFileURL(join(process.env.LWB_SMOKE_RUNTIME, 'lwb', 'profile-setup.mjs')))
       await prepareLwbProfile()
     `], { env, cwd: home, timeout: 30_000 })
+  }
+  async function seedUpgrade(packs, enabled) {
+    const records = []
+    for (const pack of packs) {
+      const source = join(home, 'runtime', `old-build-${enabled}`, 'lwb', 'packs', pack.id)
+      await cp(join(env.LWB_PACKS_DIR, pack.id), source, {
+        recursive: true, filter: source => !source.split(/[\\/]/u).includes('node_modules'),
+      })
+      const link = join(env.LWB_PROFILE_DIR, 'node_modules', ...pack.packageName.split('/'))
+      await mkdir(join(link, '..'), { recursive: true })
+      await rm(link, { force: true })
+      await symlink(source, link, process.platform === 'win32' ? 'junction' : 'dir')
+      records.push({ id: pack.id, packageName: pack.packageName, source,
+        installedAt: '2026-01-01T00:00:00.000Z', enabled, manifest: pack })
+    }
+    await writeFile(join(home, 'packs.json'), JSON.stringify({ schemaVersion: 2, packs: records }))
+    await prepareProfile()
+    for (const pack of packs) {
+      const link = join(env.LWB_PROFILE_DIR, 'node_modules', ...pack.packageName.split('/'))
+      assert.equal(await realpath(link), await realpath(join(env.LWB_PACKS_DIR, pack.id)))
+    }
+    console.log(`Packaged upgrade preparation passed: old registry and Profile links, enabled=${enabled}.`)
+  }
+  try {
+    await cp(join(resources, 'lwb-product'), runtime, { recursive: true })
     const packs = []
     for (const id of await readdir(env.LWB_PACKS_DIR)) {
       packs.push(JSON.parse(await readFile(join(env.LWB_PACKS_DIR, id, 'lwb-pack.json'), 'utf8')))
     }
     const free = packs.filter(pack => !pack.access?.membershipRequired)
     assert.ok(free.length, 'the edition must ship a keyless pack for lifecycle acceptance')
+    await prepareProfile()
     let rpc = await start()
+    assert.equal((await rpc('lwbPacks/list')).packs.length, 0)
+    await stop()
+    await seedUpgrade(free, false)
+    rpc = await start()
     assert.equal((await rpc('lwbPacks/list')).packs.length, 0)
     for (const pack of free) {
       const loaded = await rpc('lwbPacks/load', { request: { id: pack.id } })
@@ -139,7 +173,12 @@ export async function verifyPackagedPacks({ executable, resources }) {
       await rpc('lwbPacks/load', { request: { id: pack.id } })
     }
     await rpc('spokenVideo/createAccount', { request: { name: 'Packaged acceptance account' } })
+    // Keep lifecycle acceptance independent of scheduled external feed fetches.
+    for (const source of await rpc('spokenVideo/sources')) {
+      await rpc('spokenVideo/setSourceEnabled', { request: { sourceId: source.id, enabled: false } })
+    }
     await stop()
+    await seedUpgrade(free, true)
     rpc = await start()
     for (const pack of free) assert.ok((await rpc('lwbPacks/list')).packs.some(row => row.id === pack.id))
     assert.equal((await rpc('spokenVideo/listAccounts')).accounts[0].name, 'Packaged acceptance account')
@@ -164,7 +203,7 @@ export async function verifyPackagedPacks({ executable, resources }) {
       await ctx.plugin(PluginPackages, { resolution: await createRuntimeResolution({ installAnchor, profile, home: process.env.DSH_HOME }) }).await()
       for (const pack of packs) await import(pathToFileURL(join(pack.source, pack.hostEntry)))
     `], { env, cwd: home, timeout: 30_000 })
-    console.log(`Packaged pack acceptance passed: ${free.length} load/unload/restore lifecycle(s), ${packs.length} host imports, browser graph and persistent account.`)
+    console.log(`Packaged pack acceptance passed: disabled/enabled upgrade links, ${free.length} load/unload/restore lifecycle(s), ${packs.length} host imports, browser graph and persistent account.`)
   } catch (error) {
     console.error(output.replace(/token=[^\s&]+/gu, 'token=[redacted]'))
     throw error

@@ -22,8 +22,9 @@ const upstream = JSON.parse(await readFile('lwb/UPSTREAM.lock.json', 'utf8'))
 const product = JSON.parse(await readFile('package.json', 'utf8'))
 const buildNumber = process.env.LWB_DESKTOP_BUILD_NUMBER ?? process.env.GITHUB_RUN_NUMBER ?? '1'
 if (!/^\d+$/u.test(buildNumber)) throw new Error('Desktop test build number must be numeric')
+const release = process.env.LWB_DESKTOP_RELEASE === '1'
 const report = {
-  edition: values.edition, target: values.target, version: `${product.version}-test.${buildNumber}`,
+  edition: values.edition, target: values.target, version: release ? product.version : `${product.version}-test.${buildNumber}`,
   unsigned: true, portable: true, notarized: false, autoUpdate: false,
   workflowCommit: process.env.GITHUB_SHA ?? null, upstream, artifacts: records,
   runner: process.env.RUNNER_NAME ?? null,

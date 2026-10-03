@@ -98,8 +98,8 @@ test('the commercial edition resolves a private pack from its pinned source', as
   })
   assert.deepEqual(edition.packs.map(pack => pack.id), ['spoken-video', 'model-review'])
   assert.equal(edition.packs[1].source, await realpath(commercial))
-  assert.equal(edition.productHome, 'LaofuWorkbenchCommercial')
-  assert.equal(edition.protocolScheme, 'lwb-commercial')
+  assert.equal(edition.productHome, 'LaofuWorkbench')
+  assert.equal(edition.protocolScheme, 'lwb')
 })
 
 test('a source-less pack must be owned by this repository', async (t) => {

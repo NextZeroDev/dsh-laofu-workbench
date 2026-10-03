@@ -7,8 +7,9 @@ import { verifyPackagedPacks } from './pack-smoke.mjs'
 /**
  * Extend the official builder configuration without modifying its source.
  *
- * The identity is the resolved edition, so each edition produces its own
- * product name, artifact name and URL scheme instead of overwriting the other.
+ * The identity is the resolved build input. The official build uses the
+ * complete capability set while keeping one product name, data root and URL
+ * scheme for every user.
  */
 export async function createLwbPackageConfig(payload, identity) {
   if (!identity?.productName || !identity?.artifactName || !identity?.protocolScheme) {
@@ -30,7 +31,8 @@ export async function createLwbPackageConfig(payload, identity) {
   await mkdir(entry, { recursive: true })
   await cp(fileURLToPath(new URL('./bootstrap.mjs', import.meta.url)), join(entry, 'lwb-bootstrap.mjs'))
   await cp(fileURLToPath(new URL('./entry-policy.mjs', import.meta.url)), join(entry, 'lwb-entry-policy.mjs'))
-  config.files.push({ from: entry, to: '.', filter: ['lwb-bootstrap.mjs', 'lwb-entry-policy.mjs'] })
+  await cp(fileURLToPath(new URL('./registry-migration.mjs', import.meta.url)), join(entry, 'registry-migration.mjs'))
+  config.files.push({ from: entry, to: '.', filter: ['lwb-bootstrap.mjs', 'lwb-entry-policy.mjs', 'registry-migration.mjs'] })
   applyLwbProductResources(config, payload)
   const afterPack = config.afterPack
   config.afterPack = async context => {

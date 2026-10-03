@@ -41,6 +41,7 @@ window.__ModuleLoader__.load({
     let lwbAccountGeneration = 0;
     const lwbAccountListeners = new Set();
     let lwbAccountRequest;
+    let packAccountSnapshot;
     let dshAccountState = { phase: 'unavailable', status: 'signed-out', attempt: null, error: null };
     const dshAccountListeners = new Set();
     let dshAccountStreamDispose;
@@ -136,6 +137,13 @@ window.__ModuleLoader__.load({
     function setLwbAccountState(next) {
       lwbAccountState = Object.assign({}, lwbAccountState, next);
       lwbAccountListeners.forEach((listener) => listener());
+      if (['authenticated', 'anonymous'].includes(lwbAccountState.phase)) {
+        const snapshot = JSON.stringify([lwbAccountState.user?.id, lwbAccountState.membership, lwbAccountState.entitlements]);
+        if (snapshot !== packAccountSnapshot) {
+          packAccountSnapshot = snapshot;
+          void refreshPackCatalog({ retain: true }).catch(() => {});
+        }
+      }
     }
     function useLwbAccount() {
       return React.useSyncExternalStore(
@@ -408,6 +416,7 @@ window.__ModuleLoader__.load({
     let packVisibility = null;
     const packCatalogListeners = new Set();
     let packMarket = { phase: 'pending', packs: [], error: null };
+    let packCatalogGeneration = 0;
     const packMarketListeners = new Set();
     let lwbPackClient;
     let lwbPackClientRuntime;
@@ -515,6 +524,8 @@ window.__ModuleLoader__.load({
     }
     async function refreshPackCatalog(options = {}) {
       if (!services?.connection?.rpc?.call) return;
+      const generation = ++packCatalogGeneration;
+      const accountGeneration = lwbAccountGeneration;
       const retain = options.retain === true;
       if (!retain) {
         setPackCatalog({ phase: 'pending', packs: packCatalog.packs, error: null });
@@ -526,6 +537,7 @@ window.__ModuleLoader__.load({
           services.connection.rpc.call('/api', 'lwbPacks/market', { args: {} }),
           services.connection.rpc.call('/api', 'lwbPacks/visibility', { args: {} }),
         ]);
+        if (generation !== packCatalogGeneration || accountGeneration !== lwbAccountGeneration) return;
         if (!visibilityResponse?.ok) throw new Error(visibilityResponse?.error?.message || '无法读取能力包工作区归属。');
         packVisibility = visibilityResponse.value;
         if (!activeResponse?.ok) throw new Error(activeResponse?.error?.message || '无法读取已加载能力包。');
@@ -533,6 +545,7 @@ window.__ModuleLoader__.load({
         if (!marketResponse?.ok) throw new Error(marketResponse?.error?.message || '无法读取能力包市场。');
         setPackMarket(normalizePackMarket(marketResponse.value));
       } catch (error) {
+        if (generation !== packCatalogGeneration || accountGeneration !== lwbAccountGeneration) return;
         const message = error?.message || '无法读取能力包目录。';
         if (retain) {
           setPackCatalog({ phase: 'ready', packs: packCatalog.packs, error: message });
@@ -1406,6 +1419,7 @@ window.__ModuleLoader__.load({
     function PacksPage() {
       const copy = useLwbCopy();
       const market = usePackMarket();
+      React.useEffect(() => { void refreshPackCatalog({ retain: true }).catch(() => {}); }, []);
       const [detailPack, setDetailPack] = React.useState(null);
       const [query, setQuery] = React.useState('');
       const [statusFilter, setStatusFilter] = React.useState('all');

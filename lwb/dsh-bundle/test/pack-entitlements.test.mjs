@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { LwbPackEntitlements } from '../pack-entitlements.mjs'
+import { LwbAccountGateway } from '../account-gateway.mjs'
+import { Context } from '../../../vendor/deepseek-harness/vendor/cordis/lib/index.js'
 
 const manifest = { access: { account: 'lwb', membershipRequired: true } }
 
@@ -21,4 +23,44 @@ test('membership policy allows active paid plans and rejects free or expired pla
 test('non-gated packs remain available without an account', async () => {
   const result = await new LwbPackEntitlements(account({ user: null, membership: null })).check({})
   assert.deepEqual(result, { allowed: true, required: false, reason: null })
+})
+
+test('an account change discards a pending anonymous membership check', async () => {
+  let resolveAnonymous, changed, reads = 0
+  const policy = new LwbPackEntitlements({
+    subscribe(listener) { changed = listener; return () => {} },
+    status() {
+      reads++
+      if (reads === 1) return new Promise(resolve => { resolveAnonymous = resolve })
+      return Promise.resolve({ user: { id: 'member' }, membership: { planCode: 'business', status: 'active' } })
+    },
+  })
+  const oldCheck = policy.check(manifest)
+  changed()
+  assert.equal((await policy.check(manifest)).allowed, true)
+  resolveAnonymous({ user: null, membership: null })
+  assert.equal((await oldCheck).allowed, true)
+  assert.equal((await policy.check(manifest)).allowed, true)
+  assert.equal(reads, 2)
+})
+
+test('refreshing account status makes a newly purchased membership available immediately', async () => {
+  let status = { user: { id: 'member' }, membership: { planCode: 'free', status: 'active' } }
+  const ats = { async status() { return status }, async catalog() { return {} } }
+  const policy = new LwbPackEntitlements(ats)
+  const ctx = new Context()
+  ctx.provide('lwbAtsClient', ats)
+  ctx.provide('lwbPackEntitlements', policy)
+  ctx.provide('webServer', { register() { return () => {} } })
+  ctx.provide('lwbTaskModel', {})
+  ctx.provide('llm', {})
+  try {
+    await ctx.plugin(LwbAccountGateway).await()
+    assert.equal((await policy.check(manifest)).allowed, false)
+    status = { user: { id: 'member' }, membership: { planCode: 'business', status: 'active' } }
+    await ctx.get('lwbAccount').status()
+    assert.equal((await policy.check(manifest)).allowed, true)
+  } finally {
+    await ctx.fiber.dispose()
+  }
 })

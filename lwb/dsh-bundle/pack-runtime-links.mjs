@@ -1,11 +1,11 @@
-import { cp, lstat, mkdir, readFile, readlink, rm, symlink, unlink } from 'node:fs/promises'
+import { cp, lstat, mkdir, readFile, readlink, realpath, rm, symlink, unlink } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { LWB_RUNTIME, lwbProfilePath } from './runtime-config.mjs'
 import { dshPackageDirectory } from './dsh-adapter/package-paths.mjs'
+import { marketplaceLwbPacks } from './pack-manager.mjs'
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const PROFILE_NODE_MODULES = join(lwbProfilePath(), 'node_modules')
 
 function packagePath(nodeModules, packageName) {
   const segments = packageName.split('/')
@@ -41,6 +41,8 @@ function runtimePackPath(pack) {
 async function preparePackSource(pack) {
   const target = runtimePackPath(pack)
   if (target === undefined || resolve(target) === resolve(pack.source)) return pack.source
+  const existingTarget = await realpath(target).catch(error => { if (error.code !== 'ENOENT') throw error })
+  if (existingTarget === await realpath(pack.source)) return target
   await mkdir(dirname(target), { recursive: true })
   await rm(target, { recursive: true, force: true })
   await cp(pack.source, target, {
@@ -52,11 +54,12 @@ async function preparePackSource(pack) {
 }
 
 /** Make a locally registered package resolvable by the active DSH Profile. */
-export async function linkLwbPackForRuntime(pack) {
+export async function linkLwbPackForRuntime(pack, profileDir = lwbProfilePath()) {
   if (!pack?.source || !pack?.manifest?.packageName) throw new Error('Cannot link an invalid LWB pack for runtime use.')
   const source = await preparePackSource(pack)
-  await mkdir(PROFILE_NODE_MODULES, { recursive: true })
-  await ensureLwbRuntimeSymlink(packagePath(PROFILE_NODE_MODULES, pack.manifest.packageName), source)
+  const profileNodeModules = join(profileDir, 'node_modules')
+  await mkdir(profileNodeModules, { recursive: true })
+  await ensureLwbRuntimeSymlink(packagePath(profileNodeModules, pack.manifest.packageName), source)
 
   const packageJson = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'))
   const declared = Object.assign({}, packageJson.dependencies, packageJson.peerDependencies)
@@ -66,5 +69,15 @@ export async function linkLwbPackForRuntime(pack) {
       ? join(ROOT_DIR, 'lwb', 'pack-sdk')
       : name.startsWith('@deepseek-ai/') ? dshPackageDirectory(name) : undefined
     if (target) await ensureLwbRuntimeSymlink(packagePath(packageNodeModules, name), target)
+  }
+}
+
+/** Update existing pack links before starting a host with immutable path caches. */
+export async function prepareLwbPackRuntimeLinks(profileDir = lwbProfilePath()) {
+  for (const pack of await marketplaceLwbPacks()) {
+    if (!pack.available) continue
+    const link = packagePath(join(profileDir, 'node_modules'), pack.manifest.packageName)
+    const stats = await lstat(link).catch(error => { if (error.code !== 'ENOENT') throw error })
+    if (stats?.isSymbolicLink()) await linkLwbPackForRuntime(pack, profileDir)
   }
 }
