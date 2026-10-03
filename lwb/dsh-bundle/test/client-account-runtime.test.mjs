@@ -114,6 +114,12 @@ async function checkClientActivation(accountInitiallyReady, exerciseAccountContr
     assert.ok(ctx.get('lwbPackClient'), 'capability registration remains available')
     assert.ok(slots.has('sidebar'))
     assert.ok(slots.has('shell.overlay'))
+    assert.ok(slots.has('conversation.hero.brand.mark'))
+    const brand = slots.get('conversation.hero.brand.mark')({ size: 34 })
+    assert.equal(brand.type, 'img')
+    assert.equal(brand.props.src, '/lwb/branding/logo.png')
+    assert.equal(brand.props.width, 34)
+    assert.equal(window.document.querySelector('link[rel="icon"]').getAttribute('href'), brand.props.src)
     assert.equal(opened, 1, 'the official account stream starts once')
     assert.equal(accepted, 1, 'account snapshots are accepted')
     if (exerciseAccountControls || exerciseLwbLogin) {

@@ -47,6 +47,16 @@ export async function createLwbPackageConfig(payload, identity) {
 }
 
 export function applyLwbProductResources(config, payload) {
+  const resources = fileURLToPath(new URL('./resources/', import.meta.url))
+  const logo = fileURLToPath(new URL('../dsh-bundle/assets/laofu-workbench-logo.png', import.meta.url))
+  config.mac = { ...config.mac, icon: join(resources, 'icon-macos.icns') }
+  config.win = { ...config.win, icon: join(resources, 'icon-windows.ico') }
+  // Replace the upstream runtime icons as well as the executable/bundle icon.
+  config.extraResources = config.extraResources.map(resource => {
+    if (resource.to === 'icon.png') return { ...resource, from: logo }
+    if (resource.to === 'tray.ico') return { ...resource, from: join(resources, 'tray-windows.ico') }
+    return resource
+  })
   config.extraResources.push(
     { from: payload, to: 'lwb-product', filter: ['**/*'] },
     // electron-builder excludes a FileSet source's root node_modules.
