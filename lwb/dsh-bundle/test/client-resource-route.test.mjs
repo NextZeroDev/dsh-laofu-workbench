@@ -22,7 +22,7 @@ const FILE_ADDRESS = 'dsh-resource://file/session/B/out/index.html'
 /** Load the workbench client module with just enough browser surface to apply it. */
 async function workbenchPlugin() {
   let plugin
-  const element = { setAttribute() {}, style: {}, textContent: '' }
+  const element = { setAttribute() {}, remove() {}, style: {}, textContent: '' }
   class MutationObserver {
     observe() {}
     disconnect() {}
@@ -43,11 +43,12 @@ async function workbenchPlugin() {
       title: '',
       body: { nodeType: 1 },
       documentElement: { style: { removeProperty() {} } },
-      head: { appendChild() {} },
+      head: { appendChild() {}, append() {} },
       visibilityState: 'visible',
       createElement: () => element,
       createTreeWalker: () => ({ nextNode: () => null }),
       getElementById: () => undefined,
+      querySelectorAll: () => [],
       addEventListener() {},
       removeEventListener() {},
     },

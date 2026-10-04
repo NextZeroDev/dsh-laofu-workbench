@@ -22,6 +22,9 @@
 - id: ui-sidebar
   disabled: true
 
+- id: ui-brand-official
+  disabled: true
+
 # ui-plugin-manager deliberately stays enabled: the Plugins page is an official
 # `main` panel, and its sidebar row is filled by the conversation module, whose
 # column declares `sidebar.panellist` on the LWB overlay entry. LWB owns only

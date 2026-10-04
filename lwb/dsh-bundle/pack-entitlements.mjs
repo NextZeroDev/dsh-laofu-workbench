@@ -10,18 +10,22 @@ export class LwbPackEntitlements {
     this.cacheMs = cacheMs
     this.cached = null
     this.pending = null
+    this.generation = 0
     this.unsubscribe = account?.subscribe?.(() => this.invalidate())
   }
 
   invalidate() {
+    this.generation += 1
     this.cached = null
+    this.pending = null
   }
 
   async membership() {
     if (!this.account?.status) return { authenticated: false, active: false, reason: 'LWB 账号服务不可用。' }
     if (this.cached && this.cached.expiresAt > Date.now()) return this.cached.value
     if (this.pending) return this.pending
-    this.pending = this.account.status().then((status) => {
+    const generation = this.generation
+    const pending = this.account.status().then((status) => {
       const membership = status?.membership
       const plan = String(membership?.planCode || membership?.code || '').trim().toLowerCase()
       const state = String(membership?.status || '').trim().toLowerCase()
@@ -40,10 +44,12 @@ export class LwbPackEntitlements {
       active: false,
       reason: error instanceof Error ? error.message : String(error),
     })).then((value) => {
+      if (generation !== this.generation) return this.membership()
       this.cached = { value, expiresAt: Date.now() + this.cacheMs }
       return value
-    }).finally(() => { this.pending = null })
-    return this.pending
+    }).finally(() => { if (this.pending === pending) this.pending = null })
+    this.pending = pending
+    return pending
   }
 
   async check(manifest) {

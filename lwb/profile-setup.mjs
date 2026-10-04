@@ -62,4 +62,8 @@ export async function prepareLwbProfile(profileDir = LWB_RUNTIME.profileHome) {
   await linkProductPeers(bundle)
   await ensureLink(join(profileDir, 'node_modules', '@scitiger-ai', 'lwb-pack-sdk'), join(LWB_RUNTIME.projectRoot, 'lwb', 'pack-sdk'))
   await ensureLink(join(profileDir, 'node_modules', '@scitiger-ai', 'lwb-dsh-bundle'), bundle)
+  // Reconcile persisted links before the host caches its Profile resolution,
+  // including packs that were unloaded before the product was upgraded.
+  const { prepareLwbPackRuntimeLinks } = await import('./dsh-bundle/pack-runtime-links.mjs')
+  await prepareLwbPackRuntimeLinks(profileDir)
 }

@@ -7,8 +7,9 @@ import { verifyPackagedPacks } from './pack-smoke.mjs'
 /**
  * Extend the official builder configuration without modifying its source.
  *
- * The identity is the resolved edition, so each edition produces its own
- * product name, artifact name and URL scheme instead of overwriting the other.
+ * The identity is the resolved build input. The official build uses the
+ * complete capability set while keeping one product name, data root and URL
+ * scheme for every user.
  */
 export async function createLwbPackageConfig(payload, identity) {
   if (!identity?.productName || !identity?.artifactName || !identity?.protocolScheme) {
@@ -30,7 +31,8 @@ export async function createLwbPackageConfig(payload, identity) {
   await mkdir(entry, { recursive: true })
   await cp(fileURLToPath(new URL('./bootstrap.mjs', import.meta.url)), join(entry, 'lwb-bootstrap.mjs'))
   await cp(fileURLToPath(new URL('./entry-policy.mjs', import.meta.url)), join(entry, 'lwb-entry-policy.mjs'))
-  config.files.push({ from: entry, to: '.', filter: ['lwb-bootstrap.mjs', 'lwb-entry-policy.mjs'] })
+  await cp(fileURLToPath(new URL('./registry-migration.mjs', import.meta.url)), join(entry, 'registry-migration.mjs'))
+  config.files.push({ from: entry, to: '.', filter: ['lwb-bootstrap.mjs', 'lwb-entry-policy.mjs', 'registry-migration.mjs'] })
   applyLwbProductResources(config, payload)
   const afterPack = config.afterPack
   config.afterPack = async context => {
@@ -45,6 +47,16 @@ export async function createLwbPackageConfig(payload, identity) {
 }
 
 export function applyLwbProductResources(config, payload) {
+  const resources = fileURLToPath(new URL('./resources/', import.meta.url))
+  const logo = fileURLToPath(new URL('../dsh-bundle/assets/laofu-workbench-logo.png', import.meta.url))
+  config.mac = { ...config.mac, icon: join(resources, 'icon-macos.icns') }
+  config.win = { ...config.win, icon: join(resources, 'icon-windows.ico') }
+  // Replace the upstream runtime icons as well as the executable/bundle icon.
+  config.extraResources = config.extraResources.map(resource => {
+    if (resource.to === 'icon.png') return { ...resource, from: logo }
+    if (resource.to === 'tray.ico') return { ...resource, from: join(resources, 'tray-windows.ico') }
+    return resource
+  })
   config.extraResources.push(
     { from: payload, to: 'lwb-product', filter: ['**/*'] },
     // electron-builder excludes a FileSet source's root node_modules.

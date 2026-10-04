@@ -20,6 +20,7 @@ const { values } = parseArgs({
     edition: { type: 'string' },
     unsigned: { type: 'boolean' },
     portable: { type: 'boolean' },
+    release: { type: 'boolean' },
   },
 })
 if (!['darwin', 'win32'].includes(process.platform)) throw new Error('Official Desktop packaging supports macOS and Windows build hosts.')
@@ -58,10 +59,11 @@ const appRoot = join(DSH_ROOT, 'apps/desktop')
 const { loadDesktopPackageEnvironment, validateDesktopPackageEnvironment } = await import(pathToFileURL(join(appRoot, 'scripts/desktop-package-environment.mjs')))
 const unsigned = values.unsigned === true
 const portable = values.portable === true
+const release = values.release === true || process.env.LWB_DESKTOP_RELEASE === '1'
 const env = unsigned ? Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:DSH_DESKTOP_|APPLE_|CSC_|WIN_CSC_|DOWNLOAD_(?:TEST|PROD)_)/u.test(key))) : loadDesktopPackageEnvironment(process.platform)
 if (unsigned) {
   Object.assign(env, {
-    DSH_DESKTOP_APP_ID: `com.scitiger.laofu.workbench${edition.name === 'commercial' ? '.commercial' : ''}`,
+    DSH_DESKTOP_APP_ID: 'com.scitiger.laofu.workbench',
     DSH_DESKTOP_UNSIGNED: '1',
     LWB_DESKTOP_PORTABLE: portable ? '1' : '0',
     LWB_DESKTOP_UNSIGNED: '1',
@@ -95,7 +97,10 @@ await mkdir(join(LWB_RUNTIME.projectRoot, '.tooling'), { recursive: true })
 const stage = await mkdtemp(join(LWB_RUNTIME.projectRoot, '.tooling/lwb-package-'))
 const payload = join(stage, 'product')
 await mkdir(payload)
-const digest = createHash('sha256').update(UPSTREAM.commit).update(`edition:${edition.name}`)
+const digest = createHash('sha256')
+  .update(UPSTREAM.commit)
+  .update(`edition:${edition.name}`)
+  .update(`product:${edition.productName}:${edition.productHome}:${edition.protocolScheme}`)
 // Packs come only from the resolved edition; see lwb/desktop/payload.mjs.
 await assembleProductPayload({
   projectRoot: LWB_RUNTIME.projectRoot,
@@ -103,6 +108,9 @@ await assembleProductPayload({
   payload,
   onFile: async (key, source) => { digest.update(key).update(await readFile(source)) },
 })
+for (const path of ['bootstrap.mjs', 'entry-policy.mjs', 'registry-migration.mjs']) {
+  digest.update(`desktop-entry:${path}`).update(await readFile(join(LWB_RUNTIME.projectRoot, 'lwb', 'desktop', path)))
+}
 for (const path of ['package.json', 'package-lock.json']) await cp(join(LWB_RUNTIME.projectRoot, path), join(payload, path))
 // Install only the product's declared production dependencies; never package
 // checkout node_modules, credentials, local state, or upstream source backups.
@@ -125,7 +133,7 @@ const identity = {
   artifactName: edition.artifactName.replace('.${ext}', `${portable ? '-portable' : ''}${unsigned ? '-unsigned' : ''}.${'${ext}'}`),
   protocolScheme: edition.protocolScheme,
   portable,
-  ...(unsigned ? { unsigned: true, version: `${productVersion}-test.${buildNumber}`, output: join(LWB_RUNTIME.projectRoot, '.tooling', 'artifacts', edition.name, `${process.platform === 'darwin' ? 'mac' : 'win'}-${arch}`) } : {}),
+  ...(unsigned ? { unsigned: true, version: release ? productVersion : `${productVersion}-test.${buildNumber}`, output: join(LWB_RUNTIME.projectRoot, '.tooling', 'artifacts', edition.name, `${process.platform === 'darwin' ? 'mac' : 'win'}-${arch}`) } : {}),
 }
 const config = join(stage, 'electron-builder.config.mjs')
 await writeFile(config, `export default await (await import(${JSON.stringify(new URL('./package-config.mjs', import.meta.url).href)})).createLwbPackageConfig(${JSON.stringify(payload)}, ${JSON.stringify(identity)})\n`)

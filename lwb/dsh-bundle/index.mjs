@@ -19,6 +19,7 @@ import { LwbAtsClient } from './ats-client.mjs'
 import LwbAccountGateway from './account-gateway.mjs'
 import { openTaskModel } from './task-model.mjs'
 import { registerLwbModels } from './dsh-adapter/lwb-model.mjs'
+import { registerLwbBranding } from './branding.mjs'
 
 /**
  * Host-side product identity for the LWB DSH composition.
@@ -32,6 +33,7 @@ export async function apply(ctx, config = {}) {
   // dedicated loader row is host-side only to expose ./client, so do not
   // register the identity service a second time for that row.
   if (config.clientOnly) return
+  await registerLwbBranding(ctx)
   const identity = Object.freeze({
     id: PROFILE_ID,
     name: String(config.name || '老傅工作台'),

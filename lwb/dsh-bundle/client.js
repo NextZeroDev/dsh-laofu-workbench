@@ -6,6 +6,11 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const { IconSettingsOutlineRegular, IconNewChatOutlineRegular, IconCordisPluginOutlineRegular, IconChevronLeftOutlineRegular, ShortcutKeys } = require('@deepseek-ai/dsh-client-ui-primitives');
     const h = React.createElement;
+    const LOGO_PATH = '/lwb/branding/logo.png';
+    function LwbBrandMark({ size = 30, className } = {}) {
+      return h('img', { src: LOGO_PATH, alt: 'Laofu Workbench', className,
+        width: size, height: size, style: { width: size, height: size, objectFit: 'contain', flex: 'none' } });
+    }
 
     // Browsers expose crypto.randomUUID only in secure contexts. The workbench
     // also supports authenticated plain-HTTP LAN previews, where getRandomValues
@@ -41,6 +46,7 @@ window.__ModuleLoader__.load({
     let lwbAccountGeneration = 0;
     const lwbAccountListeners = new Set();
     let lwbAccountRequest;
+    let packAccountSnapshot;
     let dshAccountState = { phase: 'unavailable', status: 'signed-out', attempt: null, error: null };
     const dshAccountListeners = new Set();
     let dshAccountStreamDispose;
@@ -136,6 +142,13 @@ window.__ModuleLoader__.load({
     function setLwbAccountState(next) {
       lwbAccountState = Object.assign({}, lwbAccountState, next);
       lwbAccountListeners.forEach((listener) => listener());
+      if (['authenticated', 'anonymous'].includes(lwbAccountState.phase)) {
+        const snapshot = JSON.stringify([lwbAccountState.user?.id, lwbAccountState.membership, lwbAccountState.entitlements]);
+        if (snapshot !== packAccountSnapshot) {
+          packAccountSnapshot = snapshot;
+          void refreshPackCatalog({ retain: true }).catch(() => {});
+        }
+      }
     }
     function useLwbAccount() {
       return React.useSyncExternalStore(
@@ -408,6 +421,7 @@ window.__ModuleLoader__.load({
     let packVisibility = null;
     const packCatalogListeners = new Set();
     let packMarket = { phase: 'pending', packs: [], error: null };
+    let packCatalogGeneration = 0;
     const packMarketListeners = new Set();
     let lwbPackClient;
     let lwbPackClientRuntime;
@@ -515,6 +529,8 @@ window.__ModuleLoader__.load({
     }
     async function refreshPackCatalog(options = {}) {
       if (!services?.connection?.rpc?.call) return;
+      const generation = ++packCatalogGeneration;
+      const accountGeneration = lwbAccountGeneration;
       const retain = options.retain === true;
       if (!retain) {
         setPackCatalog({ phase: 'pending', packs: packCatalog.packs, error: null });
@@ -526,6 +542,7 @@ window.__ModuleLoader__.load({
           services.connection.rpc.call('/api', 'lwbPacks/market', { args: {} }),
           services.connection.rpc.call('/api', 'lwbPacks/visibility', { args: {} }),
         ]);
+        if (generation !== packCatalogGeneration || accountGeneration !== lwbAccountGeneration) return;
         if (!visibilityResponse?.ok) throw new Error(visibilityResponse?.error?.message || '无法读取能力包工作区归属。');
         packVisibility = visibilityResponse.value;
         if (!activeResponse?.ok) throw new Error(activeResponse?.error?.message || '无法读取已加载能力包。');
@@ -533,6 +550,7 @@ window.__ModuleLoader__.load({
         if (!marketResponse?.ok) throw new Error(marketResponse?.error?.message || '无法读取能力包市场。');
         setPackMarket(normalizePackMarket(marketResponse.value));
       } catch (error) {
+        if (generation !== packCatalogGeneration || accountGeneration !== lwbAccountGeneration) return;
         const message = error?.message || '无法读取能力包目录。';
         if (retain) {
           setPackCatalog({ phase: 'ready', packs: packCatalog.packs, error: message });
@@ -641,7 +659,7 @@ window.__ModuleLoader__.load({
       .lwb-sidebar { display:flex; height:100%; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; flex-direction:column; padding:16px 10px 10px; background:#fff; } html[data-platform='darwin'] .lwb-sidebar { padding-top:48px; } html[data-platform='darwin']:has(.lwb-sidebar) [data-shell-leading] { display:none; }
       .lwb-brand,.lwb-nav-item { display:flex; width:100%; min-width:0; align-items:center; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
       .lwb-brand { flex-shrink:0; gap:10px; min-height:42px; padding:3px 8px 14px; }
-      .lwb-brand-mark { display:grid; width:30px; height:30px; flex:none; place-items:center; border-radius:7px; color:#fff; background:linear-gradient(145deg,#1267c7,#1d8b99 48%,#52a859 49%,#e8ad30); font-size:var(--lwb-text-md,15px); font-weight:800; }
+      .lwb-brand-mark { display:block; width:30px; height:30px; flex:none; object-fit:contain; }
       .lwb-brand-copy { display:grid; min-width:0; gap:2px; }
       .lwb-brand-copy strong,.lwb-brand-copy small,.lwb-nav-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .lwb-brand-copy strong { font-size:var(--lwb-text-section,18px); } .lwb-brand-copy small { color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); }
@@ -1266,7 +1284,7 @@ window.__ModuleLoader__.load({
       return h('aside', { className: 'lwb-sidebar', 'data-collapsed': sidebarCollapsed ? 'true' : 'false', 'data-mobile-open': state.mobileNavOpen ? 'true' : 'false', 'aria-label': copy.workbenchFeatures },
         h('div', { style: { display: 'flex', alignItems: 'center' } },
           h('button', { type: 'button', className: 'lwb-brand', title: '老傅工作台', onClick: () => navTo('conversation') },
-            h('span', { className: 'lwb-brand-mark' }, '老'),
+            h(LwbBrandMark, { className: 'lwb-brand-mark' }),
             wide && h('span', { className: 'lwb-brand-copy' }, h('strong', null, '老傅工作台'), h('small', null, 'Laofu Workbench')),
           ),
           wide && button('lwb-collapse', h(IconChevronLeftOutlineRegular, { size: 18 }), () => services?.layout?.toggleSidebar?.(), { 'aria-label': copy.collapseSidebar, title: copy.collapseSidebar }),
@@ -1406,6 +1424,7 @@ window.__ModuleLoader__.load({
     function PacksPage() {
       const copy = useLwbCopy();
       const market = usePackMarket();
+      React.useEffect(() => { void refreshPackCatalog({ retain: true }).catch(() => {}); }, []);
       const [detailPack, setDetailPack] = React.useState(null);
       const [query, setQuery] = React.useState('');
       const [statusFilter, setStatusFilter] = React.useState('all');
@@ -2421,6 +2440,17 @@ window.__ModuleLoader__.load({
         void refreshPackCatalog();
         });
       ctx.effect(() => {
+        // The Desktop serves its initial HTML directly; update its favicon too.
+        const oldIcons = Array.from(document.querySelectorAll('link[rel="icon"]'));
+        oldIcons.forEach(icon => icon.remove());
+        const favicon = document.createElement('link');
+        favicon.rel = 'icon';
+        favicon.type = 'image/png';
+        favicon.href = LOGO_PATH;
+        document.head.append(favicon);
+        const disposeHeroBrand = ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({
+          name: 'conversation.hero.brand.mark', registrant: 'lwb-workbench',
+        }, LwbBrandMark));
         let disposeSidebar;
         const enableSidebar = () => {
           if (disposeSidebar) return;
@@ -2475,6 +2505,9 @@ window.__ModuleLoader__.load({
             },
           }, WorkbenchOverlay));
         return () => {
+          disposeHeroBrand?.();
+          favicon.remove();
+          oldIcons.forEach(icon => document.head.append(icon));
           disableSidebar();
           disposeConversationPanels?.();
           disposeConversationPanelLabels?.();

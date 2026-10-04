@@ -47,64 +47,60 @@ npm run package:desktop
 
 安装版由 bootstrap 在系统 appData 下创建产品数据根（可显式覆盖，见下节），将本次构建的产品资源放到可写 runtime 中，再通过公共 Profile API 装配 LWB，最后在加载官方 main 时应用上述入口策略。业务工作区在 runtime 外，能力包不静态启用。发布上传被禁用。
 
-### 便携版测试构建
+### 统一官方便携版构建
 
 当前阶段发布便携版测试包，不需要安装器或管理员权限。缺少正式发行证书时，可构建未签名便携包：
 
 ```bash
-npm run package:desktop:unsigned
-# 商业版仍需设置 LWB_COMMERCIAL_PACK_DIR
-npm run package:desktop:unsigned -- --edition commercial
+# 官方完整发行版需要私有会员能力包源码
+LWB_COMMERCIAL_PACK_DIR=/absolute/path/to/commercial-pack npm run package:desktop:official -- --unsigned --portable
 ```
 
 也可以显式构建便携版（正式签名环境仍需配置）：
 
 ```bash
-npm run package:desktop:portable
-npm run package:desktop:portable -- --edition commercial
+npm run package:desktop:portable                 # 公开源码开发包
+LWB_COMMERCIAL_PACK_DIR=/absolute/path/to/commercial-pack npm run package:desktop:official -- --portable
 ```
 
 Windows 产物是可直接运行的 portable `.exe`，macOS 产物是包含 `.app` 的 `.zip`，不生成 NSIS 安装器或 DMG。程序数据写入用户数据目录，不要求把压缩包目录作为可写目录。未签名模式不读取签名环境文件，不调用 Apple 公证或 Windows 签名硬件。macOS 原生组件使用临时 ad-hoc 签名满足 Apple Silicon 的加载要求，不代表 Developer ID 签名或公证；首次打开仍可能受到 Gatekeeper 或 SmartScreen 提示。
 
-测试包关闭自动更新与强制更新服务，版本为 LWB 根版本加 `-test.<构建编号>`。构建编号优先使用 `LWB_DESKTOP_BUILD_NUMBER`，其次为 Actions 的 `GITHUB_RUN_NUMBER`，默认 `1`；同一 Release 的 Windows 和 macOS 构建必须使用相同编号。文件名明确带 `-portable-unsigned`。两版使用不同 app ID，输出分开放在 `.tooling/artifacts/<edition>/<target>/`。
+官方便携版关闭自动更新与强制更新服务，使用 LWB 根版本号；构建编号仅用于 Windows 构建目录和两端构建关联。文件名明确带 `-portable-unsigned`，官方发行版统一使用 `LaofuWorkbench` 的应用身份和数据目录。
 
-Windows 两版在商业私有仓库的自托管 Windows x64 Runner 上构建，通过 Actions 的 `Desktop portable test builds` 手动触发，填写构建编号。macOS 两版在本机 Apple Silicon Mac 构建：
+Windows 官方发行版在商业私有仓库的自托管 Windows x64 Runner 上构建，通过 Actions 的 `Desktop portable test builds` 手动触发，填写构建编号。macOS 官方发行版在本机 Apple Silicon Mac 构建：
 
 ```bash
-export LWB_DESKTOP_BUILD_NUMBER=20261002
-npm run package:desktop:unsigned
-LWB_COMMERCIAL_PACK_DIR=/absolute/path/to/commercial-pack npm run package:desktop:unsigned -- --edition commercial
-node scripts/collect-desktop-artifacts.mjs --edition community --target mac-arm64
+export LWB_DESKTOP_BUILD_NUMBER=20261003
+LWB_COMMERCIAL_PACK_DIR=/absolute/path/to/commercial-pack npm run package:desktop:official -- --unsigned --portable --release
 node scripts/collect-desktop-artifacts.mjs --edition commercial --target mac-arm64
 ```
 
-每组产物必须通过实际打包宿主的能力包加载、卸载、重新加载、浏览器模块注册和重启恢复验收。Windows workflow 将成品、SHA256 校验值和构建报告上传到私有仓库 Draft Release，不使用 Actions Artifact 存储。macOS 验收完成后汇总同版本产物：社区版发布到公开仓库，商业版发布到私有仓库。正式发布前核对两端文件和校验值；未签名测试包标记为预发布。
+官方产物必须通过实际打包宿主的能力包加载、卸载、重新加载、浏览器模块注册和重启恢复验收。Windows workflow 和本机 macOS 构建将成品、SHA256 校验值和构建报告汇总到公开仓库的同一个 Draft Release，验收通过后发布为正式 Release。未签名状态会在发布说明和构建报告中明确标注。
 
 官方源码保持原样。未签名模式通过仅在构建子进程启用的内存适配复用官方运行时准备、完整性校验与烟雾测试；适配与锁定的上游结构不匹配时会报错。此模式只用于测试分发，正式签名构建仍使用原有校验。
 
-## 版本（edition）
+## 构建输入与官方发行版
 
-安装包随带哪些能力包由**构建输入**决定，不由工作树状态决定。`lwb/desktop/editions.json` 声明每个版本的产品身份与能力包列表，`--edition` 选择版本（默认 `community`）。
+安装包随带哪些能力包由**构建输入**决定，不由工作树状态决定。代码保留 `community` 和 `commercial` 两个内部构建输入，分别用于公开源码开发包和官方完整发行包；用户下载的发行版只有一个，不再按版本名称区分。
 
-| 版本 | 产品名 | 数据根 | 协议 | 随带能力包 |
+| 构建输入 | 产品名 | 数据根 | 协议 | 随带能力包 |
 | --- | --- | --- | --- | --- |
 | `community` | Laofu Workbench | `LaofuWorkbench` | `lwb://` | 本仓库自有的 `spoken-video` |
-| `commercial` | Laofu Workbench Commercial | `LaofuWorkbenchCommercial` | `lwb-commercial://` | 上述加上 `model-review`，源码由 `LWB_COMMERCIAL_PACK_DIR` 指定 |
+| `commercial`（官方发行） | Laofu Workbench | `LaofuWorkbench` | `lwb://` | 公开包加上 `model-review`，源码由 `LWB_COMMERCIAL_PACK_DIR` 指定 |
 
 ```bash
-npm run package:plan                          # 查看 community 随带哪些包，不需要签名资料
-npm run package:plan -- --edition commercial  # 需要先设置 LWB_COMMERCIAL_PACK_DIR
-npm run package:desktop -- --edition commercial
+LWB_COMMERCIAL_PACK_DIR=/absolute/path/to/commercial-pack npm run package:plan -- --edition commercial
+LWB_COMMERCIAL_PACK_DIR=/absolute/path/to/commercial-pack npm run package:desktop:official
 ```
 
 规则：
 
 - 未声明 `source` 的能力包必须由本仓库拥有：目录在 `lwb/packs/<id>`，且 `lwb-pack.json` 已被 Git 跟踪。`lwb/packs/` 下出现非本仓库的目录时打包直接失败，提示改用 `npm run pack:install` 登记。
-- 声明了 `source` 的能力包是构建方给出的绝对目录，用 `${VARIABLE}` 固定到具体 checkout。商业包源码因此不必进入本仓库：两个版本是**同一个内核加不同的能力包集合**，不需要第二份商业版内核。
+- 声明了 `source` 的能力包是构建方给出的绝对目录，用 `${VARIABLE}` 固定到具体 checkout。会员包源码因此不必进入本仓库：官方发行版是**同一个内核加额外的会员能力包**，不需要第二份工作台内核。
 - 只有清单列出的能力包会被复制进产物。版本解析在打包环境校验之前完成，所以包集合写错时不需要签名资料就会失败。
 - 每个能力包在打包时用宿主加载能力包时的同一套规则校验（`inspectLwbPack`），运行时会被拒绝的包无法进入产物。
 - 构建 id 只由上游 commit、版本名、清单内能力包内容和依赖锁决定。能力包按 id 计入，因此同一份商业包换一个 checkout 目录不会改变构建 id。
 - 依赖、能力包测试目录和仓库元数据（`.git`）一律不进产物。
-- 两个版本使用不同的数据根与协议，可以并存安装；产品身份写进 `build.json`，由 bootstrap 在运行时读取。
+- 官方发行版使用统一的数据根与协议；产品身份写进 `build.json`，由 bootstrap 在运行时读取。首次升级商业版时会承接到统一的 `LaofuWorkbench` 数据目录。
 
-当前仓库未配置 macOS 签名环境，因此已验证开发入口、打包预检报错路径和两种版本的包集合解析；尚未生成、安装或验收签名发行包。Windows 打包也需在目标环境验收。详细边界与升级门禁见 [扩展边界](38-dsh-extension-boundary.md)。
+当前仓库未配置 macOS 签名环境，因此已验证开发入口、打包预检报错路径和公开源码/官方完整构建输入的包集合解析；尚未生成、安装或验收签名发行包。Windows 打包也需在目标环境验收。详细边界与升级门禁见 [扩展边界](38-dsh-extension-boundary.md)。

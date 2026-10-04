@@ -8,7 +8,7 @@ const PAYMENT_FORM_TTL_MS = 10 * 60 * 1000
 function decorateRemote(prototype, method, exportName) { const decorate = Remote(exportName); decorate(prototype[method], { kind: 'method', name: method, static: false, private: false, addInitializer(initializer) { remoteInitializers.push(initializer) } }) }
 /** Browser-safe LWB account projection. Tokens stay in the Host credentials store. */
 export class LwbAccountGateway extends TypertRemoteService {
-  static inject = ['lwbAtsClient', 'webServer', 'lwbTaskModel', 'llm']
+  static inject = ['lwbAtsClient', 'webServer', 'lwbTaskModel', 'llm', 'lwbPackEntitlements']
   constructor(ctx) {
     super(ctx, 'lwbAccount')
     this.paymentForms = new Map()
@@ -24,6 +24,7 @@ export class LwbAccountGateway extends TypertRemoteService {
   async logout() { return this.ctx.lwbAtsClient.logout() }
   async status() {
     const account = await this.ctx.lwbAtsClient.status()
+    this.ctx.lwbPackEntitlements?.invalidate()
     try { return { ...account, catalog: await this.ctx.lwbAtsClient.catalog(), serviceError: null } }
     catch (error) { return { ...account, catalog: null, serviceError: error.status === 404 ? '请先更新 ATS 服务以启用 LWB 模型与场景服务。' : error.message } }
   }
