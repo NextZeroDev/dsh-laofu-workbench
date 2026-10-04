@@ -11,6 +11,15 @@ export const MODEL_ROUTE_STATES = Object.freeze({
   NOT_APPLICABLE: 'not-applicable',
 })
 
+const MIN_MODEL_OUTPUT_TOKENS = 128
+const MAX_MODEL_OUTPUT_TOKENS = 393216
+const DEFAULT_MODEL_OUTPUT_LIMIT = 32768
+
+function advertisedOutputLimit(model) {
+  const value = [model?.maxOutputTokens, model?.maxTokens, model?.defaultMaxTokens].find(candidate => Number.isInteger(candidate) && candidate >= MIN_MODEL_OUTPUT_TOKENS)
+  return Math.max(MIN_MODEL_OUTPUT_TOKENS, Math.min(value ?? DEFAULT_MODEL_OUTPUT_LIMIT, MAX_MODEL_OUTPUT_TOKENS))
+}
+
 function unverifiable(ref) {
   return {
     state: MODEL_ROUTE_STATES.UNVERIFIABLE,
@@ -70,7 +79,7 @@ function routeAvailability(route) {
 
 /** Scoped services issued by the host to one actually mounted package. */
 export class LwbPackServices {
-  constructor(ctx, workspaces, { account, taskModel, entitlements } = {}) { this.ctx = ctx; this.workspaces = workspaces; this.scopes = new Map(); this.account = account; this.taskModel = taskModel; this.entitlements = entitlements }
+  constructor(ctx, workspaces, { account, taskModel, entitlements } = {}) { this.ctx = ctx; this.workspaces = workspaces; this.scopes = new Map(); this.account = account; this.taskModel = taskModel; this.entitlements = entitlements; this.sessionPolicies = new WeakMap() }
 
   async mount(manifest) {
     await this.workspaces.activate(manifest)
@@ -92,7 +101,7 @@ export class LwbPackServices {
         list: async () => Promise.all((this.ctx.llm?.listProviders?.() || []).map(async (provider) => ({
           ...provider,
           ...routeAvailability(await modelRouteState(this.ctx, provider.id)),
-          models: await this.ctx.llm.listModels(provider.id).catch(() => []),
+          models: await this.listPackModels(provider.id),
         }))),
       }),
       account: Object.freeze({
@@ -201,6 +210,18 @@ export class LwbPackServices {
     return this.entitlements?.assertAllowed(manifest) || { allowed: true, required: false, reason: null }
   }
 
+  async listPackModels(provider) {
+    const models = await this.ctx.llm.listModels(provider).catch(() => [])
+    return Promise.all(models.map(async model => {
+      let info = model
+      if (typeof this.ctx.llm.resolveModelInfo === 'function') {
+        try { info = { ...model, ...await this.ctx.llm.resolveModelInfo(provider, model.id) } }
+        catch { /* Native dispatch will report capability lookup failures. */ }
+      }
+      return { ...info, maxOutputTokens: advertisedOutputLimit(info) }
+    }))
+  }
+
   async withAgent(id, operation, signal) {
     signal.throwIfAborted()
     const scope = this.forPack(id)
@@ -250,7 +271,7 @@ export class LwbPackServices {
     const cwd = await this.sessionCwd(id, context, options?.cwd)
     const sessionId = typeof options.sessionId === 'string' && options.sessionId.trim()
       ? options.sessionId.trim() : `lwb-pack-${id}-${randomUUID()}`
-    return this.openSession(id, { sessionId, context, cwd, selection, signal, sessions, resume: false })
+    return this.openSession(id, { sessionId, context, cwd, selection, policy: this.sessionPolicy(options), signal, sessions, resume: false })
   }
 
   async resumeSession(id, sessionId, options = {}, signal, sessions) {
@@ -259,7 +280,7 @@ export class LwbPackServices {
     const context = await scope.context()
     const selection = this.normalizeSelection(options, this.defaultSelection())
     const cwd = await this.sessionCwd(id, context, options?.cwd)
-    return this.openSession(id, { sessionId: sessionId.trim(), context, cwd, selection, signal, sessions, resume: true })
+    return this.openSession(id, { sessionId: sessionId.trim(), context, cwd, selection, policy: this.sessionPolicy(options), signal, sessions, resume: true })
   }
 
   normalizeSelection(options, fallback) {
@@ -273,18 +294,77 @@ export class LwbPackServices {
       ...(candidate.reasoningEffort === undefined ? {} : { reasoningEffort: candidate.reasoningEffort }) }
   }
 
-  async openSession(id, { sessionId, context, cwd, selection, signal, sessions, resume }) {
-    if (sessions.has(sessionId)) return sessions.get(sessionId).public
+  sessionPolicy(options) {
+    if (options.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 128 || options.maxTokens > MAX_MODEL_OUTPUT_TOKENS)) throw new Error('会话输出上限必须是 128—393216 的整数。')
+    if (options.tools !== undefined && options.tools !== 'none') throw new Error('会话工具约束无效。')
+    if (options.system !== undefined && (typeof options.system !== 'string' || !options.system.trim())) throw new Error('会话系统提示词不能为空。')
+    return { maxTokens: options.maxTokens, tools: options.tools, system: options.system }
+  }
+
+  async restrictedPreset() {
+    this.noToolsPreset ??= this.ctx.agentPresets.register({
+      id: 'lwb-pack-no-tools', name: '场景纯模型会话', plugins: [],
+    })
+    await this.noToolsPreset
+    return 'lwb-pack-no-tools'
+  }
+
+  installSessionPolicy(agent, selection, policy) {
+    const installed = this.sessionPolicies.get(agent)
+    const state = installed || { selection, policy: {} }
+    state.selection = selection
+    // Omitted options on a later adoption do not loosen existing constraints.
+    state.policy = { ...state.policy, ...Object.fromEntries(Object.entries(policy).filter(([, value]) => value !== undefined)) }
+    if (state.policy.tools === 'none' && !state.toolsRestricted) {
+      agent.ctx.tools.restrict({ allow: [] })
+      state.toolsRestricted = true
+    }
+    if (state.policy.system !== undefined && !state.systemInstalled) {
+      agent.ctx.systemPrompt.section({
+        name: 'lwb-pack:complete-system', order: 0, complete: true,
+        interpolate: false, text: () => state.policy.system,
+      })
+      state.systemInstalled = true
+    }
+    if (installed) return
+    agent.ctx.on('system-prompt/assemble', async (_, _context, next) => {
+      const assembly = await next()
+      return { ...assembly, variables: { ...assembly.variables, provider: state.selection.provider, model: state.selection.model } }
+    }, { prepend: true })
+    agent.ctx.on('agent/request', async (_, next) => {
+      const resolved = await next()
+      const { reasoningEffort: _inherited, ...config } = resolved
+      return { ...config, ...state.selection,
+        ...(state.policy.maxTokens === undefined ? {} : { maxTokens: state.policy.maxTokens }),
+        ...(state.policy.tools === 'none' ? { tools: [] } : {}),
+      }
+    }, { prepend: true })
+    this.sessionPolicies.set(agent, state)
+  }
+
+  async openSession(id, { sessionId, context, cwd, selection, policy, signal, sessions, resume }) {
+    if (sessions.has(sessionId)) {
+      const existing = sessions.get(sessionId)
+      const agent = this.ctx.agents.get(sessionId)
+      if (agent) this.installSessionPolicy(agent, selection, policy)
+      return existing.public
+    }
     await this.workspaces.recordSession(id, sessionId)
-    const preset = await this.ctx.agentPresets.resolve('standard')
+    const presetId = policy.tools === 'none'
+      ? await this.restrictedPreset() : (await this.ctx.agentPresets.resolve('standard')).id
     signal.throwIfAborted()
     // DSH resolves a Session's location once: a resume must name the same cwd the
     // Session was created with, so the caller passes it back for both paths.
     const sessionCwd = cwd ?? context.workspacePath
-    await this.ctx.sessionController.create({ sessionId, cwd: sessionCwd, agentPreset: preset.id })
-    await this.ctx.sessionController.selectModel({ sessionId, ...selection })
+    await this.ctx.sessionController.create({ sessionId, cwd: sessionCwd,
+      ...(resume && policy.tools === 'none' ? {} : { agentPreset: presetId }),
+    })
+    // selectModel also saves the ordinary chat's global default. Restricted
+    // pack Sessions route through scoped public waterfalls instead.
+    if (policy.tools !== 'none') await this.ctx.sessionController.selectModel({ sessionId, ...selection })
     const agent = this.ctx.agents.get(sessionId)
     if (!agent) throw new Error(`会话 "${sessionId}" 创建后不可用。`)
+    if (policy.tools === 'none' || policy.maxTokens !== undefined || policy.system !== undefined) this.installSessionPolicy(agent, selection, policy)
     this.ctx.permissionPresets.set(agent.session, 'workspace-write')
     const session = {
       public: null,

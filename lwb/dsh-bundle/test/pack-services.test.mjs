@@ -28,7 +28,7 @@ async function setup(t) {
       register: (name) => name,
       mutate: async (ns, ops) => { assert.equal(ns, 'llm-pi-ai'); for (const op of ops) settings.providers[op.path[1]] = op.value },
     },
-    agentPresets: { resolve: async () => ({ id: 'standard' }), mount: async (_, id) => calls.push(['preset', id]) },
+    agentPresets: { register: async options => calls.push(['preset.register', options]), resolve: async () => ({ id: 'standard' }), mount: async (_, id) => calls.push(['preset', id]) },
     permissionPresets: { set: (_, value) => calls.push(['permission', value]) },
     agents: {
       create: async (options) => {
@@ -50,6 +50,12 @@ async function setup(t) {
         let agent = sessionAgents.get(options.sessionId)
         if (!agent) {
           agent = {
+            ctx: {
+              hooks: new Map(),
+              on(name, callback) { this.hooks.set(name, callback) },
+              tools: { restrict: options => calls.push(['tools.restrict', options]) },
+              systemPrompt: { section: options => calls.push(['system.section', options]) },
+            },
             id: options.sessionId,
             session: { header: { cwd: options.cwd } },
             whenIdle: async () => calls.push(['session.idle', options.sessionId]),
@@ -390,4 +396,29 @@ test('settings share one writer per scope and cannot write after unload', async 
   assert.deepEqual(b.get(), a.get())
   await services.unmount(first.id)
   await assert.rejects(a.update({ left: 3 }))
+})
+
+
+test('restricted persistent Sessions enforce per-request parameters without saving the global model', async t => {
+  const { first, calls, ctx } = await setup(t)
+  const options = { provider: 'bailian', model: 'qwen', maxTokens: 4096, tools: 'none', system: '只下棋。{{literal}}' }
+  const session = await first.sessions.create(options)
+  const agent = ctx.agents.get(session.id)
+  assert.equal(calls.find(([kind]) => kind === 'session.create')[1].agentPreset, 'lwb-pack-no-tools')
+  assert.equal(calls.some(([kind]) => kind === 'session.selectModel'), false)
+  assert.deepEqual(calls.find(([kind]) => kind === 'tools.restrict')[1], { allow: [] })
+  const section = calls.find(([kind]) => kind === 'system.section')[1]
+  assert.equal(section.complete, true)
+  assert.equal(section.interpolate, false)
+  assert.equal(section.text(), options.system)
+  const request = () => agent.ctx.hooks.get('agent/request')({}, async () => ({ provider: 'other', model: 'default', reasoningEffort: 'high', maxTokens: 16, tools: [{ name: 'bash' }] }))
+  assert.deepEqual(await request(), { provider: 'bailian', model: 'qwen', maxTokens: 4096, tools: [] })
+  await session.dispose()
+  assert.equal((await request()).tools.length, 0, 'facade disposal keeps the live Agent restricted')
+  await first.sessions.resume(session.id, { ...options, maxTokens: 8192, reasoningEffort: 'low' })
+  assert.equal(calls.filter(([kind]) => kind === 'session.create').at(-1)[1].agentPreset, undefined, 'legacy preset identity is preserved on resume')
+  assert.equal((await request()).maxTokens, 8192)
+  assert.equal((await request()).reasoningEffort, 'low')
+  assert.equal(calls.filter(([kind]) => kind === 'tools.restrict').length, 1)
+  for (const maxTokens of [0, 127, 393217, 1.5, NaN]) await assert.rejects(first.sessions.create({ ...options, maxTokens }), /输出上限/)
 })

@@ -38,7 +38,7 @@ npm run dev -- --port 4174
 | `lwb/profile/` | 工作台基础运行组合 |
 | `lwb/dsh-bundle/` | 工作台壳、包生命周期、工作区和服务 |
 | `lwb/pack-sdk/` | 包清单校验、注册和作用域接口 |
-| `lwb/packs/` | 独立业务包；目前仅有 `spoken-video` |
+| `lwb/packs/` | 独立业务包；当前包含 `spoken-video` 与 `ai-arena` |
 | `scripts/setup-upstream.mjs` | 获取和构建锁定的 DSH |
 | `docs/` | 当前指南、开发契约及历史记录 |
 
@@ -53,6 +53,7 @@ npm run check
 npm run profile:check
 npm run pack:profile-check
 npm run unit:test
+npm run arena:test
 ```
 
 也可以用 `npm test` 一次运行上述检查。`npm run dsh:dump` 可查看展开的运行配置，输出分享前应检查是否包含本机信息。

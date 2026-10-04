@@ -19,6 +19,7 @@
 | 文档 | 内容 |
 |---|---|
 | [贡献指南](../CONTRIBUTING.md) | 开发环境、验证、Issue 与 PR |
+| [AI竞技台](ai-arena.md) | 五子棋模型竞技、会话与用量、暂停恢复、回放及验收 |
 | [能力包开发入门](develop-a-pack.md) | 最小独立包与注册、加载、卸载 |
 | [总体架构](01-architecture.md) | 工作台与 DSH、业务包的职责边界 |
 | [能力包契约](12-capability-packs.md) | 清单、host/client 贡献及当前口播流程 |

@@ -8,7 +8,10 @@
 |---|---|---|
 | DeepSeek Harness | 对话、模型、工具、会话和插件运行时 | [上游仓库](https://github.com/deepseek-ai/deepseek-harness)，锁定版本见 [UPSTREAM.lock.json](lwb/UPSTREAM.lock.json)；该版本根许可证为 MIT，Copyright 2026 DeepSeek |
 | React / React DOM | 工作台与视频组件 | [React](https://github.com/facebook/react)，MIT |
-| Remotion / Remotion CLI | 视频工程、预览与渲染 | [Remotion](https://github.com/remotion-dev/remotion)，使用独立的 [Remotion License](https://www.remotion.dev/license)，并非本项目许可证的一部分 |
+| Remotion / Remotion CLI / Bundler / Renderer | 视频工程、预览与渲染 | [Remotion](https://github.com/remotion-dev/remotion)，使用独立的 [Remotion License](https://www.remotion.dev/license)，并非本项目许可证的一部分 |
+| @algorithm.ts/gomoku 4.0.5 | 五子棋规则与胜负判定 | [algorithm.ts](https://github.com/guanghechen/algorithm.ts)，MIT |
+| lucide-react 0.468.0 | 竞技台图标 | [Lucide](https://github.com/lucide-icons/lucide)，ISC |
+| esbuild 0.28.1 | 竞技台客户端构建 | [esbuild](https://github.com/evanw/esbuild)，MIT |
 | Babel parser | 解析生成的视频代码 | [Babel](https://github.com/babel/babel)，MIT |
 | PostCSS | 样式解析 | [PostCSS](https://github.com/postcss/postcss)，MIT |
 | ws | WebSocket 通信 | [ws](https://github.com/websockets/ws)，MIT |

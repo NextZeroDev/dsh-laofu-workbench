@@ -6,6 +6,7 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 const ROUTE = 'lwb'
 const INTERACTIVE_MAX_TOKENS = 32768
 const retryPolicy = resolveRetryPolicy({ mode: 'normal', maxRetries: 0 }, 'LWB')
+const effectiveMaxTokens = item => Math.min(Number.isInteger(item.maxOutputTokens) ? item.maxOutputTokens : INTERACTIVE_MAX_TOKENS, INTERACTIVE_MAX_TOKENS)
 
 export class LwbModelAdapter extends LlmAdapter {
   constructor(client, ctx) { super(); this.client = client; this.ctx = ctx }
@@ -16,7 +17,8 @@ export class LwbModelAdapter extends LlmAdapter {
     return (await this.client.catalog()).models.filter(item => item.available).map(item => this.info(item))
   }
   info(item) {
-    return { provider: ROUTE, id: item.id, name: item.name, inputModalities: item.supportsVision ? ['text', 'image'] : ['text'], context: { contextWindow: item.contextWindow }, defaultMaxTokens: Math.min(item.maxOutputTokens, INTERACTIVE_MAX_TOKENS) }
+    const maxOutputTokens = effectiveMaxTokens(item)
+    return { provider: ROUTE, id: item.id, name: item.name, inputModalities: item.supportsVision ? ['text', 'image'] : ['text'], context: { contextWindow: item.contextWindow }, maxOutputTokens, defaultMaxTokens: maxOutputTokens }
   }
   async resolveModel(provider, model) {
     if (provider !== ROUTE) throw new LlmError('无效的 LWB 模型来源。', 'NO_ADAPTER')
@@ -41,7 +43,7 @@ export class LwbModelAdapter extends LlmAdapter {
     const credential = await this.client.serviceCredential()
     assertCurrent()
     const baseUrl = `${this.client.baseUrl}/api/lwb/v1`
-    const maxTokens = Math.min(item.maxOutputTokens, INTERACTIVE_MAX_TOKENS)
+    const maxTokens = effectiveMaxTokens(item)
     const model = { id: item.id, name: item.name, api: 'openai-completions', provider: ROUTE, baseUrl, reasoning: false, input: item.supportsVision ? ['text', 'image'] : ['text'], contextWindow: item.contextWindow, maxTokens, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, compat: { supportsStore: false, supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' } }
     const api = openAICompletionsApi()
     const piProvider = { id: ROUTE, name: 'LWB 模型服务', baseUrl, auth: { apiKey: { name: 'LWB', resolve: async ({ credential: key }) => ({ auth: { apiKey: key?.key }, source: 'LWB' }) } }, getModels: () => [model], stream: (...args) => api.stream(...args), streamSimple: (...args) => api.streamSimple(...args) }

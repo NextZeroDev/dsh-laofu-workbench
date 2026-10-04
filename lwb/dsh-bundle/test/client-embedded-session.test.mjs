@@ -5,6 +5,42 @@ import test from 'node:test'
 
 const source = await readFile(new URL('../client.js', import.meta.url), 'utf8')
 
+test('readonly official conversations block input and branching while preserving viewing controls', () => {
+  const start = source.indexOf('function ReadOnlyConversationSurface(')
+  const end = source.indexOf('\n    }', start) + 6
+  const effects = [], cleanups = [], writes = []
+  const previous = { reason: 'existing blocker' }
+  let block = previous, disconnected = false, update
+  const send = {}, copy = { getAttribute: () => '复制' }, branch = { getAttribute: () => '分支' }
+  const seat = { querySelectorAll: () => [send] }
+  const element = { querySelectorAll: selector => selector.includes('composer') ? [seat] : [copy, branch] }
+  const surface = vm.runInNewContext(`(${source.slice(start, end)})`, {
+    React: { useRef: () => ({ current: element }), useLayoutEffect: effect => effects.push(effect) },
+    h: (_component, props) => props,
+    services: { composerBlocks: () => ({ storeFor: () => ({ getSnapshot: () => block }), set: (_id, value) => { block = value; writes.push(value) } }), locale: { bind: () => () => '分支' } },
+    MutationObserver: class { constructor(callback) { update = callback } observe() {} disconnect() { disconnected = true } },
+  })
+  const props = surface({ sessionId: 'arena-session', children: 'official-chat' })
+  for (const effect of effects) cleanups.push(effect())
+  assert.notEqual(block, previous)
+  assert.equal(seat.inert, true)
+  assert.equal(seat.hidden, true)
+  assert.equal(send.disabled, true)
+  assert.equal(branch.disabled, true)
+  assert.equal(copy.disabled, undefined)
+  const lateSend = {}; seat.querySelectorAll = () => [lateSend]; update()
+  assert.equal(lateSend.disabled, true)
+  let refused = 0
+  props.onClickCapture({ target: { closest: () => seat }, preventDefault() { refused++ }, stopPropagation() { refused++ } })
+  assert.equal(refused, 2)
+  props.onClickCapture({ target: { closest: () => null }, preventDefault() { refused++ }, stopPropagation() { refused++ } })
+  assert.equal(refused, 2)
+  for (const cleanup of cleanups) cleanup?.()
+  assert.equal(block, previous)
+  assert.equal(disconnected, true)
+  assert.equal(writes.length, 2)
+})
+
 function packFixture() {
   const functions = ['currentSessionId', 'PackConversationPlaceholder', 'packSessionArmed',
     'mountedPackPanelSession', 'collapsePackPanel', 'focusSession', 'armPackSession', 'releasePackSession',

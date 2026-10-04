@@ -21,6 +21,7 @@ test('LWB delegates real SSE and tool calls to the official adapter with managed
   const client = { baseUrl: `http://127.0.0.1:${server.address().port}`, generation: 0, serviceAbort: new AbortController(), catalog: async () => ({ models: [entry] }), readSession: async () => ({ user: { id: '7' } }), assertGeneration(g) { assert.equal(g, this.generation) }, serviceCredential: async () => ({ apiKey: 'local-test-key' }), changed() {} }
   const adapter = new LwbModelAdapter(client, { get() {} })
   assert.equal((await adapter.listModels())[0].name, '快速')
+  assert.equal((await adapter.listModels())[0].maxOutputTokens, 32768)
   const prepared = await adapter.prepareCall('lwb', 'lwb-fast')
   assert.equal(prepared.model.defaultMaxTokens, 32768)
   const options = { provider: 'lwb', model: 'lwb-fast', messages: [createUserMessage({ content: [{ type: 'text', text: '测试' }], source: { kind: 'plugin', plugin: 'test' } })] }
