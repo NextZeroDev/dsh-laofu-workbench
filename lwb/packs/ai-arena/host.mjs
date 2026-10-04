@@ -22,10 +22,14 @@ function modelOutputLimit(model) {
   return Math.max(MIN_OUTPUT_TOKENS, Math.min(advertised ?? DEFAULT_MODEL_OUTPUT_LIMIT, MAX_OUTPUT_TOKENS))
 }
 export const SYSTEM = '你正在参加一场真实规则的 AI 竞技。只依据收到的局面决策。你没有任何工具。只输出一个 JSON 对象：{"action":{"row":整数,"col":整数},"speech":"一句面向观众的简短选手发言"}。speech 使用中文，最多 80 字，表达你这一手的意图或判断，不要叙述完整内部推理，不要伪造对手发言。坐标从 1 开始。不得输出代码围栏或其他文字。'
-export function parseDecision(text) {
+export const XIANGQI_SYSTEM = '你正在参加一场真实规则的中国象棋 AI 竞技。只依据收到的局面决策。你没有任何工具。只输出一个 JSON 对象：{"action":{"from":{"row":整数,"col":整数},"to":{"row":整数,"col":整数}},"speech":"一句面向观众的简短选手发言"}。speech 使用中文，最多 80 字，表达这一手的意图或判断，不要叙述完整内部推理，不要伪造对手发言。坐标从 1 开始，行从黑方顶端到红方底端为 1—10，列从左到右为 1—9。只能走合法着法，必须应将，不得让己方将帅被攻击。不得输出代码围栏或其他文字。'
+export function parseDecision(text, gameId = 'gomoku') {
   const value = JSON.parse(text.trim())
   if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.speech !== 'string' || !value.speech.trim() || value.speech.length > 80 || !value.action) throw new Error('回复必须包含合法的 action 和 1—80 字的 speech。')
-  return { action: { row: value.action.row, col: value.action.col }, speech: value.speech.trim() }
+  const action = gameId === 'xiangqi'
+    ? { from: { row: value.action.from?.row, col: value.action.from?.col }, to: { row: value.action.to?.row, col: value.action.to?.col } }
+    : { row: value.action.row, col: value.action.col }
+  return { action, speech: value.speech.trim() }
 }
 export function tokenCount(usage) {
   if (!usage) return null
@@ -67,15 +71,15 @@ export class ArenaHost {
     const maxTokensLimit = Math.min(...players.map(player => player.maxOutputTokens))
     if (request.pace !== undefined && request.pace !== 'native') throw new Error('比赛模式已移除，请刷新页面后创建比赛。')
     const config = {
-      maxMoves: bounded(request.maxMoves, 100, 1, 225, '落子上限'),
-      maxCalls: bounded(request.maxCalls, 120, 1, 450, '调用上限'),
+      maxMoves: bounded(request.maxMoves, game.id === 'xiangqi' ? 200 : 100, 1, game.id === 'xiangqi' ? 600 : 225, '行棋上限'),
+      maxCalls: bounded(request.maxCalls, game.id === 'xiangqi' ? 240 : 120, 1, game.id === 'xiangqi' ? 1200 : 450, '调用上限'),
       maxTokens: bounded(request.maxTokens, Math.min(DEFAULT_OUTPUT_TOKENS, maxTokensLimit), MIN_OUTPUT_TOKENS, maxTokensLimit, '每步输出上限'),
       maxTokensLimit,
       tokenBudget: bounded(request.tokenBudget, DEFAULT_TOKEN_BUDGET, 1000, MAX_TOKEN_BUDGET, '累计 Token 上限'),
       timeoutSeconds: bounded(request.timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 5, MAX_TIMEOUT_SECONDS, '单步时限'),
       pace: 'native',
       invalidRetries: bounded(request.invalidRetries, 1, 0, 2, '违规重试次数'),
-      speechVisibility: 'spectator', system: SYSTEM,
+      speechVisibility: 'spectator', system: game.id === 'xiangqi' ? XIANGQI_SYSTEM : SYSTEM,
       contextMode: 'current-position',
     }
     const match = await this.store.create({ title: `${players[0].name} vs ${players[1].name}`, game: { id: game.id, name: game.name, version: game.version, description: game.description }, players, config, state: game.create() })
@@ -188,7 +192,7 @@ export class ArenaHost {
     return session
   }
 
-  async executeDecisionTurn(session, prompt, { afterSeq, signal, progress, id, turnId, player } = {}) {
+  async executeDecisionTurn(session, prompt, { afterSeq, signal, progress, id, turnId, player, gameId = 'gomoku', system = SYSTEM } = {}) {
     let currentPrompt = prompt
     let cursor = Number.isSafeInteger(afterSeq) ? afterSeq : -1
     let usage = null
@@ -203,7 +207,7 @@ export class ArenaHost {
       }
       usage = mergeUsage(usage, response.usage)
       let parseError = null
-      try { parseDecision(response.text) } catch (error) { parseError = error }
+      try { parseDecision(response.text, gameId) } catch (error) { parseError = error }
       const complete = response.finish?.kind === 'stop' && !parseError
       if (complete || attempt === MAX_CONTINUATIONS || response.finish?.kind === 'cancelled') break
       continuations += 1
@@ -213,7 +217,7 @@ export class ArenaHost {
           sessionSeq: response.sessionSeq, error: parseError?.message || null })
       })
       cursor = Number.isSafeInteger(response.sessionSeq) ? response.sessionSeq : cursor
-      currentPrompt = '上一条回复未完成或格式不合法。请立即完成当前回合，只输出一个完整、合法的 JSON 对象：{"action":{"row":整数,"col":整数},"speech":"一句不超过80字的中文发言"}。不要重复分析，不要输出代码围栏或其他文字。'
+      currentPrompt = `上一条回复未完成或格式不合法。请立即完成当前回合，不要重复分析。${system}`
     }
     if (usage) response = { ...response, usage }
     if (continuations) response = { ...response, continuationCount: continuations }
@@ -234,7 +238,7 @@ export class ArenaHost {
       const pending = match.pending
       let decision, next
       try {
-        decision = parseDecision(pending.response.text)
+        decision = parseDecision(pending.response.text, match.game.id)
         next = this.games.get(match.game.id).apply(match.state, decision.action, pending.player)
       } catch (error) {
         match.events.push({ type: 'invalid', at: now(), turnId: pending.turnId, player: pending.player, attempt: pending.attempt, error: error.message, raw: pending.response.text })
@@ -254,11 +258,11 @@ export class ArenaHost {
         if (!['running', 'pausing'].includes(match.status)) return
         if (match.pending) { await this.commitPending(id); continue }
         if (match.state.winner !== null || match.state.draw) {
-          await this.finish(id, { kind: match.state.draw ? 'draw' : 'win', winner: match.state.winner, message: match.state.draw ? '棋盘已满，平局。' : `${match.players[match.state.winner].name} 连成五子，获胜。` }); return
+          await this.finish(id, { kind: match.state.draw ? 'draw' : 'win', winner: match.state.winner, message: match.state.draw ? (match.game.id === 'xiangqi' ? `中国象棋和棋（${match.state.terminalReason || '规则判定'}）。` : '棋盘已满，平局。') : `${match.players[match.state.winner].name} ${match.game.id === 'xiangqi' ? `获胜（${match.state.terminalReason || '将死或困毙'}）` : '连成五子，获胜'}。` }); return
         }
         if (match.status === 'pausing') { await this.store.update(id, value => { value.status = 'paused' }); return }
         if (match.state.moves.length >= match.config.maxMoves || match.calls >= match.config.maxCalls || match.tokens >= match.config.tokenBudget) {
-          await this.finish(id, { kind: 'limit', winner: null, message: '达到比赛预算或落子上限，比赛结束，未判定胜负。' }); return
+          await this.finish(id, { kind: 'limit', winner: null, message: '达到比赛预算或行棋上限，比赛结束，未判定胜负。' }); return
         }
         const attempt = match.activeTurn?.attempt || 0
         if (attempt > match.config.invalidRetries) {
@@ -299,6 +303,8 @@ export class ArenaHost {
             id,
             turnId,
             player,
+            gameId: match.game.id,
+            system: match.config.system,
           })
           response = { ...response, sessionId: session.id }
           if (response.finish?.kind !== 'stop' && !(response.finish?.kind === 'cancelled' && signal.aborted)) {

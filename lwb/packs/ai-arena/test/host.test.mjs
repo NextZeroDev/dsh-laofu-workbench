@@ -9,6 +9,7 @@ import { ArenaGames } from '../games.mjs'
 import { decisionPrompt } from '../decision-prompt.mjs'
 
 const reply = (row, col, speech = '我先占住这个位置。') => ({ text: JSON.stringify({ action: { row, col }, speech }), reasoning: '', usage: { inputTokens: 10, outputTokens: 10 }, finish: { kind: 'stop' }, config: {} })
+const xiangqiReply = (fromRow, fromCol, toRow, toCol, speech = '我先出动这枚棋子。') => ({ ...reply(1, 1, speech), text: JSON.stringify({ action: { from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } }, speech }) })
 async function setup(t, complete, models = [{ id: 'black', name: 'Black' }, { id: 'white', name: 'White' }], hostOptions = {}) {
   const root = await mkdtemp(join(tmpdir(), 'arena-test-'))
   t.after(() => rm(root, { recursive: true, force: true }))
@@ -87,6 +88,84 @@ test('complete match persists inputs, output, speech and deterministic winner wi
   assert.equal(match.events.filter(event => event.type === 'move').length, 9)
   assert.equal(match.events.filter(event => event.type === 'request').length, 9)
   assert.ok(requests.every(request => !request.prompt.includes('观众台词')))
+})
+
+test('xiangqi parses source/destination moves and runs an isolated multi-turn match to its move limit', async t => {
+  const opening = [[10, 2, 8, 3], [1, 2, 3, 3], [8, 2, 5, 2], [3, 8, 5, 8], [10, 8, 8, 7], [1, 8, 3, 7]]
+  const requests = []
+  const env = await setup(t, async request => {
+    requests.push(request)
+    return xiangqiReply(...opening[requests.length - 1], `象棋观众台词 ${requests.length}`)
+  })
+  const started = await env.start({ gameId: 'xiangqi', maxMoves: opening.length })
+  await env.settle()
+  const match = await env.store.get(started.id)
+  assert.equal(match.game.id, 'xiangqi')
+  assert.equal(match.game.name, '中国象棋')
+  assert.equal(match.status, 'finished')
+  assert.equal(match.result.kind, 'limit')
+  assert.equal(match.result.winner, null)
+  assert.match(match.result.message, /行棋上限/u)
+  assert.equal(match.calls, opening.length)
+  assert.equal(match.state.moves.length, opening.length)
+  assert.equal(match.tokens, opening.length * 20)
+  assert.equal(match.state.nextPlayer, 0)
+  assert.equal(match.config.maxCalls, 240)
+  assert.match(match.config.system, /"from".*"to"/u)
+  assert.match(match.config.system, /中国象棋/u)
+  assert.match(match.config.system, /行.*1.*10/u)
+  const recordedMoves = match.events.filter(event => event.type === 'move')
+  assert.deepEqual(recordedMoves.map(event => event.action), opening.map(([fromRow, fromCol, toRow, toCol]) => ({ from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } })))
+  assert.deepEqual(recordedMoves.map(event => event.player), [0, 1, 0, 1, 0, 1])
+  for (const request of requests) {
+    assert.equal(request.tools, 'none')
+    assert.equal(request.system, match.config.system)
+    assert.match(request.prompt, /"legalMoves"/u)
+    assert.ok(!request.prompt.includes('象棋观众台词'))
+    assert.ok(!request.prompt.includes('"moves"'))
+  }
+  assert.match(requests[0].prompt, /"color":"红"/u)
+  assert.match(requests[1].prompt, /"color":"黑"/u)
+  assert.match(requests[1].prompt, /08 · 炮 傌/u)
+  assert.equal(new Set(match.events.filter(event => event.type === 'request').map(event => event.sessionId)).size, 2)
+  assert.equal(env.host.sessions.size, 0)
+  assert.deepEqual(parseDecision(xiangqiReply(10, 2, 8, 3, '出马').text, 'xiangqi'), { action: { from: { row: 10, col: 2 }, to: { row: 8, col: 3 } }, speech: '出马' })
+})
+
+test('xiangqi invalid moves retry the same position without committing a move or leaking speech', async t => {
+  const requests = []
+  const responses = [xiangqiReply(7, 1, 7, 2, '违规发言不该进入局面'), xiangqiReply(10, 2, 8, 3, '合法发言不该进入对手局面'), xiangqiReply(1, 2, 3, 3, '黑方出马')]
+  const env = await setup(t, async request => { requests.push(request); return responses[requests.length - 1] })
+  const started = await env.start({ gameId: 'xiangqi', maxMoves: 2, invalidRetries: 1 })
+  await env.settle()
+  const match = await env.store.get(started.id)
+  assert.equal(match.result.kind, 'limit')
+  assert.equal(match.calls, 3)
+  assert.equal(match.tokens, 60)
+  assert.equal(match.state.moves.length, 2)
+  assert.deepEqual(match.events.filter(event => event.type === 'request').map(event => [event.player, event.attempt, event.moveNumber]), [[0, 0, 1], [0, 1, 1], [1, 0, 2]])
+  const invalid = match.events.filter(event => event.type === 'invalid')
+  assert.equal(invalid.length, 1)
+  assert.match(invalid[0].error, /中国象棋规则/u)
+  assert.match(invalid[0].raw, /违规发言/u)
+  assert.match(requests[1].prompt, /中国象棋规则/u)
+  assert.match(requests[1].prompt, /10 俥 傌 相/u)
+  assert.ok(requests.every(request => !request.prompt.includes('发言不该进入')))
+  assert.deepEqual(match.events.filter(event => event.type === 'move').map(event => event.action.from), [{ row: 10, col: 2 }, { row: 1, col: 2 }])
+})
+
+test('xiangqi repeated illegal moves forfeit without changing the board', async t => {
+  const env = await setup(t, async () => xiangqiReply(7, 1, 7, 2))
+  const started = await env.start({ gameId: 'xiangqi', invalidRetries: 1 })
+  await env.settle()
+  const match = await env.store.get(started.id)
+  assert.equal(match.result.kind, 'forfeit')
+  assert.equal(match.result.winner, 1)
+  assert.equal(match.state.moves.length, 0)
+  assert.equal(match.state.pieces.length, 32)
+  assert.equal(match.calls, 2)
+  assert.equal(match.events.filter(event => event.type === 'move').length, 0)
+  assert.equal(match.events.filter(event => event.type === 'invalid').length, 2)
 })
 test('uses the shared model ceiling and rejects a request above the selected models', async t => {
   const env = await setup(t, async request => { assert.equal(request.maxTokens, 8192); return reply(8, 8) }, [{ id: 'black', name: 'Black', maxOutputTokens: 16384 }, { id: 'white', name: 'White', maxOutputTokens: 8192 }])

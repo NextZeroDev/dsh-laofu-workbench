@@ -98,7 +98,10 @@ body[data-ds-dark-theme] .ar-page{
 .ar-player small{display:block;margin-top:3px;font-size:11px;color:var(--lwb-muted);overflow-wrap:anywhere}
 .ar-stone{display:block;flex:none;width:19px;height:19px;border-radius:50%;background:#252b28;border:1px solid #a9b5ac;box-shadow:0 1px 2px #0001}
 .ar-stone[data-player="1"]{background:#fff}.ar-vs{text-align:center;color:var(--lwb-muted);font-size:11px;font-weight:700}
+.ar-player[data-game="xiangqi"] .ar-stone,.ar-participant[data-game="xiangqi"] .ar-stone{background:#b83c2e;border-color:#f0c999}
+.ar-player[data-game="xiangqi"] .ar-stone[data-player="1"],.ar-participant[data-game="xiangqi"] .ar-stone[data-player="1"]{background:#252b28}
 .ar-board{width:calc(100% - 32px);max-width:520px;aspect-ratio:1;margin:16px auto;position:relative;overflow:hidden;border:1px solid #9a6336;border-radius:9px;background:#c58a4d;box-shadow:0 10px 22px rgba(82,45,20,.18),inset 0 1px 0 rgba(255,245,210,.3)}
+.ar-match-view[data-game="xiangqi"] .ar-board,.ar-match[data-game="xiangqi"] .ar-board{aspect-ratio:508/562}
 .ar-board > svg{display:block;width:100%;height:100%}
 .ar-board svg g:last-child{animation:ar-place .25s ease-out}
 .ar-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--lwb-line);background:var(--lwb-surface)}

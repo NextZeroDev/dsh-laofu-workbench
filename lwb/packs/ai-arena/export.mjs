@@ -4,7 +4,7 @@ import { lstat, mkdir, open, rename, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { sceneHtml, SCENE_CSS, movesOf, escapeHtml } from './presentation.mjs'
+import { sceneHtml, SCENE_CSS, movesOf, escapeHtml, actionLabel, playerSide } from './presentation.mjs'
 
 const exec = promisify(execFile)
 const ROOT = dirname(fileURLToPath(import.meta.url))
@@ -20,9 +20,9 @@ export function reportMarkdown(match) {
   for (const event of match.events) {
     if (event.type === 'request' || event.type === 'response') turns.set(event.turnId, { ...turns.get(event.turnId), ...event })
   }
-  return [`# ${match.title}`, '', `规则：${match.game.description}（${match.game.version}）`, `创建：${match.createdAt}`, `当前调用配置：${executionLabel(match.config?.pace)}`, `状态：${match.status}`, `结果：${match.result?.message || '尚未结束'}`, `模型调用：${match.calls}；已知 Token：${match.tokens}${match.usageUnknown ? '（部分调用未报告用量）' : ''}`, '选手发言仅对观众可见。', '', ...match.players.map((player, i) => `${i ? '白' : '黑'}方：${player.provider}/${player.model}；${player.name}；所选推理强度：${player.reasoningEffort || '模型默认'}`), '', ...movesOf(match).map(event => {
+  return [`# ${match.title}`, '', `规则：${match.game.description}（${match.game.version}）`, `创建：${match.createdAt}`, `当前调用配置：${executionLabel(match.config?.pace)}`, `状态：${match.status}`, `结果：${match.result?.message || '尚未结束'}`, `模型调用：${match.calls}；已知 Token：${match.tokens}${match.usageUnknown ? '（部分调用未报告用量）' : ''}`, '选手发言仅对观众可见。', '', ...match.players.map((player, i) => `${playerSide(match.game, i)}：${player.provider}/${player.model}；${player.name}；所选推理强度：${player.reasoningEffort || '模型默认'}`), '', ...movesOf(match).map(event => {
     const turn = turns.get(event.turnId)
-    return `## 第 ${event.moveNumber} 手 · ${match.players[event.player].name}\n\n${event.action.row} 行 ${event.action.col} 列 · ${event.elapsedMs} ms\n\n${executionLabel(turn?.pace)} · ${turn?.execution?.label || turn?.model?.reasoningEffort || '模型默认推理'}\n\n${event.speech}\n`
+    return `## 第 ${event.moveNumber} 手 · ${match.players[event.player].name}\n\n${actionLabel(event.action, match.game)} · ${event.elapsedMs} ms\n\n${executionLabel(turn?.pace)} · ${turn?.execution?.label || turn?.model?.reasoningEffort || '模型默认推理'}\n\n${event.speech}\n`
   })].join('\n')
 }
 export class ArenaExport {

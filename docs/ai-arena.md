@@ -192,3 +192,12 @@ npm run dev -- --no-open --port 4185
 - 整合主分支 `044cacc`，保留 `0.1.2` 版本、官方桌面发行配置与迁移检查，同时纳入竞技台依赖、构建和测试命令。
 - 整合后的 `npm test` 全部通过：共享 SDK、桌面、能力包服务与口播模块 441 项，竞技台 43 项，共 484 项；无失败、跳过或取消。项目语法、两项 Profile 检查、竞技台客户端构建与 diff 格式检查通过。
 - 此次整合不改变官方桌面发行包的默认能力包清单，也不包含本地比赛数据、凭据或临时验收产物。
+
+## 2026-10-05 中国象棋竞技游戏
+
+- 在独立 worktree `dsh-laofu-workbench-xiangqi`、分支 `codex/ai-arena-xiangqi` 中，以基线提交 `c0f21ec` 为起点实现中国象棋，未改变其他能力包的注册或调度路径。游戏注册同时保留 `gomoku`，象棋使用独立的 `xiangqi` 规则定义和版本。
+- 象棋使用标准 10×9 棋盘，红方先手，支持将、士、象、马、车、炮、兵的合法走法，以及马腿、象眼、九宫、过河、炮架、将帅照面、自将检查、将军、将死、困毙和吃将。客户端、回放、离线 HTML、Markdown 战报和视频表现层显示楚河汉界、九宫、32 枚红黑棋子与起止坐标，视觉沿用五子棋竞技台的页面结构和窄屏布局。
+- 竞技台和棋采用可审计的简化规则：同一行棋方的局面第三次出现，或连续 120 个半回合没有吃子且没有兵卒向前推进。当前版本不裁决正式中国象棋长将、长捉的责任归属；完整规则若要覆盖该裁决，需要扩展重复局面历史和责任判定协议。
+- 开源资料仅作规则、合法着法和棋盘视觉参考，不直接复制 GPL/AGPL 代码。重点参考 `@weshell/xiangqi.js`（BSD-2-Clause，https://github.com/west-shell/xiangqi.js）、`xiangqi.js`（BSD-2-Clause，https://github.com/lengyanyu258/xiangqi.js）、`xiangqiboardjs`（MIT，https://github.com/lengyanyu258/xiangqiboardjs）、`lhttjdr/xiangqi`（MIT，https://github.com/lhttjdr/xiangqi）和 `wukong-xiangqi`（MIT，https://github.com/maksimKorzh/wukong-xiangqi）。Pikafish/Fairy-Stockfish（GPL-3.0）、ElephantEye（LGPL-2.1）、xqwlight（GPL-2.0）和 pychess-variants（AGPL-3.0）仅作为引擎或服务架构资料，不作为本包运行时依赖。
+- 可复现的规则交叉检查：`node lwb/packs/ai-arena/test/xiangqi-reference-check.mjs` 使用 `@weshell/xiangqi.js@1.0.3`、固定 seed `0x51a7c0de`，比较 1200 个局面并应用 1200 个合法半回合，覆盖 4 局，`mismatches=0`。该检查只证明合法着法集合 parity；每个局面重建 FEN，因此不比较三次重复、120 半回合和棋或其他终局责任裁决。
+- 本次竞技台验证：`npm run arena:build` 通过，`npm run arena:test` 为 58/58 通过；其中包含五子棋兼容、象棋规则、Host 多回合、非法动作重试、回放、导出和展示测试。真实工作台浏览器 E2E 使用 DSH SSE 与本地 Arena Fixture 完成连续 12 手合法走子，并验证暂停/继续、预算结束、回放进度控制、请求与响应审计、usage 和只读 DSH 对话视图。Fixture 验证了产品调用链路，不代表真实供应商模型棋力。

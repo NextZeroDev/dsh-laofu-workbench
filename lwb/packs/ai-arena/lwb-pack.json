@@ -5,23 +5,76 @@
   "name": "AI竞技台",
   "version": "0.1.0",
   "description": "让模型在真实游戏规则下竞技，观战落子与选手发言，回放并导出完整比赛。",
-  "providers": ["official", "ats", "custom"],
+  "providers": [
+    "official",
+    "ats",
+    "custom"
+  ],
   "market": {
     "category": "AI竞技",
-    "tags": ["五子棋", "模型对战", "选手发言", "回放", "视频导出"],
-    "workflow": ["选择游戏", "配置选手", "自动比赛", "回放复盘", "导出视频"],
+    "tags": [
+      "五子棋",
+      "中国象棋",
+      "模型对战",
+      "选手发言",
+      "回放",
+      "视频导出"
+    ],
+    "workflow": [
+      "选择游戏",
+      "配置选手",
+      "自动比赛",
+      "回放复盘",
+      "导出视频"
+    ],
     "icon": "竞",
-    "introduction": "为模型创建一场有规则、有胜负、有选手表达的比赛。首发五子棋，比赛画面与真实模型发言同步呈现，比赛结束后可重新回放或导出横竖屏视频。",
-    "gettingStarted": ["先在工作台设置中配置可用模型。", "五子棋采用 15×15 自由规则，黑方先手，连续五颗及以上获胜，无禁手。", "选手发言只给观众看，不发送给对手；模型没有文件、网络和通用工具权限。", "比赛按实际模型用量计费；导出视频需要 FFmpeg。"],
+    "introduction": "为模型创建一场有规则、有胜负、有选手表达的比赛。支持五子棋与中国象棋，比赛画面与真实模型发言同步呈现，比赛结束后可重新回放或导出横竖屏视频。",
+    "gettingStarted": [
+      "先在工作台设置中配置可用模型。",
+      "五子棋采用 15×15 自由规则，黑方先手，连续五颗及以上获胜，无禁手。",
+      "中国象棋采用 10×9 棋盘，红方先手，完整行棋、将军、将死与困毙规则。竞技台简化和棋：同一行棋方的局面三次重复，或连续 120 半回合无吃子及兵卒向前推进。暂不裁决正式长将、长捉责任。",
+      "选手发言只给观众看，不发送给对手；模型没有文件、网络和通用工具权限。",
+      "比赛按实际模型用量计费；导出视频需要 FFmpeg。"
+    ],
     "features": [
-      {"menuId": "games", "title": "游戏库", "description": "查看游戏规则与赛制，选择游戏进入竞技台。", "icon": "target"},
-      {"menuId": "arena", "title": "竞技台", "description": "配置模型、预算与时限，实时观看棋盘和双方的选手发言。", "icon": "signal"},
-      {"menuId": "history", "title": "比赛记录", "description": "逐步回放、查看实际输入输出，下载战报、离线回放和横竖屏视频。", "icon": "video"}
+      {
+        "menuId": "games",
+        "title": "游戏库",
+        "description": "查看游戏规则与赛制，选择游戏进入竞技台。",
+        "icon": "target"
+      },
+      {
+        "menuId": "arena",
+        "title": "竞技台",
+        "description": "配置模型、预算与时限，实时观看棋盘和双方的选手发言。",
+        "icon": "signal"
+      },
+      {
+        "menuId": "history",
+        "title": "比赛记录",
+        "description": "逐步回放、查看实际输入输出，下载战报、离线回放和横竖屏视频。",
+        "icon": "video"
+      }
     ]
   },
   "menus": [
-    {"id": "games", "label": "游戏库", "glyph": "棋", "tone": "green"},
-    {"id": "arena", "label": "竞技台", "glyph": "竞", "tone": "orange"},
-    {"id": "history", "label": "比赛记录", "glyph": "史", "tone": "blue"}
+    {
+      "id": "games",
+      "label": "游戏库",
+      "glyph": "棋",
+      "tone": "green"
+    },
+    {
+      "id": "arena",
+      "label": "竞技台",
+      "glyph": "竞",
+      "tone": "orange"
+    },
+    {
+      "id": "history",
+      "label": "比赛记录",
+      "glyph": "史",
+      "tone": "blue"
+    }
   ]
 }

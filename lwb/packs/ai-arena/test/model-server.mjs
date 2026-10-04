@@ -8,12 +8,26 @@ const server = createServer(async (request, response) => {
     for await (const chunk of request) body += chunk
     const input = JSON.parse(body)
     if (input.tools?.length) throw new Error('Unexpected tools')
-    const prompt = input.messages.find(item => item.role === 'user')?.content
-    if (typeof prompt !== 'string' || prompt.includes('验收发言')) throw new Error('Unexpected prompt or opponent speech')
-    const observation = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1))
-    const [row, col] = points[observation.turn - 1]
-    const text = JSON.stringify({ action: { row, col }, speech: `验收发言：第${observation.turn}手，我选择${row}行${col}列。` })
-    console.log(JSON.stringify({ model: input.model, turn: observation.turn, tools: input.tools?.length || 0 }))
+    // DSH can append its own context/retry user messages after the arena prompt.
+    // Read the latest actual board observation instead of a fixed message index.
+    let observation
+    for (const message of input.messages.filter(item => item.role === 'user').reverse()) {
+      if (typeof message.content !== 'string') continue
+      for (const line of message.content.split('\n')) {
+        if (!line.startsWith('{')) continue
+        try {
+          const candidate = JSON.parse(line)
+          if (Number.isInteger(candidate.turn) && typeof candidate.board === 'string') observation = candidate
+        } catch { /* A context line is not a board observation. */ }
+      }
+      if (observation) break
+    }
+    if (!observation) throw new Error('No arena observation in request')
+    const point = points[(observation.turn - 1) % points.length]
+    const action = observation.legalMoves?.[(observation.turn * 7) % observation.legalMoves.length] || { row: point[0], col: point[1] }
+    const text = JSON.stringify({ action, speech: `验收发言：第${observation.turn}手，稳步推进。` })
+    console.log(JSON.stringify({ model: input.model, game: observation.legalMoves ? 'xiangqi' : 'gomoku', turn: observation.turn, action, tools: input.tools?.length || 0 }))
+    await new Promise(resolve => setTimeout(resolve, 700))
     response.writeHead(200, { 'content-type': 'text/event-stream' })
     const emit = value => response.write(`data: ${JSON.stringify({ id: 'arena-fixture', object: 'chat.completion.chunk', created: 1, model: input.model, ...value })}\n\n`)
     emit({ choices: [{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }] })

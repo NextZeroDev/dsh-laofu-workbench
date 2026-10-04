@@ -6,7 +6,7 @@ const h = React.createElement
 // Running turns include the final turn being settled before a requested pause.
 export const activeMatchCount = matches => matches.filter(match => ['running', 'pausing'].includes(match.status)).length
 
-function Confirmation({ title, description, notice, players, confirmLabel, onResult, opener }) {
+function Confirmation({ title, description, notice, players, playerLabels, confirmLabel, onResult, opener }) {
   const dialog = React.useRef(null), titleId = React.useId(), descriptionId = React.useId()
   React.useEffect(() => {
     const element = dialog.current
@@ -25,7 +25,7 @@ function Confirmation({ title, description, notice, players, confirmLabel, onRes
     h('div', { className: 'ar-confirm-head' }, h('span', { className: 'ar-confirm-mark' }, h(Play)), h('button', { className: 'ar-icon', type: 'button', 'aria-label': '关闭确认框', onClick: () => onResult(false) }, h(X))),
     h('h2', { id: titleId }, title), h('p', { id: descriptionId, className: 'ar-confirm-copy' }, description),
     notice && h('p', { className: 'ar-confirm-notice' }, notice),
-    players && h('div', { className: 'ar-confirm-players' }, players.map((name, index) => h('div', { key: index }, h('small', null, index ? '白方 · 后手' : '黑方 · 先手'), h('strong', null, name)))),
+    players && h('div', { className: 'ar-confirm-players' }, players.map((name, index) => h('div', { key: index }, h('small', null, playerLabels?.[index] || (index ? '白方 · 后手' : '黑方 · 先手')), h('strong', null, name)))),
     h('div', { className: 'ar-confirm-actions' }, h('button', { type: 'button', className: 'ar-button', onClick: () => onResult(false) }, '取消'), h('button', { type: 'button', className: 'ar-button ar-primary', onClick: () => onResult(true) }, confirmLabel)))
 }
 

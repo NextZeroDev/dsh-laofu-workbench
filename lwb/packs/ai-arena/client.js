@@ -237,12 +237,84 @@ var X = createLucideIcon("X", [
 ]);
 
 // lwb/packs/ai-arena/presentation.mjs
-var movesOf = (match) => match.events.filter((event) => event.type === "move");
+var movesOf = (match) => (match.events || []).filter((event) => event.type === "move");
+var gameName = (game) => game?.name || (game?.id === "xiangqi" ? "\u4E2D\u56FD\u8C61\u68CB" : "\u4E94\u5B50\u68CB");
+var playerSide = (game, player) => game?.id === "xiangqi" ? player ? "\u9ED1\u65B9" : "\u7EA2\u65B9" : player ? "\u767D\u65B9" : "\u9ED1\u65B9";
+var actionLabel = (action, game) => game?.id === "xiangqi" || action?.from && action?.to ? Number.isInteger(action?.from?.row) && Number.isInteger(action?.from?.col) && Number.isInteger(action?.to?.row) && Number.isInteger(action?.to?.col) ? `${action.from.row}\u884C${action.from.col}\u5217 \u2192 ${action.to.row}\u884C${action.to.col}\u5217` : "\u7B49\u5F85\u8D70\u5B50" : Number.isInteger(action?.row) && Number.isInteger(action?.col) ? `${action.row} \u884C ${action.col} \u5217` : "\u7B49\u5F85\u843D\u5B50";
 function frameAt(match, step) {
   const events = movesOf(match).slice(0, step);
   return { moves: events.map((event) => ({ ...event.action, player: event.player })), current: events.at(-1) || null, speech: events.slice(-6).reverse(), result: step >= movesOf(match).length ? match.result : null };
 }
-function boardSvg(moves, { size = 15, opacity = 1 } = {}) {
+var XIANGQI_PIECES = Object.freeze({
+  r: ["\u8F66", "red"],
+  n: ["\u9A6C", "red"],
+  b: ["\u76F8", "red"],
+  a: ["\u4ED5", "red"],
+  k: ["\u5E05", "red"],
+  c: ["\u70AE", "red"],
+  p: ["\u5175", "red"],
+  R: ["\u8ECA", "black"],
+  N: ["\u99AC", "black"],
+  B: ["\u8C61", "black"],
+  A: ["\u58EB", "black"],
+  K: ["\u5C06", "black"],
+  C: ["\u7832", "black"],
+  P: ["\u5352", "black"]
+});
+var XIANGQI_INITIAL = [
+  ["R", "N", "B", "A", "K", "A", "B", "N", "R"],
+  [null, null, null, null, null, null, null, null, null],
+  [null, "C", null, null, null, null, null, "C", null],
+  ["P", null, "P", null, "P", null, "P", null, "P"],
+  [null, null, null, null, null, null, null, null, null],
+  [null, null, null, null, null, null, null, null, null],
+  ["p", null, "p", null, "p", null, "p", null, "p"],
+  [null, "c", null, null, null, null, null, "c", null],
+  [null, null, null, null, null, null, null, null, null],
+  ["r", "n", "b", "a", "k", "a", "b", "n", "r"]
+];
+var isXiangqiMove = (move) => !!move && move.from && move.to;
+var coordinate = (value) => {
+  if (!value || !Number.isInteger(value.row) || !Number.isInteger(value.col) || value.row < 1 || value.row > 10 || value.col < 1 || value.col > 9) return null;
+  return { row: value.row - 1, col: value.col - 1 };
+};
+function xiangqiPosition(moves = []) {
+  const board = XIANGQI_INITIAL.map((row) => [...row]);
+  for (const move of moves) {
+    const from = coordinate(move.from), to = coordinate(move.to);
+    if (!from || !to) continue;
+    const code = board[from.row][from.col];
+    if (!code) continue;
+    board[from.row][from.col] = null;
+    board[to.row][to.col] = code;
+  }
+  return board;
+}
+function xiangqiBoardSvg(moves = [], { opacity = 1 } = {}) {
+  const margin = 38, gap = 54, width = margin * 2 + gap * 8, height = margin * 2 + gap * 9;
+  const board = xiangqiPosition(moves);
+  const parts = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="\u4E2D\u56FD\u8C61\u68CB\u68CB\u76D8\uFF0C${moves.length} \u624B"><defs><linearGradient id="ar-xq-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e0b16b"/><stop offset=".5" stop-color="#c99251"/><stop offset="1" stop-color="#b9793f"/></linearGradient><filter id="ar-xq-shadow"><feDropShadow dx="1.5" dy="2" stdDeviation="1.5" flood-color="#4b2d15" flood-opacity=".35"/></filter></defs><rect width="${width}" height="${height}" rx="6" fill="url(#ar-xq-wood)"/><rect x="10" y="10" width="${width - 20}" height="${height - 20}" rx="4" fill="none" stroke="#754a26" stroke-opacity=".55" stroke-width="1.5"/>`];
+  const x = (col) => margin + col * gap, y = (row) => margin + row * gap;
+  for (let row = 0; row < 10; row++) parts.push(`<path d="M ${x(0)} ${y(row)} H ${x(8)}" stroke="#674622" stroke-opacity=".9" stroke-width="1.25"/><text x="18" y="${y(row) + 3}" text-anchor="middle" fill="#5e3e1e" font-size="10" font-family="sans-serif" font-weight="600">${row + 1}</text>`);
+  for (let col = 0; col < 9; col++) {
+    const path = col === 0 || col === 8 ? `M ${x(col)} ${y(0)} V ${y(9)}` : `M ${x(col)} ${y(0)} V ${y(4)} M ${x(col)} ${y(5)} V ${y(9)}`;
+    parts.push(`<path d="${path}" stroke="#674622" stroke-opacity=".9" stroke-width="1.25"/>`);
+    parts.push(`<text x="${x(col)}" y="${height - 10}" text-anchor="middle" fill="#5e3e1e" font-size="10" font-family="sans-serif" font-weight="600">${col + 1}</text>`);
+  }
+  parts.push(`<rect x="${x(0)}" y="${y(4)}" width="${gap * 8}" height="${gap}" fill="#edd095" fill-opacity=".36"/><text x="${width / 2 - 80}" y="${y(4) + 34}" text-anchor="middle" fill="#784c28" font-family="serif" font-size="19" font-weight="700" letter-spacing="6">\u695A\u6CB3</text><text x="${width / 2 + 80}" y="${y(4) + 34}" text-anchor="middle" fill="#784c28" font-family="serif" font-size="19" font-weight="700" letter-spacing="6">\u6C49\u754C</text>`);
+  for (const [fromCol, fromRow, toCol, toRow] of [[3, 0, 5, 2], [5, 0, 3, 2], [3, 7, 5, 9], [5, 7, 3, 9]]) parts.push(`<path d="M ${x(fromCol)} ${y(fromRow)} L ${x(toCol)} ${y(toRow)}" stroke="#674622" stroke-width="1.1"/>`);
+  for (const [row, col] of [[2, 1], [2, 7], [7, 1], [7, 7], [3, 0], [3, 2], [3, 4], [3, 6], [3, 8], [6, 0], [6, 2], [6, 4], [6, 6], [6, 8]]) parts.push(`<path d="M ${x(col) - 5} ${y(row) - 5} h 4 v -4 M ${x(col) + 5} ${y(row) - 5} h -4 v -4 M ${x(col) - 5} ${y(row) + 5} h 4 v 4 M ${x(col) + 5} ${y(row) + 5} h -4 v 4" fill="none" stroke="#674622" stroke-width="1"/>`);
+  board.forEach((line, row) => line.forEach((code, col) => {
+    if (!code || !XIANGQI_PIECES[code]) return;
+    const [label, side] = XIANGQI_PIECES[code], fill = side === "red" ? "#b83c2e" : "#202723", stroke = side === "red" ? "#79231c" : "#101512";
+    parts.push(`<g opacity="${opacity}" filter="url(#ar-xq-shadow)"><circle cx="${x(col)}" cy="${y(row)}" r="20" fill="#f4e4bd" stroke="${stroke}" stroke-width="1.5"/><circle cx="${x(col)}" cy="${y(row)}" r="16.5" fill="none" stroke="${fill}" stroke-opacity=".55" stroke-width="1"/><text x="${x(col)}" y="${y(row) + 7}" text-anchor="middle" fill="${fill}" font-family="serif" font-size="22" font-weight="700">${label}</text></g>`);
+  }));
+  const last = moves.at(-1), lastTo = coordinate(last?.to);
+  if (lastTo) parts.push(`<circle cx="${x(lastTo.col)}" cy="${y(lastTo.row)}" r="24" fill="none" stroke="#e45d3c" stroke-width="2.4"/>`);
+  return `${parts.join("")}</svg>`;
+}
+function boardSvg(moves, { size = 15, opacity = 1, gameId = "" } = {}) {
+  if (gameId === "xiangqi" || moves?.some(isXiangqiMove)) return xiangqiBoardSvg(moves, { opacity });
   const margin = 34, gap = 32, end = margin + gap * (size - 1), extent = end + margin;
   const parts = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${extent} ${extent}" role="img" aria-label="\u4E94\u5B50\u68CB\u68CB\u76D8\uFF0C${moves.length} \u624B"><defs><linearGradient id="ar-board-wood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d7a866"/><stop offset=".5" stop-color="#c6904e"/><stop offset="1" stop-color="#b9793f"/></linearGradient><radialGradient id="ar-stone-black" cx="30%" cy="25%"><stop offset="0" stop-color="#4a514c"/><stop offset=".55" stop-color="#1c2521"/><stop offset="1" stop-color="#0d1310"/></radialGradient><radialGradient id="ar-stone-white" cx="30%" cy="25%"><stop offset="0" stop-color="#fffdf7"/><stop offset=".65" stop-color="#e8e5dc"/><stop offset="1" stop-color="#bdb8ad"/></radialGradient></defs><rect width="${extent}" height="${extent}" rx="6" fill="url(#ar-board-wood)"/><path d="M 0 48 H ${extent} M 0 128 H ${extent} M 0 214 H ${extent} M 0 302 H ${extent} M 0 384 H ${extent}" stroke="#fff1c4" stroke-opacity=".12" stroke-width="2"/>`];
   for (let i = 0; i < size; i++) {
@@ -359,7 +431,10 @@ body[data-ds-dark-theme] .ar-page{
 .ar-player small{display:block;margin-top:3px;font-size:11px;color:var(--lwb-muted);overflow-wrap:anywhere}
 .ar-stone{display:block;flex:none;width:19px;height:19px;border-radius:50%;background:#252b28;border:1px solid #a9b5ac;box-shadow:0 1px 2px #0001}
 .ar-stone[data-player="1"]{background:#fff}.ar-vs{text-align:center;color:var(--lwb-muted);font-size:11px;font-weight:700}
+.ar-player[data-game="xiangqi"] .ar-stone,.ar-participant[data-game="xiangqi"] .ar-stone{background:#b83c2e;border-color:#f0c999}
+.ar-player[data-game="xiangqi"] .ar-stone[data-player="1"],.ar-participant[data-game="xiangqi"] .ar-stone[data-player="1"]{background:#252b28}
 .ar-board{width:calc(100% - 32px);max-width:520px;aspect-ratio:1;margin:16px auto;position:relative;overflow:hidden;border:1px solid #9a6336;border-radius:9px;background:#c58a4d;box-shadow:0 10px 22px rgba(82,45,20,.18),inset 0 1px 0 rgba(255,245,210,.3)}
+.ar-match-view[data-game="xiangqi"] .ar-board,.ar-match[data-game="xiangqi"] .ar-board{aspect-ratio:508/562}
 .ar-board > svg{display:block;width:100%;height:100%}
 .ar-board svg g:last-child{animation:ar-place .25s ease-out}
 .ar-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--lwb-line);background:var(--lwb-surface)}
@@ -421,7 +496,7 @@ body[data-ds-dark-theme] .ar-page{
 var import_react3 = __toESM(require("react"), 1);
 var h = import_react3.default.createElement;
 var activeMatchCount = (matches) => matches.filter((match) => ["running", "pausing"].includes(match.status)).length;
-function Confirmation({ title, description, notice, players, confirmLabel, onResult, opener }) {
+function Confirmation({ title, description, notice, players, playerLabels, confirmLabel, onResult, opener }) {
   const dialog = import_react3.default.useRef(null), titleId = import_react3.default.useId(), descriptionId = import_react3.default.useId();
   import_react3.default.useEffect(() => {
     const element = dialog.current;
@@ -454,7 +529,7 @@ function Confirmation({ title, description, notice, players, confirmLabel, onRes
     h("h2", { id: titleId }, title),
     h("p", { id: descriptionId, className: "ar-confirm-copy" }, description),
     notice && h("p", { className: "ar-confirm-notice" }, notice),
-    players && h("div", { className: "ar-confirm-players" }, players.map((name, index) => h("div", { key: index }, h("small", null, index ? "\u767D\u65B9 \xB7 \u540E\u624B" : "\u9ED1\u65B9 \xB7 \u5148\u624B"), h("strong", null, name)))),
+    players && h("div", { className: "ar-confirm-players" }, players.map((name, index) => h("div", { key: index }, h("small", null, playerLabels?.[index] || (index ? "\u767D\u65B9 \xB7 \u540E\u624B" : "\u9ED1\u65B9 \xB7 \u5148\u624B")), h("strong", null, name)))),
     h("div", { className: "ar-confirm-actions" }, h("button", { type: "button", className: "ar-button", onClick: () => onResult(false) }, "\u53D6\u6D88"), h("button", { type: "button", className: "ar-button ar-primary", onClick: () => onResult(true) }, confirmLabel))
   );
 }
@@ -523,8 +598,12 @@ function timeoutMessage(name, seconds) {
 var h2 = import_react4.default.createElement;
 var connection;
 var rememberedId = null;
+var rememberedGameId = "gomoku";
 var arenaEntryMode = "resume";
 var statusLabel = { running: "\u6BD4\u8D5B\u4E2D", pausing: "\u56DE\u5408\u7ED3\u7B97\u540E\u6682\u505C", paused: "\u5DF2\u6682\u505C", finished: "\u5DF2\u7ED3\u675F", cancelled: "\u5DF2\u53D6\u6D88" };
+var gameLabel = (id) => id === "xiangqi" ? "\u4E2D\u56FD\u8C61\u68CB" : "\u4E94\u5B50\u68CB";
+var gameMeta = (id) => id === "xiangqi" ? { board: "9 \xD7 10", facts: "\u4E5D\u8DEF\u5341\u7EBF \xB7 \u695A\u6CB3\u6C49\u754C \xB7 \u7EA2\u65B9\u5148\u624B", shortRule: "\u4E5D\u8DEF\u5341\u7EBF\u4E2D\u56FD\u8C61\u68CB \xB7 \u7EA2\u65B9\u5148\u624B \xB7 \u5C06\u6B7B\u6216\u56F0\u6BD9\u83B7\u80DC" } : { board: "15 \xD7 15", facts: "15 \xD7 15 \xB7 \u9ED1\u65B9\u5148\u624B", shortRule: "15 \xD7 15 \u81EA\u7531\u4E94\u5B50\u68CB \xB7 \u9ED1\u65B9\u5148\u624B \xB7 \u8FDE\u4E94\u53CA\u4EE5\u4E0A\u83B7\u80DC" };
+var sideLabel = (gameId, index) => `${playerSide({ id: gameId }, index)} \xB7 ${index ? "\u540E\u624B" : "\u5148\u624B"}`;
 var MIN_OUTPUT_TOKENS = 128;
 var MAX_OUTPUT_TOKENS = 393216;
 var DEFAULT_MODEL_OUTPUT_LIMIT = 32768;
@@ -594,9 +673,10 @@ function saveBlob(blob, filename) {
 function Field({ label, children }) {
   return h2("label", { className: "ar-field" }, h2("span", null, label), children);
 }
-function Setup({ onStarted, open, onOpenChange, activeCount = 0 }) {
+function Setup({ onStarted, open, onOpenChange, activeCount = 0, gameId = rememberedGameId, onGameChange }) {
   const [confirm, confirmation] = useConfirmation();
-  const catalog = useQuery("models"), [selected, setSelected] = import_react4.default.useState(["", ""]);
+  const catalog = useQuery("models"), gamesData = useQuery("games"), [selected, setSelected] = import_react4.default.useState(["", ""]);
+  const [selectedGame, setSelectedGame] = import_react4.default.useState(gameId || "gomoku");
   const [effort, setEffort] = import_react4.default.useState(["", ""]), [busy, setBusy] = import_react4.default.useState(false), [error, setError] = import_react4.default.useState("");
   const [config, setConfig] = import_react4.default.useState({ maxMoves: 100, maxCalls: 120, timeoutSeconds: DEFAULT_TIMEOUT_SECONDS, maxTokens: DEFAULT_OUTPUT_TOKENS, tokenBudget: DEFAULT_TOKEN_BUDGET });
   const customOutputBudget = import_react4.default.useRef(false);
@@ -619,7 +699,8 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0 }) {
   async function start(event) {
     event.preventDefault();
     if (busy) return;
-    if (!await confirm({ title: "\u5F00\u59CB\u65B0\u7684\u4E94\u5B50\u68CB\u6BD4\u8D5B\uFF1F", description: "\u786E\u8BA4\u540E\u5C06\u8C03\u7528\u53C2\u8D5B\u6A21\u578B\u5E76\u8BB0\u5F55\u7528\u91CF\u3002\u7ADE\u6280\u53F0\u5C55\u793A\u8FD9\u573A\u65B0\u6BD4\u8D5B\uFF0C\u5176\u4ED6\u6BD4\u8D5B\u53EF\u5728\u6BD4\u8D5B\u8BB0\u5F55\u4E2D\u67E5\u770B\u3002", notice: activeCount > 0 ? `\u5DF2\u6709 ${activeCount} \u573A\u6BD4\u8D5B\u8FDB\u884C\u4E2D\u3002\u7EE7\u7EED\u5F00\u59CB\u5C06\u5E76\u884C\u8FD0\u884C\u4E00\u573A\u65B0\u6BD4\u8D5B\u3002` : null, players: selected.map((key) => {
+    const game = gamesData.value?.find((item) => item.id === selectedGame), label = game?.name || gameLabel(selectedGame);
+    if (!await confirm({ title: `\u5F00\u59CB\u65B0\u7684${label}\u6BD4\u8D5B\uFF1F`, description: "\u786E\u8BA4\u540E\u5C06\u8C03\u7528\u53C2\u8D5B\u6A21\u578B\u5E76\u8BB0\u5F55\u7528\u91CF\u3002\u7ADE\u6280\u53F0\u5C55\u793A\u8FD9\u573A\u65B0\u6BD4\u8D5B\uFF0C\u5176\u4ED6\u6BD4\u8D5B\u53EF\u5728\u6BD4\u8D5B\u8BB0\u5F55\u4E2D\u67E5\u770B\u3002", notice: activeCount > 0 ? `\u5DF2\u6709 ${activeCount} \u573A\u6BD4\u8D5B\u8FDB\u884C\u4E2D\u3002\u7EE7\u7EED\u5F00\u59CB\u5C06\u5E76\u884C\u8FD0\u884C\u4E00\u573A\u65B0\u6BD4\u8D5B\u3002` : null, playerLabels: [0, 1].map((index) => sideLabel(selectedGame, index)), players: selected.map((key) => {
       const model = models.find((item) => item.key === key);
       return model?.name || model?.id;
     }), confirmLabel: "\u786E\u8BA4\u5F00\u59CB" })) return;
@@ -630,7 +711,8 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0 }) {
         const model = models.find((item) => item.key === key);
         return { provider: model.provider, model: model.id, ...effort[i] ? { reasoningEffort: effort[i] } : {} };
       });
-      onStarted(await api("start", { gameId: "gomoku", players, ...config }));
+      rememberedGameId = selectedGame;
+      onStarted(await api("start", { gameId: selectedGame, players, ...config }));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -640,18 +722,23 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0 }) {
   return h2("details", { className: "ar-setup", open, onToggle: (event) => onOpenChange(event.currentTarget.open) }, h2("summary", null, h2("span", { className: "ar-setup-title" }, h2(Settings2), "\u53C2\u8D5B\u914D\u7F6E"), h2(ChevronDown, { className: "ar-setup-chevron" })), h2(
     "form",
     { className: "ar-form", onSubmit: start },
+    gamesData.value?.length ? h2(Field, { label: "\u7ADE\u6280\u6E38\u620F" }, h2("select", { value: selectedGame, onChange: (event) => {
+      setSelectedGame(event.target.value);
+      rememberedGameId = event.target.value;
+      onGameChange?.(event.target.value);
+    }, "aria-label": "\u7ADE\u6280\u6E38\u620F" }, gamesData.value.map((game) => h2("option", { key: game.id, value: game.id }, game.name)))) : null,
     h2("div", { className: "ar-participants" }, [0, 1].map((index) => {
       const model = models.find((item) => item.key === selected[index]);
       const groups = routes.map((route) => h2("optgroup", { key: route.id, label: route.name || route.id }, (route.models || []).map((item) => h2("option", { key: item.id, value: JSON.stringify([route.id, item.id]), disabled: route.selectable === false, title: route.unavailableReason || void 0 }, `${item.name || item.id}${route.selectable === false ? " \xB7 \u4E0D\u53EF\u7528" : ""}`))));
       return h2(
         "div",
-        { key: index, className: "ar-participant" },
-        h2("div", { className: "ar-participant-head" }, h2("i", { className: "ar-stone", "data-player": index }), index ? "\u767D\u65B9\u9009\u624B" : "\u9ED1\u65B9\u9009\u624B", h2("small", null, index ? "\u540E\u624B" : "\u5148\u624B")),
-        h2(Field, { label: "\u53C2\u8D5B\u6A21\u578B" }, h2("select", { "aria-label": index ? "\u767D\u65B9\u6A21\u578B" : "\u9ED1\u65B9\u6A21\u578B", value: selected[index], onChange: (event) => pick(index, event.target.value), required: true }, h2("option", { value: "" }, "\u9009\u62E9\u6A21\u578B"), groups)),
+        { key: index, className: "ar-participant", "data-game": selectedGame },
+        h2("div", { className: "ar-participant-head" }, h2("i", { className: "ar-stone", "data-player": index }), `${playerSide({ id: selectedGame }, index)}\u9009\u624B`, h2("small", null, index ? "\u540E\u624B" : "\u5148\u624B")),
+        h2(Field, { label: "\u53C2\u8D5B\u6A21\u578B" }, h2("select", { "aria-label": `${playerSide({ id: selectedGame }, index)}\u6A21\u578B`, value: selected[index], onChange: (event) => pick(index, event.target.value), required: true }, h2("option", { value: "" }, "\u9009\u62E9\u6A21\u578B"), groups)),
         model?.reasoning?.efforts?.length ? h2(Field, { label: "\u63A8\u7406\u5F3A\u5EA6" }, h2("select", { value: effort[index], onChange: (event) => setEffort((previous) => previous.map((item, i) => i === index ? event.target.value : item)) }, h2("option", { value: "" }, "\u6A21\u578B\u9ED8\u8BA4"), model.reasoning.efforts.map((item) => h2("option", { key: item.id, value: item.id }, item.label || item.id)))) : null
       );
     })),
-    h2("details", { className: "ar-budget" }, h2("summary", null, "\u9884\u7B97\u4E0E\u65F6\u9650"), h2("div", { className: "ar-settings" }, [["maxMoves", "\u843D\u5B50\u4E0A\u9650", 1, 225], ["maxCalls", "\u8C03\u7528\u4E0A\u9650", 1, 450], ["timeoutSeconds", "\u5355\u6B65\u65F6\u9650 / \u79D2", 5, MAX_TIMEOUT_SECONDS], ["maxTokens", "\u6BCF\u6B65\u751F\u6210 Token", MIN_OUTPUT_TOKENS, maxTokenLimit], ["tokenBudget", "\u7D2F\u8BA1 Token \u4E0A\u9650", 1e3, MAX_TOKEN_BUDGET]].map(([key, label, min, max]) => h2(Field, { key, label }, h2("input", { type: "number", value: config[key], min, max, required: true, onChange: (event) => {
+    h2("details", { className: "ar-budget" }, h2("summary", null, "\u9884\u7B97\u4E0E\u65F6\u9650"), h2("div", { className: "ar-settings" }, [["maxMoves", "\u8D70\u5B50\u4E0A\u9650", 1, selectedGame === "xiangqi" ? 600 : 225], ["maxCalls", "\u8C03\u7528\u4E0A\u9650", 1, selectedGame === "xiangqi" ? 1200 : 450], ["timeoutSeconds", "\u5355\u6B65\u65F6\u9650 / \u79D2", 5, MAX_TIMEOUT_SECONDS], ["maxTokens", "\u6BCF\u6B65\u751F\u6210 Token", MIN_OUTPUT_TOKENS, maxTokenLimit], ["tokenBudget", "\u7D2F\u8BA1 Token \u4E0A\u9650", 1e3, MAX_TOKEN_BUDGET]].map(([key, label, min, max]) => h2(Field, { key, label }, h2("input", { type: "number", value: config[key], min, max, required: true, onChange: (event) => {
       if (key === "maxTokens") customOutputBudget.current = true;
       setConfig((previous) => ({ ...previous, [key]: Number(event.target.value) }));
     } })))), h2("p", { className: "ar-muted" }, `\u672C\u573A\u5355\u6B65\u4E0A\u9650\uFF1A${maxTokenLimit.toLocaleString()} Token`)),
@@ -683,7 +770,7 @@ function Conversation({ match, turnId, renderConversation }) {
       [0, 1].map((index) => h2("button", { key: index, type: "button", className: `ar-button${currentPlayer === index ? " ar-live" : ""}`, "aria-pressed": currentPlayer === index, onClick: () => {
         setPlayer(index);
         setSelected(null);
-      } }, `${index ? "\u767D\u65B9" : "\u9ED1\u65B9"} \xB7 ${match.players[index].name}`)),
+      } }, `${playerSide(match.game, index)} \xB7 ${match.players[index].name}`)),
       h2("select", { className: "ar-select ar-turn-select", "aria-label": "\u67E5\u770B\u51B3\u7B56\u4F1A\u8BDD", value: current?.request.turnId || "", onChange: (event) => setSelected(event.target.value) }, choices.map((turn) => h2("option", { key: turn.request.turnId, value: turn.request.turnId }, `\u7B2C ${turn.moveNumber} \u624B${turn.request.attempt ? ` \xB7 \u91CD\u8BD5 ${turn.request.attempt}` : ""}${turn.error ? " \xB7 \u672A\u5B8C\u6210" : ""}`)))
     ),
     h2("p", { className: "ar-muted" }, current?.request.contextMode === "current-position" || match.config.contextMode === "current-position" && !current ? "\u6BCF\u6B21\u51B3\u7B56\u53EA\u53D1\u9001\u5F53\u524D\u68CB\u76D8\u4E0E\u89C4\u5219\uFF1B\u5386\u53F2\u4F1A\u8BDD\u4FDD\u7559\u7528\u4E8E\u56DE\u770B\u3002" : "\u5386\u53F2\u6BD4\u8D5B\u6CBF\u7528\u9009\u624B\u4F1A\u8BDD\uFF0C\u53EF\u67E5\u770B\u5176\u4E2D\u7684\u591A\u8F6E\u8BB0\u5F55\u3002"),
@@ -785,8 +872,8 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
   const phaseLabel = { waiting: "\u7B49\u5F85\u6A21\u578B\u54CD\u5E94", reasoning: "\u601D\u8003\u4E2D", answering: "\u6B63\u5728\u751F\u6210\u843D\u5B50\u4E0E\u53D1\u8A00" }[match.activeTurn?.phase] || "\u7B49\u5F85\u6A21\u578B\u54CD\u5E94";
   return h2(
     "section",
-    { className: "ar-match-view", "data-ar-match": id },
-    h2("div", { className: "ar-match-head" }, h2("div", null, h2("div", { className: "ar-match-title" }, h2("h2", { className: "ar-section-title" }, "\u4E94\u5B50\u68CB"), h2("span", { className: "ar-match-count" }, `${activeCount} \u573A\u8FDB\u884C\u4E2D`)), h2("p", null, `${new Date(match.createdAt).toLocaleString("zh-CN")} \xB7 ${id.slice(0, 8)}`)), h2(
+    { className: "ar-match-view", "data-ar-match": id, "data-game": match.game?.id },
+    h2("div", { className: "ar-match-head" }, h2("div", null, h2("div", { className: "ar-match-title" }, h2("h2", { className: "ar-section-title" }, gameName(match.game)), h2("span", { className: "ar-match-count" }, `${activeCount} \u573A\u8FDB\u884C\u4E2D`)), h2("p", null, `${new Date(match.createdAt).toLocaleString("zh-CN")} \xB7 ${id.slice(0, 8)}`)), h2(
       "div",
       { className: "ar-actions" },
       match.config.pace === "fast" && h2("span", { className: "ar-chip" }, "\u5386\u53F2\u5FEB\u68CB\u5BF9\u5C40"),
@@ -812,8 +899,8 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
       h2(
         "div",
         { className: "ar-board-col" },
-        h2("div", { className: "ar-scoreboard" }, h2(Player, { player: match.players[0], index: 0 }), h2("span", { className: "ar-vs" }, "VS"), h2(Player, { player: match.players[1], index: 1 })),
-        h2("div", { className: "ar-board", key: currentStep, dangerouslySetInnerHTML: { __html: boardSvg(frame.moves) } }),
+        h2("div", { className: "ar-scoreboard" }, h2(Player, { player: match.players[0], index: 0, gameId: match.game?.id }), h2("span", { className: "ar-vs" }, "VS"), h2(Player, { player: match.players[1], index: 1, gameId: match.game?.id })),
+        h2("div", { className: "ar-board", key: currentStep, dangerouslySetInnerHTML: { __html: boardSvg(frame.moves, { gameId: match.game?.id }) } }),
         h2(
           "div",
           { className: "ar-toolbar" },
@@ -840,13 +927,13 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
         "aside",
         { className: "ar-commentary" },
         h2("div", { className: "ar-commentary-head" }, h2("h2", { className: "ar-section-title" }, "\u9009\u624B\u53D1\u8A00"), h2("span", { className: "ar-chip" }, thinking ? "\u51B3\u7B56\u4E2D" : `\u7B2C ${currentStep} \u624B`)),
-        h2("div", { className: "ar-speaking", "data-thinking": !!thinking }, h2("div", { className: "ar-speaking-name" }, h2(MessageCircle), match.players[currentPlayer].name), h2("p", { role: thinking ? "status" : void 0 }, thinking ? phaseLabel : frame.current?.speech || "\u7B49\u5F85\u7B2C\u4E00\u6B65\u843D\u5B50"), thinking ? h2("div", { className: "ar-generation" }, h2("div", null, h2("small", null, match.players[currentPlayer].reasoningEffort ? `\u63A8\u7406\u5F3A\u5EA6\uFF1A${match.players[currentPlayer].reasoningEffort}` : "\u6A21\u578B\u9ED8\u8BA4\u63A8\u7406"), h2("small", null, `${elapsedSeconds.toFixed(1)} / ${match.config.timeoutSeconds} \u79D2`)), h2("progress", { "aria-label": "\u672C\u6B65\u5DF2\u7528\u65F6\u95F4", value: Math.min(elapsedSeconds, match.config.timeoutSeconds), max: match.config.timeoutSeconds })) : frame.current && h2("small", null, `${frame.current.action.row} \u884C ${frame.current.action.col} \u5217 \xB7 ${(frame.current.elapsedMs / 1e3).toFixed(1)} \u79D2`)),
+        h2("div", { className: "ar-speaking", "data-thinking": !!thinking }, h2("div", { className: "ar-speaking-name" }, h2(MessageCircle), match.players[currentPlayer].name), h2("p", { role: thinking ? "status" : void 0 }, thinking ? phaseLabel : frame.current?.speech || "\u7B49\u5F85\u7B2C\u4E00\u6B65\u8D70\u5B50"), thinking ? h2("div", { className: "ar-generation" }, h2("div", null, h2("small", null, match.players[currentPlayer].reasoningEffort ? `\u63A8\u7406\u5F3A\u5EA6\uFF1A${match.players[currentPlayer].reasoningEffort}` : "\u6A21\u578B\u9ED8\u8BA4\u63A8\u7406"), h2("small", null, `${elapsedSeconds.toFixed(1)} / ${match.config.timeoutSeconds} \u79D2`)), h2("progress", { "aria-label": "\u672C\u6B65\u5DF2\u7528\u65F6\u95F4", value: Math.min(elapsedSeconds, match.config.timeoutSeconds), max: match.config.timeoutSeconds })) : frame.current && h2("small", null, `${actionLabel(frame.current.action, match.game)} \xB7 ${(frame.current.elapsedMs / 1e3).toFixed(1)} \u79D2`)),
         frame.result && h2("div", { className: "ar-result" }, h2(Trophy), frame.result.message),
         h2("div", { className: "ar-transcript-title" }, h2("span", null, "\u56DE\u5408\u8BB0\u5F55"), h2("span", null, `${frame.speech.length} \u6761`)),
-        h2("div", { className: "ar-transcript" }, frame.speech.length ? frame.speech.map((event) => h2("button", { key: event.turnId, className: "ar-speech", onClick: () => seek(event.moveNumber), "aria-label": `\u67E5\u770B\u7B2C ${event.moveNumber} \u624B` }, h2("div", { className: "ar-speech-head" }, h2("span", { className: "ar-speech-num" }, event.moveNumber), h2("strong", null, match.players[event.player].name), h2("small", null, `${event.action.row} \u884C ${event.action.col} \u5217`)), h2("p", null, event.speech))) : h2("div", { className: "ar-empty" }, "\u6682\u65E0\u56DE\u5408\u8BB0\u5F55"))
+        h2("div", { className: "ar-transcript" }, frame.speech.length ? frame.speech.map((event) => h2("button", { key: event.turnId, className: "ar-speech", onClick: () => seek(event.moveNumber), "aria-label": `\u67E5\u770B\u7B2C ${event.moveNumber} \u624B` }, h2("div", { className: "ar-speech-head" }, h2("span", { className: "ar-speech-num" }, event.moveNumber), h2("strong", null, match.players[event.player].name), h2("small", null, actionLabel(event.action, match.game))), h2("p", null, event.speech))) : h2("div", { className: "ar-empty" }, "\u6682\u65E0\u56DE\u5408\u8BB0\u5F55"))
       )
     ),
-    h2(StatBar, { items: [{ label: "\u5DF2\u5B8C\u6210\u843D\u5B50", value: moves.length, detail: `\u4E0A\u9650 ${match.config.maxMoves} \u624B`, tone: "brand" }, { label: "\u6A21\u578B\u8C03\u7528", value: match.calls, detail: `\u4E0A\u9650 ${match.config.maxCalls} \u6B21` }, { label: "\u7D2F\u8BA1 Token", value: match.tokens.toLocaleString(), detail: match.usageUnknown ? "\u7528\u91CF\u4E0D\u5B8C\u6574" : `\u9884\u7B97 ${match.config.tokenBudget.toLocaleString()}` }, { label: "\u6BD4\u8D5B\u72B6\u6001", value: statusLabel[match.status] || match.status, tone: match.status === "finished" ? "green" : void 0 }] }),
+    h2(StatBar, { items: [{ label: "\u5DF2\u5B8C\u6210\u8D70\u5B50", value: moves.length, detail: `\u4E0A\u9650 ${match.config.maxMoves} \u624B`, tone: "brand" }, { label: "\u6A21\u578B\u8C03\u7528", value: match.calls, detail: `\u4E0A\u9650 ${match.config.maxCalls} \u6B21` }, { label: "\u7D2F\u8BA1 Token", value: match.tokens.toLocaleString(), detail: match.usageUnknown ? "\u7528\u91CF\u4E0D\u5B8C\u6574" : `\u9884\u7B97 ${match.config.tokenBudget.toLocaleString()}` }, { label: "\u6BD4\u8D5B\u72B6\u6001", value: statusLabel[match.status] || match.status, tone: match.status === "finished" ? "green" : void 0 }] }),
     (error || data.error) && h2("p", { className: "ar-error", role: "alert" }, error || data.error),
     lastError && h2("p", { className: "ar-error", role: "alert" }, timedOut ? timeoutMessage(match.players[lastError.player]?.name || "\u6A21\u578B", match.config.timeoutSeconds) : lastError.error),
     h2(
@@ -862,11 +949,12 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
     confirmation
   );
 }
-function Player({ player, index }) {
-  return h2("div", { className: "ar-player" }, h2("i", { className: "ar-stone", "data-player": index }), h2("div", null, h2("strong", null, player.name), h2("small", null, `${index ? "\u767D\u65B9 \xB7 \u540E\u624B" : "\u9ED1\u65B9 \xB7 \u5148\u624B"} / ${player.providerName}`)));
+function Player({ player, index, gameId = "gomoku" }) {
+  return h2("div", { className: "ar-player", "data-game": gameId }, h2("i", { className: "ar-stone", "data-player": index }), h2("div", null, h2("strong", null, player.name), h2("small", null, `${sideLabel(gameId, index)} / ${player.providerName}`)));
 }
 function Arena({ renderConversation }) {
   const [freshEntry] = import_react4.default.useState(() => arenaEntryMode === "fresh");
+  const [selectedGame, setSelectedGame] = import_react4.default.useState(rememberedGameId);
   const [id, setId] = import_react4.default.useState(null), [initial, setInitial] = import_react4.default.useState(null), [setup, setSetup] = import_react4.default.useState(freshEntry);
   const matchesData = useQuery("matches"), matches = matchesData.value || [], activeCount = activeMatchCount(matches);
   import_react4.default.useEffect(() => {
@@ -890,15 +978,15 @@ function Arena({ renderConversation }) {
   const displayedActiveCount = initial && ["running", "pausing"].includes(initial.status) && !matches.some((match) => match.id === initial.id) ? activeCount + 1 : activeCount;
   return h2(
     Frame,
-    { tone: "orange", kicker: "\u6A21\u578B\u5BF9\u6218", title: "AI\u7ADE\u6280\u53F0", subtitle: "\u4E94\u5B50\u68CB \xB7 15 \xD7 15 \xB7 \u81EA\u7531\u89C4\u5219 \xB7 \u8FDE\u4E94\u53CA\u4EE5\u4E0A\u83B7\u80DC", actions: h2(Button, { primary: true, className: "ar-config-button", icon: Settings2, onClick: () => setSetup((previous) => !previous) }, "\u53C2\u8D5B\u914D\u7F6E") },
-    h2(Setup, { open: setup, onOpenChange: setSetup, activeCount, onStarted: (match) => {
+    { tone: "orange", kicker: "\u6A21\u578B\u5BF9\u6218", title: "AI\u7ADE\u6280\u53F0", subtitle: "\u4E94\u5B50\u68CB / \u4E2D\u56FD\u8C61\u68CB \xB7 \u6A21\u578B\u81EA\u4E3B\u51B3\u7B56 \xB7 \u9010\u624B\u56DE\u653E", actions: h2(Button, { primary: true, className: "ar-config-button", icon: Settings2, onClick: () => setSetup((previous) => !previous) }, "\u53C2\u8D5B\u914D\u7F6E") },
+    h2(Setup, { gameId: selectedGame, onGameChange: setSelectedGame, open: setup, onOpenChange: setSetup, activeCount, onStarted: (match) => {
       setInitial(match);
       setId(match.id);
       rememberedId = match.id;
       setSetup(false);
       matchesData.refresh();
     } }),
-    id ? h2(MatchView, { key: id, id, initial, activeCount: displayedActiveCount, renderConversation }) : h2("div", { className: "ar-match" }, h2("div", { className: "ar-board-col" }, h2("div", { className: "ar-scoreboard" }, h2(Player, { index: 0, player: { name: "\u5F85\u9009\u6A21\u578B", providerName: "\u672A\u53C2\u8D5B" } }), h2("span", { className: "ar-vs" }, "VS"), h2(Player, { index: 1, player: { name: "\u5F85\u9009\u6A21\u578B", providerName: "\u672A\u53C2\u8D5B" } })), h2("div", { className: "ar-board", dangerouslySetInnerHTML: { __html: boardSvg([]) } })), h2("aside", { className: "ar-commentary" }, h2("div", { className: "ar-commentary-head" }, h2("h2", { className: "ar-section-title" }, "\u9009\u624B\u53D1\u8A00"), h2("span", { className: "ar-chip" }, "\u672A\u5F00\u59CB")), h2("div", { className: "ar-speaking", "data-thinking": true }, h2("div", { className: "ar-speaking-name" }, h2(MessageCircle), "\u7B49\u5F85\u53C2\u8D5B\u9009\u624B"), h2("p", null, "\u6BD4\u8D5B\u5C1A\u672A\u5F00\u59CB")), h2("div", { className: "ar-transcript-title" }, "\u56DE\u5408\u8BB0\u5F55"), h2("div", { className: "ar-empty" }, activeCount ? `\u5DF2\u6709 ${activeCount} \u573A\u6BD4\u8D5B\u8FDB\u884C\u4E2D\uFF0C\u53EF\u5728\u6BD4\u8D5B\u8BB0\u5F55\u4E2D\u67E5\u770B\u3002` : "\u6682\u65E0\u56DE\u5408\u8BB0\u5F55")))
+    id ? h2(MatchView, { key: id, id, initial, activeCount: displayedActiveCount, renderConversation }) : h2("div", { className: "ar-match", "data-game": selectedGame }, h2("div", { className: "ar-board-col" }, h2("div", { className: "ar-scoreboard" }, h2(Player, { index: 0, gameId: selectedGame, player: { name: "\u5F85\u9009\u6A21\u578B", providerName: "\u672A\u53C2\u8D5B" } }), h2("span", { className: "ar-vs" }, "VS"), h2(Player, { index: 1, gameId: selectedGame, player: { name: "\u5F85\u9009\u6A21\u578B", providerName: "\u672A\u53C2\u8D5B" } })), h2("div", { className: "ar-board", dangerouslySetInnerHTML: { __html: boardSvg([], { gameId: selectedGame }) } })), h2("aside", { className: "ar-commentary" }, h2("div", { className: "ar-commentary-head" }, h2("h2", { className: "ar-section-title" }, "\u9009\u624B\u53D1\u8A00"), h2("span", { className: "ar-chip" }, "\u672A\u5F00\u59CB")), h2("div", { className: "ar-speaking", "data-thinking": true }, h2("div", { className: "ar-speaking-name" }, h2(MessageCircle), "\u7B49\u5F85\u53C2\u8D5B\u9009\u624B"), h2("p", null, "\u6BD4\u8D5B\u5C1A\u672A\u5F00\u59CB")), h2("div", { className: "ar-transcript-title" }, "\u56DE\u5408\u8BB0\u5F55"), h2("div", { className: "ar-empty" }, activeCount ? `\u5DF2\u6709 ${activeCount} \u573A\u6BD4\u8D5B\u8FDB\u884C\u4E2D\uFF0C\u53EF\u5728\u6BD4\u8D5B\u8BB0\u5F55\u4E2D\u67E5\u770B\u3002` : "\u6682\u65E0\u56DE\u5408\u8BB0\u5F55")))
   );
 }
 function History({ renderConversation }) {
@@ -907,15 +995,15 @@ function History({ renderConversation }) {
     const timer = setInterval(list.refresh, 2e3);
     return () => clearInterval(timer);
   }, [list.refresh]);
-  const matches = list.value || [], filtered = matches.filter((match) => (!status || match.status === status) && `${match.title} ${match.id}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const matches = list.value || [], filtered = matches.filter((match) => (!status || match.status === status) && `${match.title} ${gameName(match.game)} ${match.id}`.toLowerCase().includes(search.trim().toLowerCase()));
   if (id) return h2(Frame, { tone: "cyan", kicker: "\u6BD4\u8D5B\u8BB0\u5F55", title: "\u6BD4\u8D5B\u56DE\u653E", subtitle: matches.find((match) => match.id === id)?.title, actions: h2(Button, { primary: true, className: "ar-back-button", icon: ArrowLeft, onClick: () => setId(null) }, "\u8FD4\u56DE\u8BB0\u5F55") }, h2(MatchView, { key: id, id, activeCount: activeMatchCount(matches), onChange: list.refresh, renderConversation }));
   return h2(
     Frame,
-    { tone: "cyan", kicker: "\u5BF9\u6218\u6863\u6848", title: "\u6BD4\u8D5B\u8BB0\u5F55", subtitle: "\u4E94\u5B50\u68CB", actions: h2(IconButton, { icon: RefreshCw, title: "\u5237\u65B0\u6BD4\u8D5B\u8BB0\u5F55", onClick: list.refresh }) },
+    { tone: "cyan", kicker: "\u5BF9\u6218\u6863\u6848", title: "\u6BD4\u8D5B\u8BB0\u5F55", subtitle: "\u4E94\u5B50\u68CB / \u4E2D\u56FD\u8C61\u68CB", actions: h2(IconButton, { icon: RefreshCw, title: "\u5237\u65B0\u6BD4\u8D5B\u8BB0\u5F55", onClick: list.refresh }) },
     list.error && h2("p", { className: "ar-error" }, list.error),
     h2(StatBar, { items: [{ label: "\u5168\u90E8\u6BD4\u8D5B", value: matches.length, tone: "brand" }, { label: "\u6B63\u5728\u6BD4\u8D5B", value: activeMatchCount(matches) }, { label: "\u5DF2\u7ED3\u675F", value: matches.filter((match) => match.status === "finished").length, tone: "green" }, { label: "\u7D2F\u8BA1\u843D\u5B50", value: matches.reduce((total, match) => total + match.moves, 0) }] }),
     h2("div", { className: "ar-history-toolbar" }, h2("h2", { className: "ar-section-title" }, "\u5BF9\u6218\u8BB0\u5F55"), h2("div", { className: "ar-actions" }, h2("input", { className: "ar-search", type: "search", placeholder: "\u641C\u7D22\u6A21\u578B\u6216\u6BD4\u8D5B\u7F16\u53F7", "aria-label": "\u641C\u7D22\u6BD4\u8D5B", value: search, onChange: (event) => setSearch(event.target.value) }), h2("select", { className: "ar-select", "aria-label": "\u6BD4\u8D5B\u72B6\u6001\u7B5B\u9009", value: status, onChange: (event) => setStatus(event.target.value) }, h2("option", { value: "" }, "\u5168\u90E8\u72B6\u6001"), Object.entries(statusLabel).map(([value, label]) => h2("option", { key: value, value }, label))))),
-    filtered.length ? h2("nav", { className: "ar-history-list", "aria-label": "\u5386\u53F2\u6BD4\u8D5B" }, h2("div", { className: "ar-history-columns", "aria-hidden": true }, h2("span", null, "\u53C2\u8D5B\u9009\u624B"), h2("span", null, "\u6BD4\u8D5B\u65F6\u95F4"), h2("span", null, "\u843D\u5B50"), h2("span", null, "\u72B6\u6001"), h2("span")), filtered.map((match) => h2("button", { key: match.id, className: "ar-row", onClick: () => setId(match.id), "aria-label": `\u56DE\u653E ${match.title} \xB7 ${match.moves} \u624B` }, h2("span", { className: "ar-row-title" }, h2("strong", null, match.title), h2("small", null, `\u4E94\u5B50\u68CB \xB7 ${match.id.slice(0, 8)}`)), h2("span", { className: "ar-row-date" }, new Date(match.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })), h2("span", { className: "ar-row-count" }, `${match.moves} \u624B`), h2(Status, { status: match.status }), h2(ChevronRight)))) : h2("div", { className: "ar-empty" }, h2(Trophy), list.value ? search || status ? "\u6CA1\u6709\u7B26\u5408\u6761\u4EF6\u7684\u6BD4\u8D5B" : "\u6682\u65E0\u6BD4\u8D5B\u8BB0\u5F55" : "\u6B63\u5728\u8BFB\u53D6\u6BD4\u8D5B\u8BB0\u5F55\u2026")
+    filtered.length ? h2("nav", { className: "ar-history-list", "aria-label": "\u5386\u53F2\u6BD4\u8D5B" }, h2("div", { className: "ar-history-columns", "aria-hidden": true }, h2("span", null, "\u53C2\u8D5B\u9009\u624B"), h2("span", null, "\u6BD4\u8D5B\u65F6\u95F4"), h2("span", null, "\u843D\u5B50"), h2("span", null, "\u72B6\u6001"), h2("span")), filtered.map((match) => h2("button", { key: match.id, className: "ar-row", onClick: () => setId(match.id), "aria-label": `\u56DE\u653E ${match.title} \xB7 ${match.moves} \u624B` }, h2("span", { className: "ar-row-title" }, h2("strong", null, match.title), h2("small", null, `${gameName(match.game)} \xB7 ${match.id.slice(0, 8)}`)), h2("span", { className: "ar-row-date" }, new Date(match.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })), h2("span", { className: "ar-row-count" }, `${match.moves} \u624B`), h2(Status, { status: match.status }), h2(ChevronRight)))) : h2("div", { className: "ar-empty" }, h2(Trophy), list.value ? search || status ? "\u6CA1\u6709\u7B26\u5408\u6761\u4EF6\u7684\u6BD4\u8D5B" : "\u6682\u65E0\u6BD4\u8D5B\u8BB0\u5F55" : "\u6B63\u5728\u8BFB\u53D6\u6BD4\u8D5B\u8BB0\u5F55\u2026")
   );
 }
 function Games({ openPackMenu }) {
@@ -926,13 +1014,14 @@ function Games({ openPackMenu }) {
     return () => clearInterval(timer);
   }, [matches.refresh]);
   const example = [{ row: 8, col: 8, player: 0 }, { row: 8, col: 9, player: 1 }, { row: 7, col: 8, player: 0 }, { row: 9, col: 8, player: 1 }, { row: 6, col: 8, player: 0 }];
-  const enterArena = async () => {
-    if (!await confirm({ title: "\u51C6\u5907\u4E00\u573A\u65B0\u7684\u4E94\u5B50\u68CB\u6BD4\u8D5B\uFF1F", description: "\u786E\u8BA4\u540E\u8FDB\u5165\u5168\u65B0\u68CB\u76D8\uFF0C\u518D\u9009\u62E9\u53C2\u8D5B\u6A21\u578B\u548C\u6BD4\u8D5B\u914D\u7F6E\u3002\u5386\u53F2\u6BD4\u8D5B\u4FDD\u7559\u5728\u6BD4\u8D5B\u8BB0\u5F55\u4E2D\u3002", notice: activeCount > 0 ? `\u5DF2\u6709 ${activeCount} \u573A\u6BD4\u8D5B\u8FDB\u884C\u4E2D\uFF0C\u8FDB\u5165\u65B0\u68CB\u76D8\u4E0D\u4F1A\u4E2D\u65AD\u8FD9\u4E9B\u6BD4\u8D5B\u3002` : null, confirmLabel: "\u8FDB\u5165\u7ADE\u6280\u53F0" })) return;
+  const enterArena = async (game) => {
+    if (!await confirm({ title: `\u51C6\u5907\u4E00\u573A\u65B0\u7684${game.name}\u6BD4\u8D5B\uFF1F`, description: "\u786E\u8BA4\u540E\u8FDB\u5165\u5168\u65B0\u68CB\u76D8\uFF0C\u518D\u9009\u62E9\u53C2\u8D5B\u6A21\u578B\u548C\u6BD4\u8D5B\u914D\u7F6E\u3002\u5386\u53F2\u6BD4\u8D5B\u4FDD\u7559\u5728\u6BD4\u8D5B\u8BB0\u5F55\u4E2D\u3002", notice: activeCount > 0 ? `\u5DF2\u6709 ${activeCount} \u573A\u6BD4\u8D5B\u8FDB\u884C\u4E2D\uFF0C\u8FDB\u5165\u65B0\u68CB\u76D8\u4E0D\u4F1A\u4E2D\u65AD\u8FD9\u4E9B\u6BD4\u8D5B\u3002` : null, confirmLabel: "\u8FDB\u5165\u7ADE\u6280\u53F0" })) return;
     rememberedId = null;
+    rememberedGameId = game.id;
     arenaEntryMode = "fresh";
     openPackMenu?.("arena");
   };
-  return h2(Frame, { tone: "violet", kicker: "\u7ADE\u6280\u6E38\u620F", title: "\u6E38\u620F\u5E93", subtitle: `${games.value?.length || 0} \u6B3E\u6E38\u620F` }, games.error && h2("p", { className: "ar-error" }, games.error), h2("div", { className: "ar-game-grid" }, (games.value || []).map((game) => h2("article", { key: game.id, className: "ar-game" }, h2("div", { className: "ar-game-preview", dangerouslySetInnerHTML: { __html: boardSvg(example) } }), h2("div", { className: "ar-game-body" }, h2("div", { className: "ar-game-title" }, h2("h2", null, game.name), h2("span", { className: "ar-chip", "data-tone": "page" }, "\u53EF\u7ADE\u6280")), h2("p", { className: "ar-game-rule" }, game.description), h2("div", { className: "ar-game-facts" }, h2("span", { className: "ar-chip" }, "15 \xD7 15"), h2("span", { className: "ar-chip" }, `${game.players} \u4F4D\u9009\u624B`), h2("span", { className: "ar-chip" }, "\u9ED1\u65B9\u5148\u624B")), h2("div", { className: "ar-game-footer" }, h2("span", null, `\u89C4\u5219\u7248\u672C ${game.version}`), h2(Button, { primary: true, icon: Play, onClick: enterArena }, "\u5F00\u59CB\u6BD4\u8D5B")))))), confirmation);
+  return h2(Frame, { tone: "violet", kicker: "\u7ADE\u6280\u6E38\u620F", title: "\u6E38\u620F\u5E93", subtitle: `${games.value?.length || 0} \u6B3E\u6E38\u620F` }, games.error && h2("p", { className: "ar-error" }, games.error), h2("div", { className: "ar-game-grid" }, (games.value || []).map((game) => h2("article", { key: game.id, className: "ar-game" }, h2("div", { className: "ar-game-preview", dangerouslySetInnerHTML: { __html: boardSvg(game.id === "xiangqi" ? [] : example, { gameId: game.id }) } }), h2("div", { className: "ar-game-body" }, h2("div", { className: "ar-game-title" }, h2("h2", null, game.name), h2("span", { className: "ar-chip", "data-tone": "page" }, "\u53EF\u7ADE\u6280")), h2("p", { className: "ar-game-rule" }, game.description), h2("div", { className: "ar-game-facts" }, h2("span", { className: "ar-chip" }, gameMeta(game.id).board), h2("span", { className: "ar-chip" }, `${game.players} \u4F4D\u9009\u624B`), h2("span", { className: "ar-chip" }, game.id === "xiangqi" ? "\u7EA2\u65B9\u5148\u624B" : "\u9ED1\u65B9\u5148\u624B")), h2("div", { className: "ar-game-footer" }, h2("span", null, `\u89C4\u5219\u7248\u672C ${game.version}`), h2(Button, { primary: true, icon: Play, onClick: () => enterArena(game) }, "\u5F00\u59CB\u6BD4\u8D5B")))))), confirmation);
 }
 function apply(ctx) {
   connection = ctx.connection;
