@@ -222,11 +222,6 @@ export async function executeSessionTurn(session, prompt, { afterSeq = -1, signa
     if (signal?.aborted) {
       const late = await settleAfterAbort(session, boundary)
       if (late) {
-        if (signal.reason?.name === 'TimeoutError') {
-          const timeout = new Error('DSH 会话在时限到达后才返回。')
-          timeout.result = late
-          throw timeout
-        }
         return { ...late, finish: { kind: 'cancelled' } }
       }
     }

@@ -294,8 +294,10 @@ export class LwbPackServices {
       ...(candidate.reasoningEffort === undefined ? {} : { reasoningEffort: candidate.reasoningEffort }) }
   }
 
+  // undefined preserves an adopted Session policy; null clears its output cap
+  // and restores the model/adapter default, including inherited request headers.
   sessionPolicy(options) {
-    if (options.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 128 || options.maxTokens > MAX_MODEL_OUTPUT_TOKENS)) throw new Error('会话输出上限必须是 128—393216 的整数。')
+    if (options.maxTokens !== undefined && options.maxTokens !== null && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 128 || options.maxTokens > MAX_MODEL_OUTPUT_TOKENS)) throw new Error('会话输出上限必须是 128—393216 的整数。')
     if (options.tools !== undefined && options.tools !== 'none') throw new Error('会话工具约束无效。')
     if (options.system !== undefined && (typeof options.system !== 'string' || !options.system.trim())) throw new Error('会话系统提示词不能为空。')
     return { maxTokens: options.maxTokens, tools: options.tools, system: options.system }
@@ -303,7 +305,11 @@ export class LwbPackServices {
 
   async restrictedPreset() {
     this.noToolsPreset ??= this.ctx.agentPresets.register({
-      id: 'lwb-pack-no-tools', name: '场景纯模型会话', plugins: [],
+      id: 'lwb-pack-no-tools', name: '场景纯模型会话',
+      plugins: [{ id: 'compaction', name: 'cordis:group', group: true,
+        isolate: { compaction: true },
+        config: [{ id: 'compaction-basic', name: '@deepseek-ai/dsh-compaction-basic' }],
+      }],
     })
     await this.noToolsPreset
     return 'lwb-pack-no-tools'
@@ -334,8 +340,9 @@ export class LwbPackServices {
     agent.ctx.on('agent/request', async (_, next) => {
       const resolved = await next()
       const { reasoningEffort: _inherited, ...config } = resolved
+      if (state.policy.maxTokens === null) delete config.maxTokens
       return { ...config, ...state.selection,
-        ...(state.policy.maxTokens === undefined ? {} : { maxTokens: state.policy.maxTokens }),
+        ...(state.policy.maxTokens == null ? {} : { maxTokens: state.policy.maxTokens }),
         ...(state.policy.tools === 'none' ? { tools: [] } : {}),
       }
     }, { prepend: true })

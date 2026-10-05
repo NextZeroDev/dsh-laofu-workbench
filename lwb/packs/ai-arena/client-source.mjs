@@ -4,7 +4,6 @@ import { boardSvg, frameAt, movesOf, gameName, playerSide, actionLabel } from '.
 import { CSS } from './styles.mjs'
 import { activeMatchCount, useConfirmation } from './confirmation.mjs'
 import { turnRecords, turnUsage } from './turn-records.mjs'
-import { DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, turnTimedOut, timeoutMessage } from './timeouts.mjs'
 
 const h = React.createElement
 let connection, rememberedId = null, rememberedGameId = 'gomoku', arenaEntryMode = 'resume'
@@ -14,16 +13,6 @@ const gameMeta = id => id === 'xiangqi'
   ? { board: '9 × 10', facts: '九路十线 · 楚河汉界 · 红方先手', shortRule: '九路十线中国象棋 · 红方先手 · 将死或困毙获胜' }
   : { board: '15 × 15', facts: '15 × 15 · 黑方先手', shortRule: '15 × 15 自由五子棋 · 黑方先手 · 连五及以上获胜' }
 const sideLabel = (gameId, index) => `${playerSide({ id: gameId }, index)} · ${index ? '后手' : '先手'}`
-const MIN_OUTPUT_TOKENS = 128
-const MAX_OUTPUT_TOKENS = 393216
-const DEFAULT_MODEL_OUTPUT_LIMIT = 32768
-const DEFAULT_OUTPUT_TOKENS = 32768
-const DEFAULT_TOKEN_BUDGET = 4000000
-const MAX_TOKEN_BUDGET = 20000000
-const modelOutputLimit = model => {
-  const value = [model?.maxOutputTokens, model?.maxTokens, model?.defaultMaxTokens].find(candidate => Number.isInteger(candidate) && candidate >= MIN_OUTPUT_TOKENS)
-  return Math.max(MIN_OUTPUT_TOKENS, Math.min(value ?? DEFAULT_MODEL_OUTPUT_LIMIT, MAX_OUTPUT_TOKENS))
-}
 const api = async (method, request) => {
   const result = await connection.rpc.call('/api', `aiArena/${method}`, { args: request === undefined ? {} : { request } })
   if (!result?.ok) throw new Error(result?.error?.message || '竞技台服务请求失败。')
@@ -60,18 +49,25 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0, gameId = rememb
   const catalog = useQuery('models'), gamesData = useQuery('games'), [selected, setSelected] = React.useState(['', ''])
   const [selectedGame, setSelectedGame] = React.useState(gameId || 'gomoku')
   const [effort, setEffort] = React.useState(['', '']), [busy, setBusy] = React.useState(false), [error, setError] = React.useState('')
-  const [config, setConfig] = React.useState({ maxMoves: 100, maxCalls: 120, timeoutSeconds: DEFAULT_TIMEOUT_SECONDS, maxTokens: DEFAULT_OUTPUT_TOKENS, tokenBudget: DEFAULT_TOKEN_BUDGET })
-  const customOutputBudget = React.useRef(false)
   const routes = catalog.value || []
-  const models = routes.flatMap(route => (route.models || []).map(model => ({ ...model, provider: route.id, providerName: route.name, selectable: route.selectable, reason: route.unavailableReason, key: JSON.stringify([route.id, model.id]) })))
-  const selectedModels = selected.map(key => models.find(model => model.key === key)).filter(Boolean)
-  const maxTokenLimit = selectedModels.length ? Math.min(...selectedModels.map(modelOutputLimit)) : DEFAULT_MODEL_OUTPUT_LIMIT
-  React.useEffect(() => { setConfig(previous => ({ ...previous, maxTokens: customOutputBudget.current ? Math.min(previous.maxTokens, maxTokenLimit) : Math.min(DEFAULT_OUTPUT_TOKENS, maxTokenLimit) })) }, [maxTokenLimit])
-  const availabilityNotes = routes.flatMap(route => {
-    if (route.unavailableReason) return [{ name: route.name || route.id, reason: route.unavailableReason }]
-    if (!route.models?.length) return [{ name: route.name || route.id, reason: route.id === 'lwb' ? '当前没有已授权模型，请先登录 LWB 账号后刷新。' : '当前没有返回可用模型，请检查该模型服务的配置后刷新。' }]
-    return []
-  })
+  // The model service returns unavailable routes with their advertised model
+  // list so settings can explain what needs configuration. The arena picker
+  // is an execution surface, so it should only offer models that can actually
+  // be selected and started.
+  const availableRoutes = routes
+    .filter(route => route.selectable !== false)
+    .map(route => ({ ...route, models: (route.models || []).filter(model => model.selectable !== false) }))
+    .filter(route => route.models.length > 0)
+  const models = availableRoutes.flatMap(route => route.models.map(model => ({ ...model, provider: route.id, providerName: route.name, selectable: true, reason: null, key: JSON.stringify([route.id, model.id]) })))
+  React.useEffect(() => {
+    if (!catalog.value) return
+    const allowed = new Set(models.map(model => model.key))
+    setSelected(previous => {
+      const next = previous.map(key => allowed.has(key) ? key : '')
+      return next.every((key, index) => key === previous[index]) ? previous : next
+    })
+    setEffort(previous => previous.map((value, index) => allowed.has(selected[index]) ? value : ''))
+  }, [catalog.value])
   const pick = (index, value) => { setSelected(previous => previous.map((item, i) => i === index ? value : item)); setEffort(previous => previous.map((item, i) => i === index ? '' : item)) }
   async function start(event) {
     event.preventDefault()
@@ -82,22 +78,20 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0, gameId = rememb
     try {
       const players = selected.map((key, i) => { const model = models.find(item => item.key === key); return { provider: model.provider, model: model.id, ...(effort[i] ? { reasoningEffort: effort[i] } : {}) } })
       rememberedGameId = selectedGame
-      onStarted(await api('start', { gameId: selectedGame, players, ...config }))
+      onStarted(await api('start', { gameId: selectedGame, players }))
     } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
   return h('details', { className: 'ar-setup', open, onToggle: event => onOpenChange(event.currentTarget.open) }, h('summary', null, h('span', { className: 'ar-setup-title' }, h(Settings2), '参赛配置'), h(ChevronDown, { className: 'ar-setup-chevron' })), h('form', { className: 'ar-form', onSubmit: start },
     gamesData.value?.length ? h(Field, { label: '竞技游戏' }, h('select', { value: selectedGame, onChange: event => { setSelectedGame(event.target.value); rememberedGameId = event.target.value; onGameChange?.(event.target.value) }, 'aria-label': '竞技游戏' }, gamesData.value.map(game => h('option', { key: game.id, value: game.id }, game.name)))) : null,
     h('div', { className: 'ar-participants' }, [0, 1].map(index => {
       const model = models.find(item => item.key === selected[index])
-      const groups = routes.map(route => h('optgroup', { key: route.id, label: route.name || route.id }, (route.models || []).map(item => h('option', { key: item.id, value: JSON.stringify([route.id, item.id]), disabled: route.selectable === false, title: route.unavailableReason || undefined }, `${item.name || item.id}${route.selectable === false ? ' · 不可用' : ''}`))))
+      const groups = availableRoutes.map(route => h('optgroup', { key: route.id, label: route.name || route.id }, route.models.map(item => h('option', { key: item.id, value: JSON.stringify([route.id, item.id]) }, item.name || item.id))))
       return h('div', { key: index, className: 'ar-participant', 'data-game': selectedGame },
         h('div', { className: 'ar-participant-head' }, h('i', { className: 'ar-stone', 'data-player': index }), `${playerSide({ id: selectedGame }, index)}选手`, h('small', null, index ? '后手' : '先手')),
         h(Field, { label: '参赛模型' }, h('select', { 'aria-label': `${playerSide({ id: selectedGame }, index)}模型`, value: selected[index], onChange: event => pick(index, event.target.value), required: true }, h('option', { value: '' }, '选择模型'), groups)),
         model?.reasoning?.efforts?.length ? h(Field, { label: '推理强度' }, h('select', { value: effort[index], onChange: event => setEffort(previous => previous.map((item, i) => i === index ? event.target.value : item)) }, h('option', { value: '' }, '模型默认'), model.reasoning.efforts.map(item => h('option', { key: item.id, value: item.id }, item.label || item.id)))) : null)
     })),
-    h('details', { className: 'ar-budget' }, h('summary', null, '预算与时限'), h('div', { className: 'ar-settings' }, [['maxMoves', '走子上限', 1, selectedGame === 'xiangqi' ? 600 : 225], ['maxCalls', '调用上限', 1, selectedGame === 'xiangqi' ? 1200 : 450], ['timeoutSeconds', '单步时限 / 秒', 5, MAX_TIMEOUT_SECONDS], ['maxTokens', '每步生成 Token', MIN_OUTPUT_TOKENS, maxTokenLimit], ['tokenBudget', '累计 Token 上限', 1000, MAX_TOKEN_BUDGET]].map(([key, label, min, max]) => h(Field, { key, label }, h('input', { type: 'number', value: config[key], min, max, required: true, onChange: event => { if (key === 'maxTokens') customOutputBudget.current = true; setConfig(previous => ({ ...previous, [key]: Number(event.target.value) })) } })))), h('p', { className: 'ar-muted' }, `本场单步上限：${maxTokenLimit.toLocaleString()} Token`)),
-    catalog.value && availabilityNotes.length > 0 && h('div', { className: 'ar-config-empty' }, h('div', null, h('strong', null, models.some(model => model.selectable !== false) ? '模型服务状态' : '暂无可用模型'), h('ul', null, availabilityNotes.map(note => h('li', { key: `${note.name}:${note.reason}` }, h('b', null, `${note.name}：`), note.reason)))), h(IconButton, { icon: RefreshCw, title: '刷新模型列表', onClick: catalog.refresh })),
-    h('div', { className: 'ar-submit' }, h('span', { className: 'ar-muted' }, `${config.maxMoves} 手上限 · 单步 ${config.timeoutSeconds} 秒 · 违规重试一次后判负`), h('button', { className: 'ar-button ar-primary', type: 'submit', disabled: busy || selected.some(key => !models.some(model => model.key === key && model.selectable !== false)) }, h(Play, { size: 16 }), busy ? '准备比赛…' : '开始比赛')),
+    h('div', { className: 'ar-submit' }, h('span', { className: 'ar-muted' }, '按棋规判定胜负 · 违规重试一次后判负'), h('button', { className: 'ar-button ar-primary', type: 'submit', disabled: busy || selected.some(key => !models.some(model => model.key === key && model.selectable !== false)) }, h(Play, { size: 16 }), busy ? '准备比赛…' : '开始比赛')),
     (error || catalog.error) && h('div', { className: 'ar-error', role: 'alert' }, error || catalog.error)), confirmation)
 }
 function Conversation({ match, turnId, renderConversation }) {
@@ -116,7 +110,7 @@ function Conversation({ match, turnId, renderConversation }) {
     h('div', { className: 'ar-actions' }, [0, 1].map(index => h('button', { key: index, type: 'button', className: `ar-button${currentPlayer === index ? ' ar-live' : ''}`, 'aria-pressed': currentPlayer === index, onClick: () => { setPlayer(index); setSelected(null) } }, `${playerSide(match.game, index)} · ${match.players[index].name}`)),
       h('select', { className: 'ar-select ar-turn-select', 'aria-label': '查看决策会话', value: current?.request.turnId || '', onChange: event => setSelected(event.target.value) }, choices.map(turn => h('option', { key: turn.request.turnId, value: turn.request.turnId }, `第 ${turn.moveNumber} 手${turn.request.attempt ? ` · 重试 ${turn.request.attempt}` : ''}${turn.error ? ' · 未完成' : ''}`)))),
     h('p', { className: 'ar-muted' }, current?.request.contextMode === 'current-position' || match.config.contextMode === 'current-position' && !current
-      ? '每次决策只发送当前棋盘与规则；历史会话保留用于回看。' : '历史比赛沿用选手会话，可查看其中的多轮记录。'),
+      ? '每次发送当前棋盘与规则，选手在各自的连续会话中决策。' : '历史比赛沿用选手会话，可查看其中的多轮记录。'),
     h(StatBar, { items: [{ label: '本次输入 Token', value: count(usage?.input), detail: '含缓存输入' }, { label: '缓存命中 Token', value: count(usage?.cacheRead), detail: '已计入输入' }, { label: '本次输出 Token', value: count(usage?.output), detail: '含模型上报的推理用量' }, { label: '本次总 Token', value: count(usage?.total), detail: current?.response ? usage ? '服务商上报用量' : '服务商未返回用量' : current?.error ? '用量未返回' : '等待本次用量' }] }),
     current?.sessionId && renderConversation ? renderConversation({ sessionId: current.sessionId, readOnly: true }) : h('div', { className: 'ar-empty' }, current ? '正在准备会话，或该历史记录没有会话编号。' : '首个决策开始后显示官方对话。'),
     h('details', { className: 'ar-raw' }, h('summary', null, '实际请求参数与原始结果'), h('pre', null, JSON.stringify(current || {}, null, 2))))
@@ -127,17 +121,10 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
   const [step, setStep] = React.useState(null), [playing, setPlaying] = React.useState(false), [speed, setSpeed] = React.useState('1')
   const [busy, setBusy] = React.useState(''), [error, setError] = React.useState(''), [notice, setNotice] = React.useState('')
   const [orientation, setOrientation] = React.useState('landscape'), [videoUrl, setVideoUrl] = React.useState(null)
-  const [resumeMaxTokens, setResumeMaxTokens] = React.useState(DEFAULT_OUTPUT_TOKENS)
-  const [resumeTimeout, setResumeTimeout] = React.useState(DEFAULT_TIMEOUT_SECONDS)
   const [clock, setClock] = React.useState(Date.now())
   const moves = match ? movesOf(match) : [], currentStep = Math.min(step ?? moves.length, moves.length)
   const frame = match ? frameAt(match, currentStep) : null
   const lastError = match?.events.at(-1)?.type === 'error' ? match.events.at(-1) : null
-  const timedOut = turnTimedOut(lastError, match?.config.timeoutSeconds)
-  React.useEffect(() => {
-    if (match?.status === 'paused') setResumeMaxTokens(match.config.maxTokens)
-    if (match?.status === 'paused') setResumeTimeout(match.config.pace === 'fast' ? Math.max(DEFAULT_TIMEOUT_SECONDS, match.config.timeoutSeconds) : match.config.timeoutSeconds)
-  }, [id, match?.status, match?.config.timeoutSeconds, lastError?.turnId, timedOut])
   React.useEffect(() => { setStep(null); setPlaying(false); setError(''); setNotice(''); setVideoUrl(null) }, [id])
   React.useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl) }, [videoUrl])
   React.useEffect(() => {
@@ -185,23 +172,20 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
     h('div', { className: 'ar-match-head' }, h('div', null, h('div', { className: 'ar-match-title' }, h('h2', { className: 'ar-section-title' }, gameName(match.game)), h('span', { className: 'ar-match-count' }, `${activeCount} 场进行中`)), h('p', null, `${new Date(match.createdAt).toLocaleString('zh-CN')} · ${id.slice(0, 8)}`)), h('div', { className: 'ar-actions' }, match.config.pace === 'fast' && h('span', { className: 'ar-chip' }, '历史快棋对局'), h(Status, { status: match.status }),
       match.status === 'running' && h(IconButton, { icon: Pause, title: '回合结束后暂停', disabled: !!busy, onClick: () => run('pause', () => api('control', { id, action: 'pause' })) }),
       ['running', 'pausing', 'paused'].includes(match.status) && h(IconButton, { icon: Square, title: '取消比赛', disabled: !!busy, onClick: async () => { if (await confirm({ title: '取消这场比赛？', description: '取消后停止继续落子，已完成的落子、选手发言和用量记录会保留。', confirmLabel: '确认取消比赛' })) run('cancel', () => api('control', { id, action: 'cancel' })) } }))),
-    match.status === 'paused' && h('form', { className: 'ar-resume', onSubmit: event => { event.preventDefault(); run('resume', () => api('control', { id, action: 'resume', timeoutSeconds: resumeTimeout, maxTokens: resumeMaxTokens })) } },
-      h(Field, { label: '单步时限 / 秒' }, h('input', { type: 'number', 'aria-label': '继续比赛单步时限', min: 5, max: MAX_TIMEOUT_SECONDS, required: true, value: resumeTimeout, disabled: !!busy, onChange: event => setResumeTimeout(Number(event.target.value)) })),
-      h(Field, { label: '每步生成 Token' }, h('input', { type: 'number', 'aria-label': '继续比赛每步输出上限', min: MIN_OUTPUT_TOKENS, max: match.config.maxTokensLimit || DEFAULT_OUTPUT_TOKENS, required: true, value: resumeMaxTokens, disabled: !!busy, onChange: event => setResumeMaxTokens(Number(event.target.value)) })),
-      h('button', { className: 'ar-button ar-primary', type: 'submit', disabled: !!busy }, h(Play), '继续比赛')),
+    match.status === 'paused' && h(Button, { primary: true, icon: Play, disabled: !!busy, onClick: () => run('resume', () => api('control', { id, action: 'resume' })) }, '继续比赛'),
     h('div', { className: 'ar-match' }, h('div', { className: 'ar-board-col' },
       h('div', { className: 'ar-scoreboard' }, h(Player, { player: match.players[0], index: 0, gameId: match.game?.id }), h('span', { className: 'ar-vs' }, 'VS'), h(Player, { player: match.players[1], index: 1, gameId: match.game?.id })),
       h('div', { className: 'ar-board', key: currentStep, dangerouslySetInnerHTML: { __html: boardSvg(frame.moves, { gameId: match.game?.id }) } }),
       h('div', { className: 'ar-toolbar' }, h(IconButton, { icon: SkipBack, title: '回到开局', onClick: () => seek(0) }), h(IconButton, { icon: ChevronLeft, title: '上一步', onClick: () => seek(Math.max(0, currentStep - 1)), disabled: currentStep === 0 }), h(IconButton, { icon: playing ? Pause : Play, title: playing ? '暂停回放' : '播放回放', disabled: !moves.length, onClick: () => { if (playing) setPlaying(false); else { if (step === null || currentStep >= moves.length) setStep(0); setPlaying(true) } } }), h(IconButton, { icon: ChevronRight, title: '下一步', onClick: () => seek(Math.min(moves.length, currentStep + 1)), disabled: currentStep === moves.length }),
         h('input', { type: 'range', 'aria-label': '比赛回放进度', min: 0, max: moves.length, value: currentStep, onChange: event => seek(Number(event.target.value)) }), h('span', { className: 'ar-counter' }, `${currentStep} / ${moves.length}`), h('select', { className: 'ar-select', style: { width: 60 }, value: speed, 'aria-label': '回放速度', onChange: event => setSpeed(event.target.value) }, ['0.5', '1', '2', '4'].map(value => h('option', { key: value, value }, `${value}×`))), h(IconButton, { icon: Radio, title: '跟随最新回合', onClick: () => { setPlaying(false); setStep(null) }, className: `ar-icon${step === null ? ' ar-live' : ''}` }))),
       h('aside', { className: 'ar-commentary' }, h('div', { className: 'ar-commentary-head' }, h('h2', { className: 'ar-section-title' }, '选手发言'), h('span', { className: 'ar-chip' }, thinking ? '决策中' : `第 ${currentStep} 手`)),
-        h('div', { className: 'ar-speaking', 'data-thinking': !!thinking }, h('div', { className: 'ar-speaking-name' }, h(MessageCircle), match.players[currentPlayer].name), h('p', { role: thinking ? 'status' : undefined }, thinking ? phaseLabel : frame.current?.speech || '等待第一步走子'), thinking ? h('div', { className: 'ar-generation' }, h('div', null, h('small', null, match.players[currentPlayer].reasoningEffort ? `推理强度：${match.players[currentPlayer].reasoningEffort}` : '模型默认推理'), h('small', null, `${elapsedSeconds.toFixed(1)} / ${match.config.timeoutSeconds} 秒`)), h('progress', { 'aria-label': '本步已用时间', value: Math.min(elapsedSeconds, match.config.timeoutSeconds), max: match.config.timeoutSeconds })) : frame.current && h('small', null, `${actionLabel(frame.current.action, match.game)} · ${(frame.current.elapsedMs / 1000).toFixed(1)} 秒`)),
+        h('div', { className: 'ar-speaking', 'data-thinking': !!thinking }, h('div', { className: 'ar-speaking-name' }, h(MessageCircle), match.players[currentPlayer].name), h('p', { role: thinking ? 'status' : undefined }, thinking ? phaseLabel : frame.current?.speech || '等待第一步走子'), thinking ? h('div', { className: 'ar-generation' }, h('div', null, h('small', null, match.players[currentPlayer].reasoningEffort ? `推理强度：${match.players[currentPlayer].reasoningEffort}` : '模型默认推理'), h('small', null, `已用 ${elapsedSeconds.toFixed(1)} 秒`))) : frame.current && h('small', null, `${actionLabel(frame.current.action, match.game)} · ${(frame.current.elapsedMs / 1000).toFixed(1)} 秒`)),
         frame.result && h('div', { className: 'ar-result' }, h(Trophy), frame.result.message),
         h('div', { className: 'ar-transcript-title' }, h('span', null, '回合记录'), h('span', null, `${frame.speech.length} 条`)),
         h('div', { className: 'ar-transcript' }, frame.speech.length ? frame.speech.map(event => h('button', { key: event.turnId, className: 'ar-speech', onClick: () => seek(event.moveNumber), 'aria-label': `查看第 ${event.moveNumber} 手` }, h('div', { className: 'ar-speech-head' }, h('span', { className: 'ar-speech-num' }, event.moveNumber), h('strong', null, match.players[event.player].name), h('small', null, actionLabel(event.action, match.game))), h('p', null, event.speech))) : h('div', { className: 'ar-empty' }, '暂无回合记录')))),
-    h(StatBar, { items: [{ label: '已完成走子', value: moves.length, detail: `上限 ${match.config.maxMoves} 手`, tone: 'brand' }, { label: '模型调用', value: match.calls, detail: `上限 ${match.config.maxCalls} 次` }, { label: '累计 Token', value: match.tokens.toLocaleString(), detail: match.usageUnknown ? '用量不完整' : `预算 ${match.config.tokenBudget.toLocaleString()}` }, { label: '比赛状态', value: statusLabel[match.status] || match.status, tone: match.status === 'finished' ? 'green' : undefined }] }),
+    h(StatBar, { items: [{ label: '已完成走子', value: moves.length, tone: 'brand' }, { label: '决策回合', value: match.calls, detail: '含违规重试与未完成回合' }, { label: '累计 Token', value: match.tokens.toLocaleString(), detail: match.usageUnknown ? '用量不完整' : '服务商上报用量' }, { label: '比赛状态', value: statusLabel[match.status] || match.status, tone: match.status === 'finished' ? 'green' : undefined }] }),
     (error || data.error) && h('p', { className: 'ar-error', role: 'alert' }, error || data.error),
-    lastError && h('p', { className: 'ar-error', role: 'alert' }, timedOut ? timeoutMessage(match.players[lastError.player]?.name || '模型', match.config.timeoutSeconds) : lastError.error),
+    lastError && h('p', { className: 'ar-error', role: 'alert' }, lastError.error),
     h('div', { className: 'ar-export' }, h('div', { className: 'ar-actions' }, h(Button, { icon: FileText, disabled: !!busy, onClick: () => run('report', () => downloadRecord('markdown')) }, '战报'), h(Button, { icon: Download, disabled: !!busy, onClick: () => run('json', () => downloadRecord('json')) }, '完整记录'), h(Button, { icon: Play, disabled: !!busy, onClick: () => run('html', () => downloadRecord('html')) }, '离线回放')),
       h('div', { className: 'ar-actions' }, h('label', null, '视频', h('select', { className: 'ar-select', value: orientation, 'aria-label': '视频画幅', onChange: event => setOrientation(event.target.value) }, h('option', { value: 'landscape' }, '横屏 16:9'), h('option', { value: 'portrait' }, '竖屏 9:16'))), h(Button, { icon: Film, disabled: !!busy || match.export?.status === 'running' || !['finished', 'cancelled'].includes(match.status) || !moves.length, onClick: () => run('render', () => api('exportVideo', { id, orientation })) }, match.export?.status === 'running' ? '渲染中…' : '导出 MP4'), match.export?.status === 'succeeded' && h(React.Fragment, null, h(IconButton, { icon: Eye, title: '预览成片', disabled: !!busy, onClick: () => run('preview', () => video(true)) }), h(IconButton, { icon: Download, title: '下载 MP4', disabled: !!busy, onClick: () => run('video', () => video(false)) })))),
     match.export?.status === 'failed' && h('p', { className: 'ar-error' }, match.export.error), notice && h('p', { className: 'ar-notice', role: 'status' }, notice), videoUrl && h('video', { className: 'ar-video', src: videoUrl, controls: true }),

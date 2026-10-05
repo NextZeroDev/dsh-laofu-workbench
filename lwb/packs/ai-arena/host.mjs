@@ -1,25 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, timeoutMessage } from './timeouts.mjs'
 import { decisionPrompt } from './decision-prompt.mjs'
 import { executeSessionTurn } from './dsh-session.mjs'
 
 const now = () => new Date().toISOString()
-export const MIN_OUTPUT_TOKENS = 128
-export const MAX_OUTPUT_TOKENS = 393216
-export const DEFAULT_MODEL_OUTPUT_LIMIT = 32768
-export const DEFAULT_OUTPUT_TOKENS = 32768
-export const DEFAULT_TOKEN_BUDGET = 4_000_000
-export const MAX_TOKEN_BUDGET = 20_000_000
 export const MAX_CONTINUATIONS = 2
 const bounded = (value, fallback, min, max, label) => {
   const number = value ?? fallback
   if (!Number.isInteger(number) || number < min || number > max) throw new Error(`${label}必须是 ${min}—${max} 范围内的整数。`)
   return number
-}
-function modelOutputLimit(model) {
-  const advertised = [model?.maxOutputTokens, model?.maxTokens, model?.defaultMaxTokens].find(value => Number.isInteger(value) && value >= MIN_OUTPUT_TOKENS)
-  return Math.max(MIN_OUTPUT_TOKENS, Math.min(advertised ?? DEFAULT_MODEL_OUTPUT_LIMIT, MAX_OUTPUT_TOKENS))
 }
 export const SYSTEM = '你正在参加一场真实规则的 AI 竞技。只依据收到的局面决策。你没有任何工具。只输出一个 JSON 对象：{"action":{"row":整数,"col":整数},"speech":"一句面向观众的简短选手发言"}。speech 使用中文，最多 80 字，表达你这一手的意图或判断，不要叙述完整内部推理，不要伪造对手发言。坐标从 1 开始。不得输出代码围栏或其他文字。'
 export const XIANGQI_SYSTEM = '你正在参加一场真实规则的中国象棋 AI 竞技。只依据收到的局面决策。你没有任何工具。只输出一个 JSON 对象：{"action":{"from":{"row":整数,"col":整数},"to":{"row":整数,"col":整数}},"speech":"一句面向观众的简短选手发言"}。speech 使用中文，最多 80 字，表达这一手的意图或判断，不要叙述完整内部推理，不要伪造对手发言。坐标从 1 开始，行从黑方顶端到红方底端为 1—10，列从左到右为 1—9。只能走合法着法，必须应将，不得让己方将帅被攻击。不得输出代码围栏或其他文字。'
@@ -49,9 +38,9 @@ function mergeUsage(total, next) {
 }
 
 export class ArenaHost {
-  constructor({ store, games, scope, turnDelayMs = 250, turnTimeout = milliseconds => AbortSignal.timeout(milliseconds) }) {
+  constructor({ store, games, scope, turnDelayMs = 250 }) {
     if (!scope?.sessions?.create || !scope.sessions.resume) throw new Error('竞技台需要 DSH 会话服务。')
-    Object.assign(this, { store, games, scope, turnDelayMs, turnTimeout })
+    Object.assign(this, { store, games, scope, turnDelayMs })
     this.running = new Map()
     this.progress = new Map()
     this.sessions = new Map()
@@ -66,17 +55,10 @@ export class ArenaHost {
       const model = route?.models?.find(item => item.id === input.model)
       if (!model || route.selectable === false) throw new Error(route?.unavailableReason || '请选择可用的参赛模型。')
       if (input.reasoningEffort && !model.reasoning?.efforts?.some(item => item.id === input.reasoningEffort)) throw new Error('所选模型不支持该推理强度。')
-      return { id: index, provider: route.id, providerName: route.name || route.id, model: model.id, name: model.name || model.id, maxOutputTokens: modelOutputLimit(model), ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}) }
+      return { id: index, provider: route.id, providerName: route.name || route.id, model: model.id, name: model.name || model.id, ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}) }
     })
-    const maxTokensLimit = Math.min(...players.map(player => player.maxOutputTokens))
     if (request.pace !== undefined && request.pace !== 'native') throw new Error('比赛模式已移除，请刷新页面后创建比赛。')
     const config = {
-      maxMoves: bounded(request.maxMoves, game.id === 'xiangqi' ? 200 : 100, 1, game.id === 'xiangqi' ? 600 : 225, '行棋上限'),
-      maxCalls: bounded(request.maxCalls, game.id === 'xiangqi' ? 240 : 120, 1, game.id === 'xiangqi' ? 1200 : 450, '调用上限'),
-      maxTokens: bounded(request.maxTokens, Math.min(DEFAULT_OUTPUT_TOKENS, maxTokensLimit), MIN_OUTPUT_TOKENS, maxTokensLimit, '每步输出上限'),
-      maxTokensLimit,
-      tokenBudget: bounded(request.tokenBudget, DEFAULT_TOKEN_BUDGET, 1000, MAX_TOKEN_BUDGET, '累计 Token 上限'),
-      timeoutSeconds: bounded(request.timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 5, MAX_TIMEOUT_SECONDS, '单步时限'),
       pace: 'native',
       invalidRetries: bounded(request.invalidRetries, 1, 0, 2, '违规重试次数'),
       speechVisibility: 'spectator', system: game.id === 'xiangqi' ? XIANGQI_SYSTEM : SYSTEM,
@@ -104,13 +86,8 @@ export class ArenaHost {
     if (progress?.turnId === match.activeTurn?.turnId) match.activeTurn = { ...match.activeTurn, ...progress }
     return match
   }
-  async control({ id, action, timeoutSeconds, maxTokens, pace }) {
+  async control({ id, action, pace }) {
     if (!['pause', 'resume', 'cancel'].includes(action)) throw new Error('比赛操作无效。')
-    if (timeoutSeconds !== undefined) {
-      if (action !== 'resume') throw new Error('单步时限只能在继续比赛时调整。')
-      bounded(timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 5, MAX_TIMEOUT_SECONDS, '单步时限')
-    }
-    if (maxTokens !== undefined && action !== 'resume') throw new Error('输出上限只能在继续比赛时调整。')
     if (pace !== undefined) {
       if (action !== 'resume') throw new Error('比赛模式只能在继续比赛时调整。')
       if (pace !== 'native') throw new Error('比赛模式已移除，请刷新页面后继续比赛。')
@@ -120,17 +97,15 @@ export class ArenaHost {
         if (value.status !== 'paused') throw new Error('只有暂停的比赛可以继续。')
         if (this.running.has(id)) throw new Error('上一回合正在结算，请稍后继续。')
         if (this.games.get(value.game.id).version !== value.game.version) throw new Error('游戏规则版本已变化，请保留本场记录并创建新比赛。')
-        if (timeoutSeconds !== undefined && timeoutSeconds !== value.config.timeoutSeconds) {
-          value.events.push({ type: 'config-updated', at: now(), previous: { timeoutSeconds: value.config.timeoutSeconds }, next: { timeoutSeconds } })
-          value.config.timeoutSeconds = timeoutSeconds
-        }
-        if (maxTokens !== undefined) {
-          bounded(maxTokens, DEFAULT_OUTPUT_TOKENS, MIN_OUTPUT_TOKENS, value.config.maxTokensLimit || Math.min(...value.players.map(modelOutputLimit)), '每步输出上限')
-          if (maxTokens !== value.config.maxTokens) {
-            value.events.push({ type: 'config-updated', at: now(), previous: { maxTokens: value.config.maxTokens }, next: { maxTokens } })
-            value.config.maxTokens = maxTokens
+        // Migrate only resumed matches; finished historical results stay intact.
+        const previous = {}
+        for (const key of ['maxMoves', 'maxCalls', 'maxTokens', 'maxTokensLimit', 'tokenBudget', 'timeoutSeconds']) {
+          if (Object.hasOwn(value.config, key)) {
+            previous[key] = value.config[key]
+            delete value.config[key]
           }
         }
+        if (Object.keys(previous).length) value.events.push({ type: 'config-updated', at: now(), previous, next: {}, reason: 'dsh-session-defaults' })
         if (value.config.pace !== 'native') {
           value.events.push({ type: 'config-updated', at: now(), previous: { pace: value.config.pace || 'deep' }, next: { pace: 'native' } })
           value.config.pace = 'native'
@@ -167,7 +142,7 @@ export class ArenaHost {
   async playerSession(match, player, signal) {
     const key = this.sessionKey(match.id, player)
     const model = match.players[player]
-    const options = { provider: model.provider, model: model.model, maxTokens: match.config.maxTokens, tools: 'none', system: match.config.system, ...(model.reasoningEffort ? { reasoningEffort: model.reasoningEffort } : {}) }
+    const options = { provider: model.provider, model: model.model, maxTokens: null, tools: 'none', system: match.config.system, ...(model.reasoningEffort ? { reasoningEffort: model.reasoningEffort } : {}) }
     const current = this.sessions.get(key)
     if (current) return current
     const storedId = typeof model.sessionId === 'string' && model.sessionId.trim() ? model.sessionId.trim() : null
@@ -261,9 +236,6 @@ export class ArenaHost {
           await this.finish(id, { kind: match.state.draw ? 'draw' : 'win', winner: match.state.winner, message: match.state.draw ? (match.game.id === 'xiangqi' ? `中国象棋和棋（${match.state.terminalReason || '规则判定'}）。` : '棋盘已满，平局。') : `${match.players[match.state.winner].name} ${match.game.id === 'xiangqi' ? `获胜（${match.state.terminalReason || '将死或困毙'}）` : '连成五子，获胜'}。` }); return
         }
         if (match.status === 'pausing') { await this.store.update(id, value => { value.status = 'paused' }); return }
-        if (match.state.moves.length >= match.config.maxMoves || match.calls >= match.config.maxCalls || match.tokens >= match.config.tokenBudget) {
-          await this.finish(id, { kind: 'limit', winner: null, message: '达到比赛预算或行棋上限，比赛结束，未判定胜负。' }); return
-        }
         const attempt = match.activeTurn?.attempt || 0
         if (attempt > match.config.invalidRetries) {
           await this.finish(id, { kind: 'forfeit', winner: 1 - match.state.nextPlayer, message: `${match.players[match.state.nextPlayer].name} 连续违规，判负。` }); return
@@ -273,12 +245,11 @@ export class ArenaHost {
         match = await this.store.update(id, value => {
           if (value.status !== 'running') return
           value.calls += 1; value.activeTurn = { turnId, player, attempt, startedAt: now() }
-          value.events.push({ type: 'request', at: value.activeTurn.startedAt, turnId, player, attempt, moveNumber: value.state.moves.length + 1, system: value.config.system, prompt, model, pace: 'native', maxTokens: value.config.maxTokens, timeoutSeconds: value.config.timeoutSeconds })
+          value.events.push({ type: 'request', at: value.activeTurn.startedAt, turnId, player, attempt, moveNumber: value.state.moves.length + 1, system: value.config.system, prompt, model, pace: 'native' })
         })
         if (match.activeTurn?.turnId !== turnId) continue
         const started = Date.now()
-        const deadline = this.turnTimeout(match.config.timeoutSeconds * 1000)
-        const callSignal = AbortSignal.any([signal, deadline])
+        const callSignal = signal
         let response, session
         this.progress.set(id, { turnId, phase: 'waiting', bytesReceived: 0 })
         const progress = update => {
@@ -308,7 +279,7 @@ export class ArenaHost {
           })
           response = { ...response, sessionId: session.id }
           if (response.finish?.kind !== 'stop' && !(response.finish?.kind === 'cancelled' && signal.aborted)) {
-            const error = new Error(response.finish?.kind === 'length' ? '选手输出达到每步上限，比赛已暂停；请提高上限后恢复。' : `DSH 会话未正常结束（${response.finish?.kind || 'unknown'}），比赛已暂停。`)
+            const error = new Error(response.finish?.kind === 'length' ? '模型或服务商的输出边界截断了回复，补全后仍未完成，比赛已暂停。' : `DSH 会话未正常结束（${response.finish?.kind || 'unknown'}），比赛已暂停。`)
             error.code = response.finish?.kind === 'length' ? 'ARENA_OUTPUT_LIMIT' : 'ARENA_SESSION_FINISH'
             error.result = response
             throw error
@@ -322,15 +293,14 @@ export class ArenaHost {
           })
         }
         catch (error) {
-          const timedOut = deadline.aborted && !signal.aborted
           await this.store.update(id, value => {
             const partial = error.result ? { ...error.result, ...(session ? { sessionId: session.id } : {}) } : null
             if (Number.isSafeInteger(partial?.sessionSeq)) value.players[player].sessionSeq = partial.sessionSeq
             const tokens = tokenCount(partial?.usage)
             if (tokens === null) value.usageUnknown = true; else value.tokens += tokens
             value.events.push({ type: 'error', at: now(), turnId, player, elapsedMs: Date.now() - started,
-              sessionId: session?.id || null, code: timedOut ? 'ARENA_TURN_TIMEOUT' : error.code || null,
-              error: timedOut ? timeoutMessage(model.name, match.config.timeoutSeconds) : String(error.message).replace(/Bearer\s+\S+/giu, 'Bearer [hidden]').slice(0, 1000), response: partial })
+              sessionId: session?.id || null, code: error.code || null,
+              error: String(error.message).replace(/Bearer\s+\S+/giu, 'Bearer [hidden]').slice(0, 1000), response: partial })
             value.activeTurn = null
             if (value.status !== 'cancelled') value.status = 'paused'
           })

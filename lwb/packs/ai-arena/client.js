@@ -411,8 +411,6 @@ body[data-ds-dark-theme] .ar-page{
 .ar-field{display:grid;gap:6px;min-width:0}.ar-field > span{font-size:12px;color:var(--lwb-muted)}
 .ar-field input,.ar-field select,.ar-select,.ar-search{width:100%;min-width:0;height:36px;padding:0 10px;border:1px solid var(--lwb-line);border-radius:6px;color:var(--lwb-ink);background:var(--lwb-surface);font-size:13px}
 .ar-field input:focus,.ar-field select:focus,.ar-search:focus{border-color:var(--ar-brand);box-shadow:0 0 0 2px var(--ar-brand-soft)}
-.ar-budget > summary{width:max-content;cursor:pointer;color:var(--lwb-muted);font-size:12px}
-.ar-settings{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:12px}
 .ar-submit{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.ar-submit .ar-muted{font-size:12px}
 .ar-config-empty{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--ar-amber);border-radius:7px;color:var(--ar-amber);background:var(--ar-amber-soft);font-size:13px}.ar-config-empty strong{display:block;color:var(--lwb-ink);font-weight:650}.ar-config-empty ul{display:grid;gap:3px;margin:5px 0 0 16px;padding:0;color:var(--lwb-muted);font-size:12px}.ar-config-empty li{padding-left:2px}.ar-config-empty b{color:var(--lwb-ink);font-weight:600}.ar-config-empty p{margin:5px 0 0;color:var(--lwb-muted);font-size:12px}
 .ar-conversation{display:grid;gap:12px;min-width:0;padding:16px;border:1px solid var(--lwb-line);border-radius:10px;background:var(--lwb-surface)}
@@ -422,7 +420,6 @@ body[data-ds-dark-theme] .ar-page{
 .ar-conversation .lwb-embedded-conversation-main{flex:1;min-height:0;display:flex;flex-direction:column}
 .ar-match-view{display:grid;gap:16px}.ar-match-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .ar-match-head p{margin-top:4px;color:var(--lwb-muted);font-size:12px}.ar-match-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.ar-match-count{display:inline-flex;align-items:center;min-height:24px;padding:3px 9px;border:1px solid var(--ar-orange);border-radius:999px;color:var(--ar-orange);background:var(--ar-orange-soft);font-size:12px;font-weight:700;white-space:nowrap}
-.ar-resume{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--lwb-line);border-bottom:1px solid var(--lwb-line)}.ar-resume .ar-field{width:180px;max-width:100%}
 .ar-match{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.85fr);gap:16px;align-items:stretch}
 .ar-board-col{display:grid;align-content:start;gap:0;min-width:0;border:1px solid var(--lwb-line);border-radius:10px;background:var(--lwb-surface);box-shadow:var(--ar-shadow);overflow:hidden}
 .ar-scoreboard{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1fr);align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid var(--lwb-line)}
@@ -450,7 +447,7 @@ body[data-ds-dark-theme] .ar-page{
 .ar-speaking-name svg{width:16px;height:16px;flex:none;color:var(--ar-tone)}
 .ar-speaking p{font-size:18px;font-weight:600;line-height:1.75;margin:12px 0;overflow-wrap:anywhere}.ar-speaking small{font-size:12px;color:var(--lwb-muted)}
 .ar-speaking[data-thinking=true] p{color:var(--lwb-muted);font-weight:400}
-.ar-generation{display:grid;gap:8px}.ar-generation > div{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.ar-generation small:last-child{font-variant-numeric:tabular-nums}.ar-generation progress{width:100%;height:5px;accent-color:var(--ar-cyan);border:0;border-radius:3px;overflow:hidden}.ar-generation progress::-webkit-progress-bar{background:var(--lwb-page)}.ar-generation progress::-webkit-progress-value{background:var(--ar-cyan)}
+.ar-generation{display:grid;gap:8px}.ar-generation > div{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.ar-generation small:last-child{font-variant-numeric:tabular-nums}
 .ar-result{display:flex;align-items:center;gap:9px;margin:0;padding:12px 18px;color:var(--ar-green);background:var(--ar-green-soft);font-size:13px;font-weight:600;overflow-wrap:anywhere;flex:none}.ar-result svg{width:17px;height:17px;flex:none}
 .ar-transcript-title{display:flex;justify-content:space-between;gap:8px;padding:12px 18px 4px;color:var(--lwb-muted);font-size:11px;flex:none}
 .ar-transcript{flex:1;min-height:120px;overflow:auto;padding:0 18px 8px;display:grid;grid-auto-rows:max-content;align-content:start;overscroll-behavior:contain}
@@ -486,9 +483,9 @@ body[data-ds-dark-theme] .ar-page{
 .ar-game-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:14px;border-top:1px solid var(--lwb-line)}.ar-game-footer > span{font-size:12px;color:var(--lwb-muted)}
 .ar-video{display:block;width:100%;max-height:600px;background:#111;border-radius:8px}
 @keyframes ar-place{from{opacity:.25}to{opacity:1}}@keyframes ar-pulse{50%{opacity:.35}}
-@media(max-width:1100px){.ar-match{grid-template-columns:minmax(0,1.1fr) minmax(290px,.9fr)}.ar-toolbar{gap:5px;padding:10px}.ar-toolbar input[type=range]{flex-basis:110px}.ar-settings{grid-template-columns:repeat(3,minmax(0,1fr))}.ar-history-columns,.ar-row{grid-template-columns:minmax(0,1fr) 130px 55px 95px 20px;gap:12px}}
+@media(max-width:1100px){.ar-match{grid-template-columns:minmax(0,1.1fr) minmax(290px,.9fr)}.ar-toolbar{gap:5px;padding:10px}.ar-toolbar input[type=range]{flex-basis:110px}.ar-history-columns,.ar-row{grid-template-columns:minmax(0,1fr) 130px 55px 95px 20px;gap:12px}}
 @media(max-width:820px){.ar-match{grid-template-columns:minmax(0,1fr)}.ar-commentary{height:490px;max-height:none}.ar-speaking{min-height:150px}.ar-top{flex-wrap:wrap}.ar-top h1{font-size:22px}.ar-history-columns,.ar-row{grid-template-columns:minmax(0,1fr) 90px 20px}.ar-history-columns > :nth-child(2),.ar-history-columns > :nth-child(3),.ar-row-date,.ar-row-count{display:none}}
-@media(max-width:520px){.ar-page{gap:14px}.ar-top h1{font-size:20px}.ar-top-actions{width:100%}.ar-participants{grid-template-columns:1fr;gap:16px}.ar-settings{grid-template-columns:repeat(2,minmax(0,1fr))}.ar-submit{align-items:flex-start}.ar-submit .ar-muted{max-width:220px}.ar-scoreboard{padding:12px;gap:6px}.ar-player{gap:7px}.ar-player strong{font-size:12px}.ar-player small{font-size:10px}.ar-board{width:calc(100% - 20px);margin:10px auto}.ar-toolbar{gap:5px}.ar-toolbar input[type=range]{min-width:60px}.ar-commentary-head{min-height:54px;padding:12px 14px}.ar-speaking{padding:16px 14px}.ar-speaking p{font-size:16px}.ar-transcript{padding:0 14px 8px}.ar-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 0}.ar-stat:nth-child(3){border-left:0}.ar-stat strong{font-size:18px}.ar-stat{padding:0 12px}.ar-export .ar-actions{width:100%}.ar-history-toolbar .ar-search{max-width:none;flex:1}.ar-history-toolbar .ar-select{width:125px}.ar-history-columns,.ar-row{gap:8px;padding:12px 10px}.ar-row strong{font-size:13px}.ar-match-head{align-items:flex-start}.ar-match-head .ar-actions{justify-content:flex-end}.ar-tag{font-size:10px}.ar-game-grid{grid-template-columns:1fr}}
+@media(max-width:520px){.ar-page{gap:14px}.ar-top h1{font-size:20px}.ar-top-actions{width:100%}.ar-participants{grid-template-columns:1fr;gap:16px}.ar-submit{align-items:flex-start}.ar-submit .ar-muted{max-width:220px}.ar-scoreboard{padding:12px;gap:6px}.ar-player{gap:7px}.ar-player strong{font-size:12px}.ar-player small{font-size:10px}.ar-board{width:calc(100% - 20px);margin:10px auto}.ar-toolbar{gap:5px}.ar-toolbar input[type=range]{min-width:60px}.ar-commentary-head{min-height:54px;padding:12px 14px}.ar-speaking{padding:16px 14px}.ar-speaking p{font-size:16px}.ar-transcript{padding:0 14px 8px}.ar-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 0}.ar-stat:nth-child(3){border-left:0}.ar-stat strong{font-size:18px}.ar-stat{padding:0 12px}.ar-export .ar-actions{width:100%}.ar-history-toolbar .ar-search{max-width:none;flex:1}.ar-history-toolbar .ar-select{width:125px}.ar-history-columns,.ar-row{gap:8px;padding:12px 10px}.ar-row strong{font-size:13px}.ar-match-head{align-items:flex-start}.ar-match-head .ar-actions{justify-content:flex-end}.ar-tag{font-size:10px}.ar-game-grid{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.ar-page *{animation:none!important;transition:none!important}}
 `;
 
@@ -584,16 +581,6 @@ function turnUsage(usage) {
   };
 }
 
-// lwb/packs/ai-arena/timeouts.mjs
-var DEFAULT_TIMEOUT_SECONDS = 300;
-var MAX_TIMEOUT_SECONDS = 1800;
-function turnTimedOut(event, timeoutSeconds) {
-  return event?.type === "error" && (event.code === "ARENA_TURN_TIMEOUT" || /timeout|timed out/iu.test(event.error || "") && event.elapsedMs >= timeoutSeconds * 1e3);
-}
-function timeoutMessage(name, seconds) {
-  return `${name} \u672C\u6B65\u8D85\u8FC7 ${seconds} \u79D2\u65F6\u9650\uFF0C\u6BD4\u8D5B\u5DF2\u6682\u505C\u3002\u53EF\u8C03\u6574\u5355\u6B65\u65F6\u9650\u540E\u7EE7\u7EED\uFF0C\u5DF2\u5B8C\u6210\u7684\u843D\u5B50\u4FDD\u7559\u3002`;
-}
-
 // lwb/packs/ai-arena/client-source.mjs
 var h2 = import_react4.default.createElement;
 var connection;
@@ -604,16 +591,6 @@ var statusLabel = { running: "\u6BD4\u8D5B\u4E2D", pausing: "\u56DE\u5408\u7ED3\
 var gameLabel = (id) => id === "xiangqi" ? "\u4E2D\u56FD\u8C61\u68CB" : "\u4E94\u5B50\u68CB";
 var gameMeta = (id) => id === "xiangqi" ? { board: "9 \xD7 10", facts: "\u4E5D\u8DEF\u5341\u7EBF \xB7 \u695A\u6CB3\u6C49\u754C \xB7 \u7EA2\u65B9\u5148\u624B", shortRule: "\u4E5D\u8DEF\u5341\u7EBF\u4E2D\u56FD\u8C61\u68CB \xB7 \u7EA2\u65B9\u5148\u624B \xB7 \u5C06\u6B7B\u6216\u56F0\u6BD9\u83B7\u80DC" } : { board: "15 \xD7 15", facts: "15 \xD7 15 \xB7 \u9ED1\u65B9\u5148\u624B", shortRule: "15 \xD7 15 \u81EA\u7531\u4E94\u5B50\u68CB \xB7 \u9ED1\u65B9\u5148\u624B \xB7 \u8FDE\u4E94\u53CA\u4EE5\u4E0A\u83B7\u80DC" };
 var sideLabel = (gameId, index) => `${playerSide({ id: gameId }, index)} \xB7 ${index ? "\u540E\u624B" : "\u5148\u624B"}`;
-var MIN_OUTPUT_TOKENS = 128;
-var MAX_OUTPUT_TOKENS = 393216;
-var DEFAULT_MODEL_OUTPUT_LIMIT = 32768;
-var DEFAULT_OUTPUT_TOKENS = 32768;
-var DEFAULT_TOKEN_BUDGET = 4e6;
-var MAX_TOKEN_BUDGET = 2e7;
-var modelOutputLimit = (model) => {
-  const value = [model?.maxOutputTokens, model?.maxTokens, model?.defaultMaxTokens].find((candidate) => Number.isInteger(candidate) && candidate >= MIN_OUTPUT_TOKENS);
-  return Math.max(MIN_OUTPUT_TOKENS, Math.min(value ?? DEFAULT_MODEL_OUTPUT_LIMIT, MAX_OUTPUT_TOKENS));
-};
 var api = async (method, request) => {
   const result = await connection.rpc.call("/api", `aiArena/${method}`, { args: request === void 0 ? {} : { request } });
   if (!result?.ok) throw new Error(result?.error?.message || "\u7ADE\u6280\u53F0\u670D\u52A1\u8BF7\u6C42\u5931\u8D25\u3002");
@@ -678,20 +655,18 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0, gameId = rememb
   const catalog = useQuery("models"), gamesData = useQuery("games"), [selected, setSelected] = import_react4.default.useState(["", ""]);
   const [selectedGame, setSelectedGame] = import_react4.default.useState(gameId || "gomoku");
   const [effort, setEffort] = import_react4.default.useState(["", ""]), [busy, setBusy] = import_react4.default.useState(false), [error, setError] = import_react4.default.useState("");
-  const [config, setConfig] = import_react4.default.useState({ maxMoves: 100, maxCalls: 120, timeoutSeconds: DEFAULT_TIMEOUT_SECONDS, maxTokens: DEFAULT_OUTPUT_TOKENS, tokenBudget: DEFAULT_TOKEN_BUDGET });
-  const customOutputBudget = import_react4.default.useRef(false);
   const routes = catalog.value || [];
-  const models = routes.flatMap((route) => (route.models || []).map((model) => ({ ...model, provider: route.id, providerName: route.name, selectable: route.selectable, reason: route.unavailableReason, key: JSON.stringify([route.id, model.id]) })));
-  const selectedModels = selected.map((key) => models.find((model) => model.key === key)).filter(Boolean);
-  const maxTokenLimit = selectedModels.length ? Math.min(...selectedModels.map(modelOutputLimit)) : DEFAULT_MODEL_OUTPUT_LIMIT;
+  const availableRoutes = routes.filter((route) => route.selectable !== false).map((route) => ({ ...route, models: (route.models || []).filter((model) => model.selectable !== false) })).filter((route) => route.models.length > 0);
+  const models = availableRoutes.flatMap((route) => route.models.map((model) => ({ ...model, provider: route.id, providerName: route.name, selectable: true, reason: null, key: JSON.stringify([route.id, model.id]) })));
   import_react4.default.useEffect(() => {
-    setConfig((previous) => ({ ...previous, maxTokens: customOutputBudget.current ? Math.min(previous.maxTokens, maxTokenLimit) : Math.min(DEFAULT_OUTPUT_TOKENS, maxTokenLimit) }));
-  }, [maxTokenLimit]);
-  const availabilityNotes = routes.flatMap((route) => {
-    if (route.unavailableReason) return [{ name: route.name || route.id, reason: route.unavailableReason }];
-    if (!route.models?.length) return [{ name: route.name || route.id, reason: route.id === "lwb" ? "\u5F53\u524D\u6CA1\u6709\u5DF2\u6388\u6743\u6A21\u578B\uFF0C\u8BF7\u5148\u767B\u5F55 LWB \u8D26\u53F7\u540E\u5237\u65B0\u3002" : "\u5F53\u524D\u6CA1\u6709\u8FD4\u56DE\u53EF\u7528\u6A21\u578B\uFF0C\u8BF7\u68C0\u67E5\u8BE5\u6A21\u578B\u670D\u52A1\u7684\u914D\u7F6E\u540E\u5237\u65B0\u3002" }];
-    return [];
-  });
+    if (!catalog.value) return;
+    const allowed = new Set(models.map((model) => model.key));
+    setSelected((previous) => {
+      const next = previous.map((key) => allowed.has(key) ? key : "");
+      return next.every((key, index) => key === previous[index]) ? previous : next;
+    });
+    setEffort((previous) => previous.map((value, index) => allowed.has(selected[index]) ? value : ""));
+  }, [catalog.value]);
   const pick = (index, value) => {
     setSelected((previous) => previous.map((item, i) => i === index ? value : item));
     setEffort((previous) => previous.map((item, i) => i === index ? "" : item));
@@ -712,7 +687,7 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0, gameId = rememb
         return { provider: model.provider, model: model.id, ...effort[i] ? { reasoningEffort: effort[i] } : {} };
       });
       rememberedGameId = selectedGame;
-      onStarted(await api("start", { gameId: selectedGame, players, ...config }));
+      onStarted(await api("start", { gameId: selectedGame, players }));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -729,7 +704,7 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0, gameId = rememb
     }, "aria-label": "\u7ADE\u6280\u6E38\u620F" }, gamesData.value.map((game) => h2("option", { key: game.id, value: game.id }, game.name)))) : null,
     h2("div", { className: "ar-participants" }, [0, 1].map((index) => {
       const model = models.find((item) => item.key === selected[index]);
-      const groups = routes.map((route) => h2("optgroup", { key: route.id, label: route.name || route.id }, (route.models || []).map((item) => h2("option", { key: item.id, value: JSON.stringify([route.id, item.id]), disabled: route.selectable === false, title: route.unavailableReason || void 0 }, `${item.name || item.id}${route.selectable === false ? " \xB7 \u4E0D\u53EF\u7528" : ""}`))));
+      const groups = availableRoutes.map((route) => h2("optgroup", { key: route.id, label: route.name || route.id }, route.models.map((item) => h2("option", { key: item.id, value: JSON.stringify([route.id, item.id]) }, item.name || item.id))));
       return h2(
         "div",
         { key: index, className: "ar-participant", "data-game": selectedGame },
@@ -738,12 +713,7 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0, gameId = rememb
         model?.reasoning?.efforts?.length ? h2(Field, { label: "\u63A8\u7406\u5F3A\u5EA6" }, h2("select", { value: effort[index], onChange: (event) => setEffort((previous) => previous.map((item, i) => i === index ? event.target.value : item)) }, h2("option", { value: "" }, "\u6A21\u578B\u9ED8\u8BA4"), model.reasoning.efforts.map((item) => h2("option", { key: item.id, value: item.id }, item.label || item.id)))) : null
       );
     })),
-    h2("details", { className: "ar-budget" }, h2("summary", null, "\u9884\u7B97\u4E0E\u65F6\u9650"), h2("div", { className: "ar-settings" }, [["maxMoves", "\u8D70\u5B50\u4E0A\u9650", 1, selectedGame === "xiangqi" ? 600 : 225], ["maxCalls", "\u8C03\u7528\u4E0A\u9650", 1, selectedGame === "xiangqi" ? 1200 : 450], ["timeoutSeconds", "\u5355\u6B65\u65F6\u9650 / \u79D2", 5, MAX_TIMEOUT_SECONDS], ["maxTokens", "\u6BCF\u6B65\u751F\u6210 Token", MIN_OUTPUT_TOKENS, maxTokenLimit], ["tokenBudget", "\u7D2F\u8BA1 Token \u4E0A\u9650", 1e3, MAX_TOKEN_BUDGET]].map(([key, label, min, max]) => h2(Field, { key, label }, h2("input", { type: "number", value: config[key], min, max, required: true, onChange: (event) => {
-      if (key === "maxTokens") customOutputBudget.current = true;
-      setConfig((previous) => ({ ...previous, [key]: Number(event.target.value) }));
-    } })))), h2("p", { className: "ar-muted" }, `\u672C\u573A\u5355\u6B65\u4E0A\u9650\uFF1A${maxTokenLimit.toLocaleString()} Token`)),
-    catalog.value && availabilityNotes.length > 0 && h2("div", { className: "ar-config-empty" }, h2("div", null, h2("strong", null, models.some((model) => model.selectable !== false) ? "\u6A21\u578B\u670D\u52A1\u72B6\u6001" : "\u6682\u65E0\u53EF\u7528\u6A21\u578B"), h2("ul", null, availabilityNotes.map((note) => h2("li", { key: `${note.name}:${note.reason}` }, h2("b", null, `${note.name}\uFF1A`), note.reason)))), h2(IconButton, { icon: RefreshCw, title: "\u5237\u65B0\u6A21\u578B\u5217\u8868", onClick: catalog.refresh })),
-    h2("div", { className: "ar-submit" }, h2("span", { className: "ar-muted" }, `${config.maxMoves} \u624B\u4E0A\u9650 \xB7 \u5355\u6B65 ${config.timeoutSeconds} \u79D2 \xB7 \u8FDD\u89C4\u91CD\u8BD5\u4E00\u6B21\u540E\u5224\u8D1F`), h2("button", { className: "ar-button ar-primary", type: "submit", disabled: busy || selected.some((key) => !models.some((model) => model.key === key && model.selectable !== false)) }, h2(Play, { size: 16 }), busy ? "\u51C6\u5907\u6BD4\u8D5B\u2026" : "\u5F00\u59CB\u6BD4\u8D5B")),
+    h2("div", { className: "ar-submit" }, h2("span", { className: "ar-muted" }, "\u6309\u68CB\u89C4\u5224\u5B9A\u80DC\u8D1F \xB7 \u8FDD\u89C4\u91CD\u8BD5\u4E00\u6B21\u540E\u5224\u8D1F"), h2("button", { className: "ar-button ar-primary", type: "submit", disabled: busy || selected.some((key) => !models.some((model) => model.key === key && model.selectable !== false)) }, h2(Play, { size: 16 }), busy ? "\u51C6\u5907\u6BD4\u8D5B\u2026" : "\u5F00\u59CB\u6BD4\u8D5B")),
     (error || catalog.error) && h2("div", { className: "ar-error", role: "alert" }, error || catalog.error)
   ), confirmation);
 }
@@ -773,7 +743,7 @@ function Conversation({ match, turnId, renderConversation }) {
       } }, `${playerSide(match.game, index)} \xB7 ${match.players[index].name}`)),
       h2("select", { className: "ar-select ar-turn-select", "aria-label": "\u67E5\u770B\u51B3\u7B56\u4F1A\u8BDD", value: current?.request.turnId || "", onChange: (event) => setSelected(event.target.value) }, choices.map((turn) => h2("option", { key: turn.request.turnId, value: turn.request.turnId }, `\u7B2C ${turn.moveNumber} \u624B${turn.request.attempt ? ` \xB7 \u91CD\u8BD5 ${turn.request.attempt}` : ""}${turn.error ? " \xB7 \u672A\u5B8C\u6210" : ""}`)))
     ),
-    h2("p", { className: "ar-muted" }, current?.request.contextMode === "current-position" || match.config.contextMode === "current-position" && !current ? "\u6BCF\u6B21\u51B3\u7B56\u53EA\u53D1\u9001\u5F53\u524D\u68CB\u76D8\u4E0E\u89C4\u5219\uFF1B\u5386\u53F2\u4F1A\u8BDD\u4FDD\u7559\u7528\u4E8E\u56DE\u770B\u3002" : "\u5386\u53F2\u6BD4\u8D5B\u6CBF\u7528\u9009\u624B\u4F1A\u8BDD\uFF0C\u53EF\u67E5\u770B\u5176\u4E2D\u7684\u591A\u8F6E\u8BB0\u5F55\u3002"),
+    h2("p", { className: "ar-muted" }, current?.request.contextMode === "current-position" || match.config.contextMode === "current-position" && !current ? "\u6BCF\u6B21\u53D1\u9001\u5F53\u524D\u68CB\u76D8\u4E0E\u89C4\u5219\uFF0C\u9009\u624B\u5728\u5404\u81EA\u7684\u8FDE\u7EED\u4F1A\u8BDD\u4E2D\u51B3\u7B56\u3002" : "\u5386\u53F2\u6BD4\u8D5B\u6CBF\u7528\u9009\u624B\u4F1A\u8BDD\uFF0C\u53EF\u67E5\u770B\u5176\u4E2D\u7684\u591A\u8F6E\u8BB0\u5F55\u3002"),
     h2(StatBar, { items: [{ label: "\u672C\u6B21\u8F93\u5165 Token", value: count(usage?.input), detail: "\u542B\u7F13\u5B58\u8F93\u5165" }, { label: "\u7F13\u5B58\u547D\u4E2D Token", value: count(usage?.cacheRead), detail: "\u5DF2\u8BA1\u5165\u8F93\u5165" }, { label: "\u672C\u6B21\u8F93\u51FA Token", value: count(usage?.output), detail: "\u542B\u6A21\u578B\u4E0A\u62A5\u7684\u63A8\u7406\u7528\u91CF" }, { label: "\u672C\u6B21\u603B Token", value: count(usage?.total), detail: current?.response ? usage ? "\u670D\u52A1\u5546\u4E0A\u62A5\u7528\u91CF" : "\u670D\u52A1\u5546\u672A\u8FD4\u56DE\u7528\u91CF" : current?.error ? "\u7528\u91CF\u672A\u8FD4\u56DE" : "\u7B49\u5F85\u672C\u6B21\u7528\u91CF" }] }),
     current?.sessionId && renderConversation ? renderConversation({ sessionId: current.sessionId, readOnly: true }) : h2("div", { className: "ar-empty" }, current ? "\u6B63\u5728\u51C6\u5907\u4F1A\u8BDD\uFF0C\u6216\u8BE5\u5386\u53F2\u8BB0\u5F55\u6CA1\u6709\u4F1A\u8BDD\u7F16\u53F7\u3002" : "\u9996\u4E2A\u51B3\u7B56\u5F00\u59CB\u540E\u663E\u793A\u5B98\u65B9\u5BF9\u8BDD\u3002"),
     h2("details", { className: "ar-raw" }, h2("summary", null, "\u5B9E\u9645\u8BF7\u6C42\u53C2\u6570\u4E0E\u539F\u59CB\u7ED3\u679C"), h2("pre", null, JSON.stringify(current || {}, null, 2)))
@@ -785,17 +755,10 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
   const [step, setStep] = import_react4.default.useState(null), [playing, setPlaying] = import_react4.default.useState(false), [speed, setSpeed] = import_react4.default.useState("1");
   const [busy, setBusy] = import_react4.default.useState(""), [error, setError] = import_react4.default.useState(""), [notice, setNotice] = import_react4.default.useState("");
   const [orientation, setOrientation] = import_react4.default.useState("landscape"), [videoUrl, setVideoUrl] = import_react4.default.useState(null);
-  const [resumeMaxTokens, setResumeMaxTokens] = import_react4.default.useState(DEFAULT_OUTPUT_TOKENS);
-  const [resumeTimeout, setResumeTimeout] = import_react4.default.useState(DEFAULT_TIMEOUT_SECONDS);
   const [clock, setClock] = import_react4.default.useState(Date.now());
   const moves = match ? movesOf(match) : [], currentStep = Math.min(step ?? moves.length, moves.length);
   const frame = match ? frameAt(match, currentStep) : null;
   const lastError = match?.events.at(-1)?.type === "error" ? match.events.at(-1) : null;
-  const timedOut = turnTimedOut(lastError, match?.config.timeoutSeconds);
-  import_react4.default.useEffect(() => {
-    if (match?.status === "paused") setResumeMaxTokens(match.config.maxTokens);
-    if (match?.status === "paused") setResumeTimeout(match.config.pace === "fast" ? Math.max(DEFAULT_TIMEOUT_SECONDS, match.config.timeoutSeconds) : match.config.timeoutSeconds);
-  }, [id, match?.status, match?.config.timeoutSeconds, lastError?.turnId, timedOut]);
   import_react4.default.useEffect(() => {
     setStep(null);
     setPlaying(false);
@@ -883,16 +846,7 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
         if (await confirm({ title: "\u53D6\u6D88\u8FD9\u573A\u6BD4\u8D5B\uFF1F", description: "\u53D6\u6D88\u540E\u505C\u6B62\u7EE7\u7EED\u843D\u5B50\uFF0C\u5DF2\u5B8C\u6210\u7684\u843D\u5B50\u3001\u9009\u624B\u53D1\u8A00\u548C\u7528\u91CF\u8BB0\u5F55\u4F1A\u4FDD\u7559\u3002", confirmLabel: "\u786E\u8BA4\u53D6\u6D88\u6BD4\u8D5B" })) run("cancel", () => api("control", { id, action: "cancel" }));
       } })
     )),
-    match.status === "paused" && h2(
-      "form",
-      { className: "ar-resume", onSubmit: (event) => {
-        event.preventDefault();
-        run("resume", () => api("control", { id, action: "resume", timeoutSeconds: resumeTimeout, maxTokens: resumeMaxTokens }));
-      } },
-      h2(Field, { label: "\u5355\u6B65\u65F6\u9650 / \u79D2" }, h2("input", { type: "number", "aria-label": "\u7EE7\u7EED\u6BD4\u8D5B\u5355\u6B65\u65F6\u9650", min: 5, max: MAX_TIMEOUT_SECONDS, required: true, value: resumeTimeout, disabled: !!busy, onChange: (event) => setResumeTimeout(Number(event.target.value)) })),
-      h2(Field, { label: "\u6BCF\u6B65\u751F\u6210 Token" }, h2("input", { type: "number", "aria-label": "\u7EE7\u7EED\u6BD4\u8D5B\u6BCF\u6B65\u8F93\u51FA\u4E0A\u9650", min: MIN_OUTPUT_TOKENS, max: match.config.maxTokensLimit || DEFAULT_OUTPUT_TOKENS, required: true, value: resumeMaxTokens, disabled: !!busy, onChange: (event) => setResumeMaxTokens(Number(event.target.value)) })),
-      h2("button", { className: "ar-button ar-primary", type: "submit", disabled: !!busy }, h2(Play), "\u7EE7\u7EED\u6BD4\u8D5B")
-    ),
+    match.status === "paused" && h2(Button, { primary: true, icon: Play, disabled: !!busy, onClick: () => run("resume", () => api("control", { id, action: "resume" })) }, "\u7EE7\u7EED\u6BD4\u8D5B"),
     h2(
       "div",
       { className: "ar-match" },
@@ -927,15 +881,15 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
         "aside",
         { className: "ar-commentary" },
         h2("div", { className: "ar-commentary-head" }, h2("h2", { className: "ar-section-title" }, "\u9009\u624B\u53D1\u8A00"), h2("span", { className: "ar-chip" }, thinking ? "\u51B3\u7B56\u4E2D" : `\u7B2C ${currentStep} \u624B`)),
-        h2("div", { className: "ar-speaking", "data-thinking": !!thinking }, h2("div", { className: "ar-speaking-name" }, h2(MessageCircle), match.players[currentPlayer].name), h2("p", { role: thinking ? "status" : void 0 }, thinking ? phaseLabel : frame.current?.speech || "\u7B49\u5F85\u7B2C\u4E00\u6B65\u8D70\u5B50"), thinking ? h2("div", { className: "ar-generation" }, h2("div", null, h2("small", null, match.players[currentPlayer].reasoningEffort ? `\u63A8\u7406\u5F3A\u5EA6\uFF1A${match.players[currentPlayer].reasoningEffort}` : "\u6A21\u578B\u9ED8\u8BA4\u63A8\u7406"), h2("small", null, `${elapsedSeconds.toFixed(1)} / ${match.config.timeoutSeconds} \u79D2`)), h2("progress", { "aria-label": "\u672C\u6B65\u5DF2\u7528\u65F6\u95F4", value: Math.min(elapsedSeconds, match.config.timeoutSeconds), max: match.config.timeoutSeconds })) : frame.current && h2("small", null, `${actionLabel(frame.current.action, match.game)} \xB7 ${(frame.current.elapsedMs / 1e3).toFixed(1)} \u79D2`)),
+        h2("div", { className: "ar-speaking", "data-thinking": !!thinking }, h2("div", { className: "ar-speaking-name" }, h2(MessageCircle), match.players[currentPlayer].name), h2("p", { role: thinking ? "status" : void 0 }, thinking ? phaseLabel : frame.current?.speech || "\u7B49\u5F85\u7B2C\u4E00\u6B65\u8D70\u5B50"), thinking ? h2("div", { className: "ar-generation" }, h2("div", null, h2("small", null, match.players[currentPlayer].reasoningEffort ? `\u63A8\u7406\u5F3A\u5EA6\uFF1A${match.players[currentPlayer].reasoningEffort}` : "\u6A21\u578B\u9ED8\u8BA4\u63A8\u7406"), h2("small", null, `\u5DF2\u7528 ${elapsedSeconds.toFixed(1)} \u79D2`))) : frame.current && h2("small", null, `${actionLabel(frame.current.action, match.game)} \xB7 ${(frame.current.elapsedMs / 1e3).toFixed(1)} \u79D2`)),
         frame.result && h2("div", { className: "ar-result" }, h2(Trophy), frame.result.message),
         h2("div", { className: "ar-transcript-title" }, h2("span", null, "\u56DE\u5408\u8BB0\u5F55"), h2("span", null, `${frame.speech.length} \u6761`)),
         h2("div", { className: "ar-transcript" }, frame.speech.length ? frame.speech.map((event) => h2("button", { key: event.turnId, className: "ar-speech", onClick: () => seek(event.moveNumber), "aria-label": `\u67E5\u770B\u7B2C ${event.moveNumber} \u624B` }, h2("div", { className: "ar-speech-head" }, h2("span", { className: "ar-speech-num" }, event.moveNumber), h2("strong", null, match.players[event.player].name), h2("small", null, actionLabel(event.action, match.game))), h2("p", null, event.speech))) : h2("div", { className: "ar-empty" }, "\u6682\u65E0\u56DE\u5408\u8BB0\u5F55"))
       )
     ),
-    h2(StatBar, { items: [{ label: "\u5DF2\u5B8C\u6210\u8D70\u5B50", value: moves.length, detail: `\u4E0A\u9650 ${match.config.maxMoves} \u624B`, tone: "brand" }, { label: "\u6A21\u578B\u8C03\u7528", value: match.calls, detail: `\u4E0A\u9650 ${match.config.maxCalls} \u6B21` }, { label: "\u7D2F\u8BA1 Token", value: match.tokens.toLocaleString(), detail: match.usageUnknown ? "\u7528\u91CF\u4E0D\u5B8C\u6574" : `\u9884\u7B97 ${match.config.tokenBudget.toLocaleString()}` }, { label: "\u6BD4\u8D5B\u72B6\u6001", value: statusLabel[match.status] || match.status, tone: match.status === "finished" ? "green" : void 0 }] }),
+    h2(StatBar, { items: [{ label: "\u5DF2\u5B8C\u6210\u8D70\u5B50", value: moves.length, tone: "brand" }, { label: "\u51B3\u7B56\u56DE\u5408", value: match.calls, detail: "\u542B\u8FDD\u89C4\u91CD\u8BD5\u4E0E\u672A\u5B8C\u6210\u56DE\u5408" }, { label: "\u7D2F\u8BA1 Token", value: match.tokens.toLocaleString(), detail: match.usageUnknown ? "\u7528\u91CF\u4E0D\u5B8C\u6574" : "\u670D\u52A1\u5546\u4E0A\u62A5\u7528\u91CF" }, { label: "\u6BD4\u8D5B\u72B6\u6001", value: statusLabel[match.status] || match.status, tone: match.status === "finished" ? "green" : void 0 }] }),
     (error || data.error) && h2("p", { className: "ar-error", role: "alert" }, error || data.error),
-    lastError && h2("p", { className: "ar-error", role: "alert" }, timedOut ? timeoutMessage(match.players[lastError.player]?.name || "\u6A21\u578B", match.config.timeoutSeconds) : lastError.error),
+    lastError && h2("p", { className: "ar-error", role: "alert" }, lastError.error),
     h2(
       "div",
       { className: "ar-export" },

@@ -46,7 +46,7 @@
       {
         "menuId": "arena",
         "title": "竞技台",
-        "description": "配置模型、预算与时限，实时观看棋盘和双方的选手发言。",
+        "description": "选择参赛模型与推理强度，实时观看棋盘和双方的选手发言。",
         "icon": "signal"
       },
       {

@@ -8,6 +8,11 @@ import { ArenaHost, parseDecision, tokenCount } from '../host.mjs'
 import { ArenaGames } from '../games.mjs'
 import { decisionPrompt } from '../decision-prompt.mjs'
 
+const winningPoints = [[8, 4], [1, 1], [8, 5], [1, 2], [8, 6], [1, 3], [8, 7], [1, 4], [8, 8]]
+async function pauseMatch(env) {
+  const [match] = await env.store.list()
+  await env.host.control({ id: match.id, action: 'pause' })
+}
 const reply = (row, col, speech = '我先占住这个位置。') => ({ text: JSON.stringify({ action: { row, col }, speech }), reasoning: '', usage: { inputTokens: 10, outputTokens: 10 }, finish: { kind: 'stop' }, config: {} })
 const xiangqiReply = (fromRow, fromCol, toRow, toCol, speech = '我先出动这枚棋子。') => ({ ...reply(1, 1, speech), text: JSON.stringify({ action: { from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } }, speech }) })
 async function setup(t, complete, models = [{ id: 'black', name: 'Black' }, { id: 'white', name: 'White' }], hostOptions = {}) {
@@ -69,8 +74,8 @@ test('complete match persists inputs, output, speech and deterministic winner wi
   const env = await setup(t, async request => { requests.push(request); return reply(...points[requests.length - 1], '观众台词') })
   const started = await env.start(); await env.settle()
   const match = await env.store.get(started.id)
-  assert.equal(match.config.maxTokens, 32768)
-  assert.equal(match.config.timeoutSeconds, 300)
+  for (const key of ['maxMoves', 'maxCalls', 'maxTokens', 'maxTokensLimit', 'tokenBudget', 'timeoutSeconds']) assert.equal(Object.hasOwn(match.config, key), false)
+  assert.ok(requests.every(request => request.maxTokens === null))
   assert.equal(match.config.pace, 'native')
   assert.ok(requests.every(request => request.generationMode === undefined && request.reasoningEffort === undefined))
   assert.equal(match.result.kind, 'win'); assert.equal(match.result.winner, 0)
@@ -90,11 +95,12 @@ test('complete match persists inputs, output, speech and deterministic winner wi
   assert.ok(requests.every(request => !request.prompt.includes('观众台词')))
 })
 
-test('xiangqi parses source/destination moves and runs an isolated multi-turn match to its move limit', async t => {
+test('xiangqi parses source/destination moves and runs an isolated multi-turn match until explicitly paused', async t => {
   const opening = [[10, 2, 8, 3], [1, 2, 3, 3], [8, 2, 5, 2], [3, 8, 5, 8], [10, 8, 8, 7], [1, 8, 3, 7]]
   const requests = []
   const env = await setup(t, async request => {
     requests.push(request)
+    if (requests.length === opening.length) await pauseMatch(env)
     return xiangqiReply(...opening[requests.length - 1], `象棋观众台词 ${requests.length}`)
   })
   const started = await env.start({ gameId: 'xiangqi', maxMoves: opening.length })
@@ -102,15 +108,13 @@ test('xiangqi parses source/destination moves and runs an isolated multi-turn ma
   const match = await env.store.get(started.id)
   assert.equal(match.game.id, 'xiangqi')
   assert.equal(match.game.name, '中国象棋')
-  assert.equal(match.status, 'finished')
-  assert.equal(match.result.kind, 'limit')
-  assert.equal(match.result.winner, null)
-  assert.match(match.result.message, /行棋上限/u)
+  assert.equal(match.status, 'paused')
+  assert.equal(match.result, null)
   assert.equal(match.calls, opening.length)
   assert.equal(match.state.moves.length, opening.length)
   assert.equal(match.tokens, opening.length * 20)
   assert.equal(match.state.nextPlayer, 0)
-  assert.equal(match.config.maxCalls, 240)
+  assert.equal(match.config.maxCalls, undefined)
   assert.match(match.config.system, /"from".*"to"/u)
   assert.match(match.config.system, /中国象棋/u)
   assert.match(match.config.system, /行.*1.*10/u)
@@ -135,11 +139,11 @@ test('xiangqi parses source/destination moves and runs an isolated multi-turn ma
 test('xiangqi invalid moves retry the same position without committing a move or leaking speech', async t => {
   const requests = []
   const responses = [xiangqiReply(7, 1, 7, 2, '违规发言不该进入局面'), xiangqiReply(10, 2, 8, 3, '合法发言不该进入对手局面'), xiangqiReply(1, 2, 3, 3, '黑方出马')]
-  const env = await setup(t, async request => { requests.push(request); return responses[requests.length - 1] })
+  const env = await setup(t, async request => { requests.push(request); if (requests.length === responses.length) await pauseMatch(env); return responses[requests.length - 1] })
   const started = await env.start({ gameId: 'xiangqi', maxMoves: 2, invalidRetries: 1 })
   await env.settle()
   const match = await env.store.get(started.id)
-  assert.equal(match.result.kind, 'limit')
+  assert.equal(match.status, 'paused')
   assert.equal(match.calls, 3)
   assert.equal(match.tokens, 60)
   assert.equal(match.state.moves.length, 2)
@@ -167,19 +171,14 @@ test('xiangqi repeated illegal moves forfeit without changing the board', async 
   assert.equal(match.events.filter(event => event.type === 'move').length, 0)
   assert.equal(match.events.filter(event => event.type === 'invalid').length, 2)
 })
-test('uses the shared model ceiling and rejects a request above the selected models', async t => {
-  const env = await setup(t, async request => { assert.equal(request.maxTokens, 8192); return reply(8, 8) }, [{ id: 'black', name: 'Black', maxOutputTokens: 16384 }, { id: 'white', name: 'White', maxOutputTokens: 8192 }])
-  await assert.rejects(env.start({ maxTokens: 16385 }), /每步输出上限必须是 128—8192/u)
-  const started = await env.start({ maxMoves: 1, maxTokens: 8192 }); await env.settle()
+test('each selected model uses its own default instead of a shared output ceiling', async t => {
+  let index = 0
+  const env = await setup(t, async request => { assert.equal(request.maxTokens, null); return reply(...winningPoints[index++]) }, [{ id: 'black', maxOutputTokens: 16384 }, { id: 'white', maxOutputTokens: 8192 }])
+  const started = await env.start({ maxTokens: 393217 }); await env.settle()
   const match = await env.store.get(started.id)
-  assert.equal(match.config.maxTokensLimit, 8192)
-  assert.equal(match.config.maxTokens, 8192)
-})
-test('explicit high-capacity routes allow the documented model ceiling', async t => {
-  const env = await setup(t, async request => { assert.equal(request.maxTokens, 393216); return reply(8, 8) }, [{ id: 'black', name: 'Black', maxOutputTokens: 393216 }, { id: 'white', name: 'White', maxOutputTokens: 393216 }])
-  await assert.rejects(env.start({ maxTokens: 393217 }), /每步输出上限必须是 128—393216/u)
-  const started = await env.start({ maxMoves: 1, maxTokens: 393216 }); await env.settle()
-  assert.equal((await env.store.get(started.id)).config.maxTokensLimit, 393216)
+  assert.equal(match.result.kind, 'win')
+  assert.equal(Object.hasOwn(match.config, 'maxTokensLimit'), false)
+  assert.equal(Object.hasOwn(match.players[0], 'maxOutputTokens'), false)
 })
 test('invalid moves are not committed; repair is charged and repeats exceeding policy forfeit', async t => {
   const env = await setup(t, async () => reply(0, 100))
@@ -191,13 +190,13 @@ test('invalid moves are not committed; repair is charged and repeats exceeding p
 })
 test('provider errors pause without declaring defeat; explicit resume continues', async t => {
   let fails = true
-  const env = await setup(t, async () => { if (fails) throw new Error('Provider unavailable'); return reply(8, 8) })
+  const env = await setup(t, async () => { if (fails) throw new Error('Provider unavailable'); await pauseMatch(env); return reply(8, 8) })
   const start = await env.start({ maxMoves: 1 }); await env.settle()
   assert.equal((await env.store.get(start.id)).status, 'paused')
   assert.equal((await env.store.get(start.id)).result, null)
   fails = false; await env.host.control({ id: start.id, action: 'resume' }); await env.settle()
   const match = await env.store.get(start.id)
-  assert.equal(match.state.moves.length, 1); assert.equal(match.result.kind, 'limit'); assert.equal(match.calls, 2)
+  assert.equal(match.state.moves.length, 1); assert.equal(match.status, 'paused'); assert.equal(match.calls, 2)
 })
 test('pause waits for accepted current action and cancellation prevents late action', async t => {
   let release
@@ -213,23 +212,28 @@ test('pause waits for accepted current action and cancellation prevents late act
 })
 test('restart preserves received pending response and commits it without another model call', async t => {
   const env = await setup(t, async () => { throw new Error('must not call model') })
-  const match = await env.store.create({ game: env.host.games.list()[0], players: [{ name: 'B' }, { name: 'W' }], config: { maxMoves: 1, maxCalls: 1, tokenBudget: 1000 }, state: env.host.games.get('gomoku').create() })
+  const match = await env.store.create({ game: env.host.games.list()[0], players: [{ name: 'B' }, { name: 'W' }], config: { maxMoves: 1, maxCalls: 1, tokenBudget: 1000 }, state: winningPoints.slice(0, -1).reduce((state, [row, col], index) => env.host.games.get('gomoku').apply(state, { row, col }, index % 2), env.host.games.get('gomoku').create()) })
   await env.store.update(match.id, value => { value.pending = { turnId: 'received', player: 0, attempt: 0, response: reply(8, 8), elapsedMs: 1 } })
   await new ArenaStore(env.root).init()
   assert.equal((await env.store.get(match.id)).status, 'paused')
   await env.host.control({ id: match.id, action: 'resume' }); await env.settle()
   const resumed = await env.store.get(match.id)
-  assert.equal(resumed.state.moves.length, 1); assert.equal(resumed.calls, 0)
+  assert.equal(resumed.state.moves.length, 9); assert.equal(resumed.calls, 0); assert.equal(resumed.result.kind, 'win')
 })
-test('hard call budget and token budget stop at a turn boundary', async t => {
-  const env = await setup(t, async () => reply(8, 8))
-  const start = await env.start({ maxCalls: 1 }); await env.settle()
-  assert.equal((await env.store.get(start.id)).calls, 1)
-  assert.equal((await env.store.get(start.id)).result.winner, null)
+test('deprecated limits cannot stop a new match or impose a step deadline', async t => {
+  let index = 0
+  const env = await setup(t, async request => { assert.equal(request.maxTokens, null); return reply(...winningPoints[index++]) }, undefined, { turnTimeout: () => { throw new Error('scene deadline must not be created') } })
+  const started = await env.start({ maxMoves: 0, maxCalls: 1, maxTokens: 0, tokenBudget: 1, timeoutSeconds: 0 })
+  await env.settle()
+  const match = await env.store.get(started.id)
+  assert.equal(match.calls, 9)
+  assert.equal(match.state.moves.length, 9)
+  assert.equal(match.result.kind, 'win')
+  assert.ok(match.events.filter(event => event.type === 'request').every(event => !Object.hasOwn(event, 'maxTokens') && !Object.hasOwn(event, 'timeoutSeconds')))
 })
 test('bad config and unavailable model cannot create a match', async t => {
   const env = await setup(t, async () => reply(8, 8))
-  await assert.rejects(env.start({ maxMoves: 0 }))
+  await assert.rejects(env.start({ invalidRetries: -1 }))
   await assert.rejects(env.start({ pace: 'fast' }), /模式已移除/u)
   await assert.rejects(env.host.start({ players: [{ provider: 'test', model: 'missing' }, { provider: 'test', model: 'white' }] }))
   assert.equal((await env.store.list()).length, 0)
@@ -273,13 +277,14 @@ test('changed game rules cannot resume an old match', async t => {
   await assert.rejects(env.host.control({ id: start.id, action: 'resume' }), /规则版本/)
   assert.equal((await env.store.get(start.id)).status, 'paused')
 })
-test('reported token budget stops additional calls', async t => {
-  const env = await setup(t, async () => ({ ...reply(8, 8), usage: { totalTokens: 1200 } }))
+test('reported usage remains auditable after exceeding a deprecated token budget', async t => {
+  let index = 0
+  const env = await setup(t, async () => ({ ...reply(...winningPoints[index++]), usage: { totalTokens: 1200 } }))
   const start = await env.start({ tokenBudget: 1000 }); await env.settle()
   const match = await env.store.get(start.id)
-  assert.equal(match.calls, 1)
-  assert.equal(match.tokens, 1200)
-  assert.equal(match.result.kind, 'limit')
+  assert.equal(match.calls, 9)
+  assert.equal(match.tokens, 10800)
+  assert.equal(match.result.kind, 'win')
 })
 test('strict decision parsing and usage include cached input but not double counted reasoning', () => {
   assert.throws(() => parseDecision('```json\n{}\n```'))
@@ -301,7 +306,7 @@ test('decision prompt preserves the full current board and feedback without repl
   assert.match(prompt, /交叉点已有棋子/u)
 })
 
-test('live generation metadata is ephemeral and resume time limits are audited', async t => {
+test('live generation metadata is ephemeral and removed resume parameters are ignored', async t => {
   let entered, release, report
   const ready = new Promise(resolve => { entered = resolve })
   const gate = new Promise(resolve => { release = resolve })
@@ -314,7 +319,7 @@ test('live generation metadata is ephemeral and resume time limits are audited',
     return reply(8, 8)
   })
   const started = await env.start({ maxMoves: 2 })
-  assert.equal(started.config.timeoutSeconds, 300)
+  assert.equal(started.config.timeoutSeconds, undefined)
   await ready
   const stored = await env.store.get(started.id), live = await env.host.get(started.id)
   assert.equal(live.activeTurn.phase, 'reasoning')
@@ -322,13 +327,14 @@ test('live generation metadata is ephemeral and resume time limits are audited',
   assert.equal(stored.activeTurn.phase, undefined)
   assert.equal(live.revision, stored.revision)
   await env.host.control({ id: started.id, action: 'pause' }); release(); await env.settle()
-  env.host.complete = async request => { requests.push(request); return reply(7, 8) }
+  env.setResponder(async request => { requests.push(request); await pauseMatch(env); return reply(7, 8) })
   await assert.rejects(env.host.control({ id: started.id, action: 'resume', pace: 'fast' }), /模式已移除/u)
   await env.host.control({ id: started.id, action: 'resume', timeoutSeconds: 600 }); await env.settle()
   const match = await env.host.get(started.id)
   assert.equal(match.config.pace, 'native')
   assert.ok(requests.every(request => request.generationMode === undefined))
-  assert.ok(match.events.some(event => event.type === 'config-updated' && event.previous.timeoutSeconds === 300 && event.next.timeoutSeconds === 600))
+  assert.equal(match.config.timeoutSeconds, undefined)
+  assert.equal(match.state.moves.length, 2)
   assert.ok(match.events.find(event => event.type === 'response').firstOutputMs >= 0)
   report({ phase: 'answering', bytesReceived: 20 })
   assert.equal(env.host.progress.size, 0)
@@ -337,8 +343,8 @@ test('live generation metadata is ephemeral and resume time limits are audited',
 
 for (const pace of [undefined, 'fast', 'deep']) test(`legacy ${pace || 'unspecified'} matches resume with full observations and an audited native configuration`, async t => {
   const requests = []
-  const env = await setup(t, async request => { requests.push(request); return reply(8, 8) })
-  const match = await env.store.create({ game: env.host.games.list()[0], players: [{ name: 'B', provider: 'test', model: 'black', fastDecision: { effort: 'off' } }, { name: 'W' }], config: { pace, system: 'Rules', maxMoves: 1, maxCalls: 1, maxTokens: 32768, timeoutSeconds: 300, tokenBudget: 1000 }, state: env.host.games.get('gomoku').create() })
+  const env = await setup(t, async request => { requests.push(request); return reply(...winningPoints[requests.length - 1]) })
+  const match = await env.store.create({ game: env.host.games.list()[0], players: [{ name: 'B', provider: 'test', model: 'black', fastDecision: { effort: 'off' } }, { name: 'W', provider: 'test', model: 'white' }], config: { pace, invalidRetries: 1, system: 'Rules', maxMoves: 1, maxCalls: 1, maxTokens: 32768, timeoutSeconds: 300, tokenBudget: 1000 }, state: env.host.games.get('gomoku').create() })
   await env.store.update(match.id, value => { value.status = 'paused' })
   await env.host.control({ id: match.id, action: 'resume' }); await env.settle()
   assert.equal(requests[0].generationMode, undefined)
@@ -347,55 +353,50 @@ for (const pace of [undefined, 'fast', 'deep']) test(`legacy ${pace || 'unspecif
   assert.ok(requests[0].prompt.includes('"board"'))
   const resumed = await env.store.get(match.id)
   assert.equal(resumed.config.pace, 'native')
+  assert.equal(resumed.result.kind, 'win')
+  assert.equal(resumed.calls, 9)
+  assert.equal(resumed.config.maxTokens, undefined)
+  assert.equal(requests[0].maxTokens, null)
+  const migration = resumed.events.find(event => event.reason === 'dsh-session-defaults')
+  assert.equal(migration.previous.maxTokens, 32768)
+  assert.deepEqual(migration.next, {})
   assert.equal(resumed.config.contextMode, 'current-position')
   assert.ok(resumed.events.some(event => event.type === 'config-updated' && event.previous.contextMode === 'player-history' && event.next.contextMode === 'current-position'))
   assert.ok(resumed.events.some(event => event.type === 'config-updated' && event.previous.pace === (pace || 'deep') && event.next.pace === 'native'))
 })
-test('turn deadline pauses without retry or forfeit and resume applies an audited longer limit', async t => {
-  const deadlines = [], controller = new AbortController()
-  let wait = true
-  const env = await setup(t, async (request, signal) => {
-    if (!wait) return reply(8, 8)
-    await new Promise((resolve, reject) => {
-      const aborted = () => {
+test('finished historical matches retain their old budgets and results', async t => {
+  const env = await setup(t, async () => { throw new Error('historical matches must not call the model') })
+  const config = { maxMoves: 1, maxCalls: 1, maxTokens: 8192, maxTokensLimit: 16384, tokenBudget: 1000, timeoutSeconds: 300 }
+  const historical = await env.store.create({ game: env.host.games.list()[0], players: [{ name: 'B' }, { name: 'W' }], config, state: env.host.games.get('gomoku').create() })
+  await env.host.finish(historical.id, { kind: 'limit', winner: null, message: 'Historical budget result' })
+  const before = await env.store.get(historical.id)
+  assert.deepEqual((await env.host.get(historical.id)).config, config)
+  await assert.rejects(env.host.control({ id: historical.id, action: 'resume' }), /只有暂停的比赛可以继续/u)
+  assert.deepEqual(await env.store.get(historical.id), before)
+  assert.equal(env.sessions.size, 0)
+})
+
+test('a waiting Session has no scene deadline and user cancellation preserves partial usage', async t => {
+  const env = await setup(t, async (request, signal) => await new Promise((resolve, reject) => {
+    const aborted = () => {
       const error = new Error(signal.reason.message)
       error.result = { text: 'partial', reasoning: 'still deciding', usage: { totalTokens: 200 }, finish: { kind: 'cancelled' } }
       reject(error)
-      }
-      if (signal.aborted) aborted()
-      else signal.addEventListener('abort', aborted, { once: true })
-    })
-  }, undefined, { turnTimeout: milliseconds => { deadlines.push(milliseconds); return controller.signal } })
-  const started = await env.start({ timeoutSeconds: 90, maxMoves: 1 })
+    }
+    if (signal.aborted) aborted()
+    else signal.addEventListener('abort', aborted, { once: true })
+  }), undefined, { turnTimeout: () => { throw new Error('scene deadline must not be created') } })
+  const started = await env.start({ timeoutSeconds: 0 })
   while (![...env.sessions.values()].some(session => session.started)) await new Promise(resolve => setImmediate(resolve))
-  controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
-  await env.settle()
-  let match = await env.store.get(started.id)
-  assert.equal(match.status, 'paused')
-  assert.equal(match.result, null)
+  assert.equal((await env.store.get(started.id)).status, 'running')
+  await env.host.control({ id: started.id, action: 'cancel' }); await env.settle()
+  const match = await env.store.get(started.id)
+  assert.equal(match.status, 'cancelled')
   assert.equal(match.calls, 1)
   assert.equal(match.tokens, 200)
   assert.equal(match.state.moves.length, 0)
-  assert.equal(match.events.at(-1).code, 'ARENA_TURN_TIMEOUT')
-  assert.match(match.events.at(-1).error, /Black 本步超过 90 秒/u)
-  assert.equal(match.events.at(-1).response.text, 'partial')
-  await assert.rejects(env.host.control({ id: started.id, action: 'resume', timeoutSeconds: 1801 }), /单步时限/u)
-  assert.equal((await env.store.get(started.id)).config.timeoutSeconds, 90)
-  wait = false
-  env.host.turnTimeout = milliseconds => { deadlines.push(milliseconds); return new AbortController().signal }
-  await env.host.control({ id: started.id, action: 'resume', timeoutSeconds: 300 })
-  await env.settle()
-  match = await env.store.get(started.id)
-  assert.deepEqual(deadlines, [90000, 300000])
-  assert.equal(match.state.moves.length, 1)
-  assert.equal(match.calls, 2)
-  assert.equal(match.config.timeoutSeconds, 300)
-  const changed = match.events.find(event => event.type === 'config-updated')
-  assert.deepEqual(changed.previous, { timeoutSeconds: 90 })
-  assert.deepEqual(changed.next, { timeoutSeconds: 300 })
-  assert.equal(match.events.filter(event => event.type === 'request').at(-1).timeoutSeconds, 300)
+  assert.equal(match.events.find(event => event.type === 'response').text, 'partial')
 })
-
 
 test('truncated Session reply continues in place, then pauses with accumulated usage and resumes the same Session', async t => {
   const env = await setup(t, async request => {
@@ -411,11 +412,13 @@ test('truncated Session reply continues in place, then pauses with accumulated u
   assert.equal(match.state.moves.length, 0)
   assert.equal(match.events.filter(event => event.type === 'invalid').length, 0)
   assert.equal(match.events.find(event => event.type === 'error').code, 'ARENA_OUTPUT_LIMIT')
+  assert.match(match.events.find(event => event.type === 'error').error, /模型或服务商的输出边界/u)
+  assert.doesNotMatch(match.events.find(event => event.type === 'error').error, /提高上限/u)
   assert.ok(Number.isSafeInteger(match.players[0].sessionSeq))
   assert.equal(match.events.filter(event => event.type === 'continuation').length, 2)
   assert.ok(match.events.filter(event => event.type === 'continuation').every(event => event.sessionId === match.players[0].sessionId))
   const sessionId = match.players[0].sessionId
-  env.setResponder(async request => { assert.equal(request.maxTokens, 16384); return reply(8, 8) })
+  env.setResponder(async request => { assert.equal(request.maxTokens, null); await pauseMatch(env); return reply(8, 8) })
   await env.host.control({ id: started.id, action: 'resume', maxTokens: 16384 })
   await env.settle()
   const resumed = await env.store.get(started.id)

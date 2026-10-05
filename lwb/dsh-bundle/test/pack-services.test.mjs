@@ -420,5 +420,17 @@ test('restricted persistent Sessions enforce per-request parameters without savi
   assert.equal((await request()).maxTokens, 8192)
   assert.equal((await request()).reasoningEffort, 'low')
   assert.equal(calls.filter(([kind]) => kind === 'tools.restrict').length, 1)
+  await first.sessions.resume(session.id, { provider: options.provider, model: options.model })
+  assert.equal((await request()).maxTokens, 8192, 'omission preserves an existing output cap')
+  await first.sessions.resume(session.id, { ...options, maxTokens: null })
+  assert.equal(Object.hasOwn(await request(), 'maxTokens'), false, 'explicit reset also removes the inherited request header cap')
+  assert.deepEqual((await request()).tools, [])
+  await session.dispose()
+  await first.sessions.resume(session.id, { ...options, maxTokens: null })
+  assert.equal(Object.hasOwn(await request(), 'maxTokens'), false, 'reset survives facade disposal and readoption')
+  const preset = calls.find(([kind]) => kind === 'preset.register')[1]
+  assert.deepEqual(preset.plugins, [{ id: 'compaction', name: 'cordis:group', group: true,
+    isolate: { compaction: true }, config: [{ id: 'compaction-basic', name: '@deepseek-ai/dsh-compaction-basic' }],
+  }])
   for (const maxTokens of [0, 127, 393217, 1.5, NaN]) await assert.rejects(first.sessions.create({ ...options, maxTokens }), /输出上限/)
 })
