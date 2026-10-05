@@ -67,9 +67,9 @@ test('the community edition resolves only repository-owned packs', async () => {
   const manifest = await loadEditionManifest(PROJECT_ROOT)
   const edition = await resolveEdition(manifest, 'community', {
     projectRoot: PROJECT_ROOT,
-    ownedPacks: new Set(['spoken-video']),
+    ownedPacks: new Set(['spoken-video', 'ai-arena']),
   })
-  assert.deepEqual(edition.packs.map(pack => pack.id), ['spoken-video'])
+  assert.deepEqual(edition.packs.map(pack => pack.id), ['spoken-video', 'ai-arena'])
   assert.equal(edition.packs[0].packageName, '@scitiger-ai/lwb-spoken-video')
   assert.equal(edition.productHome, 'LaofuWorkbench')
   assert.equal(edition.protocolScheme, 'lwb')
@@ -80,7 +80,7 @@ test('the commercial edition does not resolve without its pack source', async ()
   await assert.rejects(
     resolveEdition(manifest, 'commercial', {
       projectRoot: PROJECT_ROOT,
-      ownedPacks: new Set(['spoken-video']),
+      ownedPacks: new Set(['spoken-video', 'ai-arena']),
       env: {},
     }),
     (error) => error instanceof LwbEditionError && /LWB_COMMERCIAL_PACK_DIR/u.test(error.message),
@@ -93,11 +93,11 @@ test('the commercial edition resolves a private pack from its pinned source', as
   const manifest = await loadEditionManifest(PROJECT_ROOT)
   const edition = await resolveEdition(manifest, 'commercial', {
     projectRoot: PROJECT_ROOT,
-    ownedPacks: new Set(['spoken-video']),
+    ownedPacks: new Set(['spoken-video', 'ai-arena']),
     env: { LWB_COMMERCIAL_PACK_DIR: commercial },
   })
-  assert.deepEqual(edition.packs.map(pack => pack.id), ['spoken-video', 'model-review'])
-  assert.equal(edition.packs[1].source, await realpath(commercial))
+  assert.deepEqual(edition.packs.map(pack => pack.id), ['spoken-video', 'ai-arena', 'model-review'])
+  assert.equal(edition.packs[2].source, await realpath(commercial))
   assert.equal(edition.productHome, 'LaofuWorkbench')
   assert.equal(edition.protocolScheme, 'lwb')
 })

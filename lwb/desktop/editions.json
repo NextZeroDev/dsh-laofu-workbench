@@ -8,7 +8,8 @@
       "productHome": "LaofuWorkbench",
       "protocolScheme": "lwb",
       "packs": [
-        { "id": "spoken-video" }
+        { "id": "spoken-video" },
+        { "id": "ai-arena" }
       ]
     },
     "commercial": {
@@ -18,6 +19,7 @@
       "protocolScheme": "lwb",
       "packs": [
         { "id": "spoken-video" },
+        { "id": "ai-arena" },
         { "id": "model-review", "source": "${LWB_COMMERCIAL_PACK_DIR}" }
       ]
     }

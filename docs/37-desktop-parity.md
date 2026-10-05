@@ -17,7 +17,7 @@ npm run start:desktop
 
 启动直接进入 LWB 工作台。DSH 账号是可选连接，在「设置 → DSH 系统设置」旁点击「登录 DSH」发起官方浏览器授权；成功后按钮变为「退出 DSH」。退出或会话过期后保留当前工作台页面，按钮恢复为「登录 DSH」，不会弹出官方欢迎窗口。模型和 API Key 仍通过「打开设置」配置。
 
-当前锁定的官方版本没有欢迎窗口策略配置，LWB 在 `entry-policy.mjs` 中维护一个受版本检查约束的内存适配：只调整主进程 `needsWelcome` 的界面决策。官方源码和构建文件不改写，官方账号授权、凭据管理及任务取消继续执行。开发入口和安装版 bootstrap 共用此适配；详见[扩展边界](38-dsh-extension-boundary.md)。
+当前锁定的官方版本没有欢迎窗口策略配置，LWB 在 `entry-policy.mjs` 中维护一个受版本检查约束的内存适配：只调整主进程 `needsWelcome` 的界面决策。官方源码和构建文件不改写，官方账号授权、凭据管理及任务取消继续执行。开发入口和安装版 bootstrap 共用此适配；详见[总体架构](01-architecture.md#扩展边界)和[升级门禁](08-base-lock.md)。
 
 开发入口默认本地端口 19487（可用 `LWB_DESKTOP_PORT` 覆盖），避免和单独安装的官方应用冲突。以终端启动命令为开发运行入口，官方开发 Dock 启动器不是 LWB 发行包。
 
@@ -85,7 +85,7 @@ node scripts/collect-desktop-artifacts.mjs --edition commercial --target mac-arm
 
 | 构建输入 | 产品名 | 数据根 | 协议 | 随带能力包 |
 | --- | --- | --- | --- | --- |
-| `community` | Laofu Workbench | `LaofuWorkbench` | `lwb://` | 本仓库自有的 `spoken-video` |
+| `community` | Laofu Workbench | `LaofuWorkbench` | `lwb://` | 本仓库自有的 `spoken-video`、`ai-arena` |
 | `commercial`（官方发行） | Laofu Workbench | `LaofuWorkbench` | `lwb://` | 公开包加上 `model-review`，源码由 `LWB_COMMERCIAL_PACK_DIR` 指定 |
 
 ```bash
@@ -103,4 +103,4 @@ LWB_COMMERCIAL_PACK_DIR=/absolute/path/to/commercial-pack npm run package:deskto
 - 依赖、能力包测试目录和仓库元数据（`.git`）一律不进产物。
 - 官方发行版使用统一的数据根与协议；产品身份写进 `build.json`，由 bootstrap 在运行时读取。首次升级商业版时会承接到统一的 `LaofuWorkbench` 数据目录。
 
-当前仓库未配置 macOS 签名环境，因此已验证开发入口、打包预检报错路径和公开源码/官方完整构建输入的包集合解析；尚未生成、安装或验收签名发行包。Windows 打包也需在目标环境验收。详细边界与升级门禁见 [扩展边界](38-dsh-extension-boundary.md)。
+当前仓库未配置 macOS 签名环境，因此已验证开发入口、打包预检报错路径和公开源码/官方完整构建输入的包集合解析；尚未生成、安装或验收签名发行包。Windows 打包也需在目标环境验收。详细边界与升级门禁见 [总体架构](01-architecture.md#扩展边界)和[升级门禁](08-base-lock.md)。
