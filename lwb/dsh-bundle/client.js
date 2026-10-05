@@ -4,7 +4,8 @@ window.__ModuleLoader__.load({
     var module = { exports: {} };
     var exports = module.exports;
     const React = require('react');
-    const { IconSettingsOutlineRegular, IconNewChatOutlineRegular, IconCordisPluginOutlineRegular, IconChevronLeftOutlineRegular, ShortcutKeys } = require('@deepseek-ai/dsh-client-ui-primitives');
+    const { createPortal } = require('react-dom');
+    const { IconSettingsOutlineRegular, IconNewChatOutlineRegular, IconCordisPluginOutlineRegular, IconChevronLeftOutlineRegular, IconPanelLeftOutlineRegular, ShortcutKeys } = require('@deepseek-ai/dsh-client-ui-primitives');
     const h = React.createElement;
     const LOGO_PATH = '/lwb/branding/logo.png';
     function LwbBrandMark({ size = 30, className } = {}) {
@@ -332,7 +333,7 @@ window.__ModuleLoader__.load({
         conversation: '对话', packs: '场景能力包', settings: '设置', capability: '能力包页面',
         packsHint: '可组合的场景能力包', settingsHint: '工作台的系统配置与偏好', capabilityHint: '已加载能力包的页面入口',
         workbench: '工作台', workbenchFeatures: '工作台功能', loadedPacks: '已加载能力包', localWorkbench: '本机单用户工作台',
-        collapseSidebar: '收起侧栏', closeNavigation: '关闭导航', openNavigation: '打开导航', openConversationList: '打开会话列表',
+        collapseSidebar: '收起侧栏', expandSidebar: '展开侧栏', closeNavigation: '关闭导航', openNavigation: '打开导航', openConversationList: '打开会话列表',
         expandPack: (name) => `展开${name}`, collapsePack: (name) => `收起${name}`,
         conversationModule: '对话模块', conversationHistory: '会话历史', closeConversationList: '关闭会话列表',
         session: '会话', newSession: '新会话', newSessionLabel: '新建会话', conversationPanels: '官方功能', readingWorkspaces: '正在读取工作区', searchConversations: '搜索对话…',
@@ -371,7 +372,7 @@ window.__ModuleLoader__.load({
         conversation: 'Conversation', packs: 'Capability Packs', settings: 'Settings', capability: 'Capability Page',
         packsHint: 'Composable capability packs', settingsHint: 'Workbench system configuration and preferences', capabilityHint: 'Entry point for the loaded capability pack',
         workbench: 'WORKBENCH', workbenchFeatures: 'Workbench features', loadedPacks: 'Loaded capability packs', localWorkbench: 'Local single-user workbench',
-        collapseSidebar: 'Collapse sidebar', closeNavigation: 'Close navigation', openNavigation: 'Open navigation', openConversationList: 'Open conversation list',
+        collapseSidebar: 'Collapse sidebar', expandSidebar: 'Expand sidebar', closeNavigation: 'Close navigation', openNavigation: 'Open navigation', openConversationList: 'Open conversation list',
         expandPack: (name) => `Expand ${name}`, collapsePack: (name) => `Collapse ${name}`,
         conversationModule: 'Conversation module', conversationHistory: 'Conversation history', closeConversationList: 'Close conversation list',
         session: 'Sessions', newSession: 'New session', newSessionLabel: 'New session', conversationPanels: 'Official panels', readingWorkspaces: 'Loading workspaces', searchConversations: 'Search conversations...',
@@ -655,15 +656,26 @@ window.__ModuleLoader__.load({
       body[data-ds-dark-theme] .lwb-nav-count,body[data-ds-dark-theme] .lwb-menu-pill { color:#b3c0cc; background:#2a3948; } body[data-ds-dark-theme] .lwb-cap-mark,body[data-ds-dark-theme] .lwb-user-avatar { background:#223c59; } body[data-ds-dark-theme] .lwb-sidebar-foot { border-color:var(--lwb-line); color:var(--lwb-muted); } body[data-ds-dark-theme] .lwb-conversation-pane { background:var(--dsw-specific-sidebar-fill,var(--lwb-page)); box-shadow:8px 0 20px rgba(0,0,0,.16); } body[data-ds-dark-theme] .lwb-overlay-head { background:rgba(28,39,51,.96); } body[data-ds-dark-theme] .lwb-select,body[data-ds-dark-theme] .lwb-input,body[data-ds-dark-theme] .lwb-plain-button,body[data-ds-dark-theme] .lwb-detail-close { border-color:#405161; color:var(--lwb-ink); background:#23313f; } body[data-ds-dark-theme] .lwb-input:focus,body[data-ds-dark-theme] .lwb-select:focus { border-color:var(--lwb-blue); box-shadow:0 0 0 2px rgba(120,173,255,.2); }
       body[data-ds-dark-theme] .lwb-pack-card > p,body[data-ds-dark-theme] .lwb-detail-menu-row,body[data-ds-dark-theme] .lwb-detail-fact strong { color:var(--lwb-ink); } body[data-ds-dark-theme] .lwb-pack-empty,body[data-ds-dark-theme] .lwb-settings-group-head,body[data-ds-dark-theme] .lwb-detail-fact,body[data-ds-dark-theme] .lwb-detail-menu-row { border-color:var(--lwb-line); background:#202d3a; } body[data-ds-dark-theme] .lwb-detail-fact small,body[data-ds-dark-theme] .lwb-modal-copy,body[data-ds-dark-theme] .lwb-modal-title { color:var(--lwb-muted); } body[data-ds-dark-theme] .lwb-pack-tab { color:var(--lwb-muted); } body[data-ds-dark-theme] .lwb-pack-tab[data-active="true"] { border-color:#345f8f; } body[data-ds-dark-theme] .lwb-status[data-tone="muted"] { color:#bdc8d2; background:#344250; } body[data-ds-dark-theme] .lwb-danger-button { border-color:#814d4d; color:#ffabab; background:#45292b; } body[data-ds-dark-theme] .lwb-dialog-error { border-color:#804b4b; color:#ffb5b5; background:#48292c; } body[data-ds-dark-theme] .lwb-mobile-nav-trigger,body[data-ds-dark-theme] .lwb-mobile-conversation-trigger { border-color:#405161; color:var(--lwb-ink); background:#23313f; }
       .lwb-sidebar,.lwb-overlay,.lwb-conversation-pane { box-sizing:border-box; font-size:var(--lwb-text-base); line-height:1.55; font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; color:var(--lwb-ink); }
-      .lwb-sidebar *,.lwb-overlay * { box-sizing:border-box; }
-      .lwb-sidebar { display:flex; height:100%; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; flex-direction:column; padding:16px 10px 10px; background:#fff; } html[data-platform='darwin'] .lwb-sidebar { padding-top:48px; } html[data-platform='darwin']:has(.lwb-sidebar) [data-shell-leading] { display:none; }
+      .lwb-sidebar *,.lwb-overlay *,.lwb-cap-flyout * { box-sizing:border-box; }
+      .lwb-sidebar-head { display:flex; width:100%; align-items:center; flex-shrink:0; }
+      .lwb-sidebar-head .lwb-brand { flex:1; width:auto; }
+      .lwb-sidebar[data-collapsed="true"] .lwb-sidebar-head { flex-direction:column; gap:2px; margin-bottom:10px; }
+      .lwb-sidebar[data-collapsed="true"] .lwb-sidebar-head .lwb-brand { flex:none; }
+      .lwb-expand,.lwb-desktop-expand { display:grid; width:28px; height:28px; place-items:center; border:0; border-radius:6px; color:var(--lwb-muted); background:transparent; cursor:pointer; -webkit-app-region:no-drag; }
+      .lwb-expand:hover,.lwb-desktop-expand:hover,.lwb-collapse:hover { color:var(--lwb-blue); background:var(--lwb-blue-soft); }
+      .lwb-desktop-expand { position:fixed; top:calc((var(--dsh-windows-titlebar-height,36px) - 28px)/2); left:12px; z-index:30; }
+      .lwb-cap-flyout { position:fixed; z-index:40; display:flex; flex-direction:column; box-sizing:border-box; width:min(264px,calc(100vw - 16px)); max-height:calc(100dvh - 16px); padding:8px; border:1px solid var(--lwb-line); border-radius:10px; background:var(--lwb-surface); color:var(--lwb-ink); box-shadow:0 8px 28px rgba(20,34,49,.16); font:14px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; }
+      .lwb-cap-flyout-title { flex:none; padding:7px 9px 10px; border-bottom:1px solid var(--lwb-line); margin-bottom:5px; font-weight:700; overflow-wrap:anywhere; }
+      .lwb-cap-flyout-items { display:grid; min-height:0; gap:2px; overflow-y:auto; overscroll-behavior:contain; }
+      .lwb-expand:focus-visible,.lwb-desktop-expand:focus-visible,.lwb-collapse:focus-visible,.lwb-cap-toggle:focus-visible,.lwb-nav-item:focus-visible { outline:2px solid var(--lwb-blue); outline-offset:2px; }
+      .lwb-sidebar { display:flex; height:100%; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; flex-direction:column; padding:16px 10px 10px; background:#fff; } html[data-platform='darwin'] .lwb-sidebar { padding-top:48px; }
       .lwb-brand,.lwb-nav-item { display:flex; width:100%; min-width:0; align-items:center; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
       .lwb-brand { flex-shrink:0; gap:10px; min-height:42px; padding:3px 8px 14px; }
       .lwb-brand-mark { display:block; width:30px; height:30px; flex:none; object-fit:contain; }
       .lwb-brand-copy { display:grid; min-width:0; gap:2px; }
       .lwb-brand-copy strong,.lwb-brand-copy small,.lwb-nav-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .lwb-brand-copy strong { font-size:var(--lwb-text-section,18px); } .lwb-brand-copy small { color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); }
-      .lwb-collapse { width:28px; height:28px; margin-left:auto; border:0; border-radius:6px; color:var(--lwb-muted); background:transparent; font-size:var(--lwb-text-section,18px); cursor:pointer; }
+      .lwb-collapse { display:grid; flex:none; width:28px; height:28px; margin-left:auto; place-items:center; border:0; border-radius:6px; color:var(--lwb-muted); background:transparent; font-size:var(--lwb-text-section,18px); cursor:pointer; }
       .lwb-nav-group { display:grid; flex-shrink:0; gap:2px; margin:0 0 15px; } .lwb-nav-caption { padding:0 10px 6px; color:var(--lwb-muted); font-size:var(--lwb-text-xs,12px); font-weight:700; letter-spacing:.08em; }
       .lwb-nav-item { min-height:42px; gap:9px; padding:0 9px; border-radius:6px; color:#566473; font-size:var(--lwb-text-base,14px); } .lwb-nav-item:hover { color:#273645; background:#f3f6fa; } .lwb-nav-item[data-active="true"] { color:var(--lwb-blue); background:var(--lwb-blue-soft); font-weight:700; }
       .lwb-nav-icon { display:grid; width:26px; height:26px; flex:none; place-items:center; border-radius:6px; color:var(--nav-color,#667788); background:var(--nav-soft,#edf1f5); } .lwb-nav-item[data-icon="conversation"] { --nav-color:#2579b9; --nav-soft:#e7f4fb; } .lwb-nav-item[data-icon="packs"] { --nav-color:#d57827; --nav-soft:#fff0e2; } .lwb-nav-item[data-icon="settings"] { --nav-color:#667789; --nav-soft:#edf1f5; } .lwb-nav-item[data-tone="violet"] { --nav-color:#8b5cc4; --nav-soft:#f2ebfb; } .lwb-nav-item[data-tone="orange"] { --nav-color:#cf762b; --nav-soft:#fff0e4; } .lwb-nav-item[data-tone="pink"] { --nav-color:#bc5f8c; --nav-soft:#faeaf1; } .lwb-nav-item[data-tone="red"] { --nav-color:#c25f4a; --nav-soft:#fdeae5; } .lwb-nav-item[data-tone="green"] { --nav-color:#238c67; --nav-soft:#e6f6ee; } .lwb-nav-item[data-active="true"] .lwb-nav-icon { color:#fff; background:var(--lwb-blue); }
@@ -1181,6 +1193,75 @@ window.__ModuleLoader__.load({
       return h('button', { type: 'button', className: 'lwb-dsh-settings-trigger', 'aria-haspopup': 'dialog', onClick: openSettings }, h(IconSettingsOutlineRegular, { size: 18, 'aria-hidden': true }), h('span', null, copy.openRuntimeSettings));
     }
 
+    function LwbSidebarExpand({ className = 'lwb-expand' }) {
+      const copy = useLwbCopy();
+      return button(className, h(IconPanelLeftOutlineRegular, { size: 18 }),
+        () => services?.layout?.toggleSidebar?.(), { 'aria-label': copy.expandSidebar, title: copy.expandSidebar });
+    }
+
+    // Render outside the scrolling sidebar so the flyout is never clipped by
+    // its compact column. This state is temporary, unlike expandedPacks.
+    function LwbPackFlyout({ pack, anchor, state, onClose }) {
+      const panel = React.useRef(null);
+      const [position, setPosition] = React.useState({ left: 0, top: 0 });
+      React.useLayoutEffect(() => {
+        const place = () => {
+          if (!anchor.isConnected) { onClose(); return; }
+          const bounds = anchor.getBoundingClientRect();
+          const box = panel.current.getBoundingClientRect();
+          setPosition({
+            left: Math.max(8, Math.min(bounds.right + 8, window.innerWidth - box.width - 8)),
+            top: Math.max(8, Math.min(bounds.top, window.innerHeight - box.height - 8)),
+          });
+        };
+        place();
+        const selected = panel.current.querySelector('[aria-current="page"]') || panel.current.querySelector('button');
+        selected?.focus();
+        const outside = (event) => {
+          if (!panel.current.contains(event.target) && !anchor.contains(event.target)) onClose();
+        };
+        const escape = (event) => {
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(true); }
+        };
+        document.addEventListener('pointerdown', outside, true);
+        document.addEventListener('focusin', outside);
+        document.addEventListener('keydown', escape, true);
+        window.addEventListener('resize', place);
+        document.addEventListener('scroll', place, true);
+        return () => {
+          document.removeEventListener('pointerdown', outside, true);
+          document.removeEventListener('focusin', outside);
+          document.removeEventListener('keydown', escape, true);
+          window.removeEventListener('resize', place);
+          document.removeEventListener('scroll', place, true);
+        };
+      }, [anchor, pack, onClose]);
+      const moveFocus = (event) => {
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const items = [...panel.current.querySelectorAll('button')];
+        const index = items.indexOf(document.activeElement);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[next]?.focus();
+      };
+      return createPortal(h('div', {
+        ref: panel, id: `lwb-cap-flyout-${pack.id}`, className: 'lwb-cap-flyout',
+        role: 'dialog', 'aria-modal': 'false', 'aria-label': pack.name,
+        style: position, onKeyDown: moveFocus,
+      }, h('div', { className: 'lwb-cap-flyout-title' }, pack.name),
+      h('nav', { className: 'lwb-cap-flyout-items', 'aria-label': pack.name }, pack.menus.map((item) => {
+        const route = capabilityRoute(pack.id, item.id);
+        const active = state.page === 'capability' && state.capabilityPage === route;
+        return h('button', {
+          key: route, type: 'button', className: 'lwb-nav-item', title: item.label,
+          'data-tone': item.tone || 'blue', 'data-active': active ? 'true' : 'false',
+          'aria-current': active ? 'page' : undefined,
+          onClick: () => { onClose(true); navTo('capability', route); },
+        }, glyph(item.glyph), h('span', { className: 'lwb-nav-label' }, item.label));
+      }))), document.body);
+    }
+
     function LwbSidebar({ collapsed, width }) {
       const state = useProduct();
       const copy = useLwbCopy();
@@ -1199,6 +1280,12 @@ window.__ModuleLoader__.load({
       const wide = !sidebarCollapsed;
       const packs = catalog.packs;
       const activePackId = state.page === 'capability' ? capabilityAtRoute(packs, state.capabilityPage)?.pack.id : undefined;
+      const [flyout, setFlyout] = React.useState(null);
+      const closeFlyout = React.useCallback((restoreFocus = false) => {
+        if (restoreFocus && flyout?.anchor.isConnected) flyout.anchor.focus();
+        setFlyout(null);
+      }, [flyout]);
+      React.useEffect(() => { setFlyout(null); }, [wide, width, packs, catalog.phase, state.page, state.capabilityPage]);
 
       React.useEffect(() => {
         document.documentElement.style.setProperty('--lwb-sidebar-width', `${width}px`);
@@ -1248,9 +1335,9 @@ window.__ModuleLoader__.load({
         'data-active': state.page === id ? 'true' : 'false',
         onClick: () => navTo(id),
       }, glyph(symbol), wide && h('span', { className: 'lwb-nav-label' }, label), wide && count !== undefined && h('span', { className: 'lwb-nav-count' }, String(count)));
-      const togglePack = (pack) => {
+      const togglePack = (pack, anchor) => {
         if (!wide) {
-          navTo('capability', capabilityRoute(pack.id, pack.menus[0].id));
+          setFlyout((previous) => previous?.id === pack.id ? null : { id: pack.id, anchor });
           return;
         }
         setExpandedPacks((previous) => {
@@ -1268,8 +1355,15 @@ window.__ModuleLoader__.load({
           h('button', {
             type: 'button', className: 'lwb-cap-toggle', title: pack.name,
             'aria-label': wide ? (expanded ? copy.collapsePack(pack.name) : copy.expandPack(pack.name)) : pack.name,
-            'aria-expanded': wide ? expanded : undefined, 'aria-controls': wide ? menuId : undefined,
-            onClick: () => togglePack(pack),
+            'aria-expanded': wide ? expanded : flyout?.id === pack.id,
+            'aria-controls': wide ? menuId : flyout?.id === pack.id ? `lwb-cap-flyout-${pack.id}` : undefined,
+            'aria-haspopup': wide ? undefined : 'dialog',
+            onClick: (event) => togglePack(pack, event.currentTarget),
+            onKeyDown: (event) => {
+              if (!wide && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+                event.preventDefault(); setFlyout({ id: pack.id, anchor: event.currentTarget });
+              }
+            },
           }, h('span', { className: 'lwb-cap-mark', 'aria-hidden': 'true' }, pack.name.slice(0, 1)), wide && h('span', { className: 'lwb-nav-label' }, pack.name), wide && h('span', { className: 'lwb-cap-chevron', 'aria-hidden': 'true' }, h(IconChevronLeftOutlineRegular, { size: 14 }))),
           wide && expanded && h('div', { id: menuId, className: 'lwb-cap-menu' }, pack.menus.map((item) => h('button', {
             key: capabilityRoute(pack.id, item.id), type: 'button', className: 'lwb-nav-item', title: item.label,
@@ -1281,13 +1375,17 @@ window.__ModuleLoader__.load({
         );
       });
 
+      const flyoutPack = !wide && flyout && packs.find((pack) => pack.id === flyout.id);
       return h('aside', { className: 'lwb-sidebar', 'data-collapsed': sidebarCollapsed ? 'true' : 'false', 'data-mobile-open': state.mobileNavOpen ? 'true' : 'false', 'aria-label': copy.workbenchFeatures },
-        h('div', { style: { display: 'flex', alignItems: 'center' } },
+        h('div', { className: 'lwb-sidebar-head' },
           h('button', { type: 'button', className: 'lwb-brand', title: '老傅工作台', onClick: () => navTo('conversation') },
             h(LwbBrandMark, { className: 'lwb-brand-mark' }),
             wide && h('span', { className: 'lwb-brand-copy' }, h('strong', null, '老傅工作台'), h('small', null, 'Laofu Workbench')),
           ),
-          wide && button('lwb-collapse', h(IconChevronLeftOutlineRegular, { size: 18 }), () => services?.layout?.toggleSidebar?.(), { 'aria-label': copy.collapseSidebar, title: copy.collapseSidebar }),
+          wide ? button('lwb-collapse', h(IconChevronLeftOutlineRegular, { size: 18 }),
+            () => mobile ? updateProduct({ mobileNavOpen: false }) : services?.layout?.toggleSidebar?.(),
+            { 'aria-label': mobile ? copy.closeNavigation : copy.collapseSidebar, title: mobile ? copy.closeNavigation : copy.collapseSidebar })
+            : h(LwbSidebarExpand),
         ),
         h('nav', { className: 'lwb-nav-group', 'aria-label': copy.workbenchFeatures },
           wide && h('div', { className: 'lwb-nav-caption' }, copy.workbench),
@@ -1300,6 +1398,9 @@ window.__ModuleLoader__.load({
           capabilityGroups,
         ),
         h('div', { className: 'lwb-sidebar-foot', title: copy.localWorkbench }, h('span', { className: 'lwb-user-avatar' }, '老'), wide && h('span', null, copy.localWorkbench)),
+        flyoutPack && h(LwbPackFlyout, { key: flyoutPack.id, pack: flyoutPack, anchor: flyout.anchor, state, onClose: closeFlyout }),
+        sidebarCollapsed && width === 0 && document.documentElement.hasAttribute('data-windows-titlebar')
+          && createPortal(h(LwbSidebarExpand, { className: 'lwb-desktop-expand' }), document.body),
       );
     }
 
@@ -2463,6 +2564,11 @@ window.__ModuleLoader__.load({
           disposeSidebar = undefined;
         };
         enableSidebar();
+        // AppFrame displays this seat beside the traffic lights only while the
+        // macOS sidebar is collapsed. The official ui-sidebar is disabled.
+        const disposeSidebarLeading = ctx.slots.inject('shell.leading', () => ctx.slots.register({
+          name: 'shell.leading', priority: -10, registrant: 'lwb-workbench',
+        }, LwbSidebarExpand));
         // The conversation column renders `sidebar.panellist`, so its rows are
         // projected here for the same reason the official shell projects them:
         // registration and locale changes both move a row's label, and a later
@@ -2509,6 +2615,7 @@ window.__ModuleLoader__.load({
           favicon.remove();
           oldIcons.forEach(icon => document.head.append(icon));
           disableSidebar();
+          disposeSidebarLeading?.();
           disposeConversationPanels?.();
           disposeConversationPanelLabels?.();
           conversationPanels.rows = [];

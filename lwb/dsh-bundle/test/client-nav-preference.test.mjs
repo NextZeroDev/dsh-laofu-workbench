@@ -90,11 +90,15 @@ test('the workbench snapshot records the current page so a reload returns to it'
 async function mountSidebar(options = {}) {
   const dom = new JSDOM('<!doctype html><title>DSH</title><body></body>', { url: 'http://localhost/' })
   const window = dom.window
+  if (options.platform) window.document.documentElement.dataset.platform = options.platform
+  if (options.windowsTitlebar) window.document.documentElement.setAttribute('data-windows-titlebar', '')
+  let mobile = Boolean(options.mobile)
+  const mediaListeners = new Set()
   for (const [key, value] of Object.entries(options.seed || {})) window.localStorage.setItem(key, value)
   try {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true, writable: true,
-      value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+      value: () => ({ get matches() { return mobile }, addEventListener(_, fn) { mediaListeners.add(fn) }, removeEventListener(_, fn) { mediaListeners.delete(fn) } }),
     })
   } catch (_) {
     window.Window.prototype.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
@@ -139,6 +143,8 @@ async function mountSidebar(options = {}) {
   }
   ctx.provide('connection', { rpc: { call: rpc } })
   for (const name of ['sessions', 'workspaces', 'uiWorkspace', 'layout', 'locale', 'modules']) ctx.provide(name, {})
+  let toggleCalls = 0
+  ctx.provide('layout', { toggleSidebar() { toggleCalls += 1 } })
   ctx.provide('remote', {})
 
   let plugin
@@ -162,12 +168,15 @@ async function mountSidebar(options = {}) {
   assert.ok(Sidebar, 'the product navigation registers on apply')
 
   const flush = async (rounds = 4) => { for (let index = 0; index < rounds; index += 1) await new Promise((resolve) => setTimeout(resolve, 0)) }
-  const render = async () => {
+  let layout = { collapsed: Boolean(options.collapsed), width: options.width ?? 248 }
+  const render = async (next = {}) => {
+    layout = { ...layout, ...next }
     // One act for mount and the catalog round trip that follows it: resolving the
     // pending RPC outside act would report a state update React never saw.
-    await React.act(async () => { root.render(React.createElement(Sidebar, { collapsed: false, width: 248 })); await flush() })
+    await React.act(async () => { root.render(React.createElement(Sidebar, layout)); await flush() })
   }
   const click = async (node) => { await React.act(async () => { node.click(); await flush() }) }
+  const dispatch = async (node, event) => { await React.act(async () => { node.dispatchEvent(event); await flush() }) }
   const groups = () => [...container.querySelectorAll('.lwb-cap-group')].map((section) => {
     const toggle = section.querySelector('.lwb-cap-toggle')
     return {
@@ -197,7 +206,10 @@ async function mountSidebar(options = {}) {
   }
 
   return {
-    window, container, render, click, groups, navRecord, pageRecord, unload,
+    window, container, render, click, dispatch, groups, navRecord, pageRecord, unload,
+    toggleCalls: () => toggleCalls,
+    renderLeading: async () => { await React.act(async () => { root.render(React.createElement(slots.get('shell.leading'))); await flush() }) },
+    setMobile: async (value) => { await React.act(async () => { mobile = value; for (const fn of mediaListeners) fn(); await flush() }) },
     setPacks: (next) => { packs = next },
     refreshCatalog: async () => { await React.act(async () => { ctx.emit('connection/reset'); await flush() }) },
   }
@@ -333,4 +345,116 @@ test('primary navigation records the page the user leaves behind', async () => {
   } finally {
     await harness.unload()
   }
+})
+
+test('compact packs expose every submenu without changing saved group preferences', async () => {
+  const app = await mountSidebar({ collapsed: true, width: 56, seed: { [NAV_KEY]: JSON.stringify({ expandedPacks: ['pack-b'] }) } })
+  try {
+    await app.render()
+    const toggle = app.container.querySelector('.lwb-cap-toggle')
+    await app.click(toggle)
+    const popup = app.window.document.querySelector('.lwb-cap-flyout')
+    assert.ok(popup && !app.container.contains(popup), 'the flyout escapes the clipped sidebar')
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true')
+    assert.equal(toggle.getAttribute('aria-controls'), popup.id)
+    assert.deepEqual([...popup.querySelectorAll('button')].map((node) => node.textContent), ['Alpha Home', 'Alpha Runs'])
+    assert.deepEqual(app.navRecord(), ['pack-b'], 'viewing the flyout preserves preferences')
+    assert.equal(app.pageRecord(), null, 'opening a pack does not navigate to its first page')
+    await app.click(popup.querySelectorAll('button')[1])
+    assert.equal(app.window.document.querySelector('.lwb-cap-flyout'), null)
+    assert.equal(JSON.parse(app.window.localStorage.getItem(WORKBENCH_KEY)).capabilityPage, 'pack-a:runs')
+    assert.equal(app.window.document.activeElement, toggle)
+    await app.click(toggle)
+    assert.equal(app.window.document.querySelector('.lwb-cap-flyout [aria-current="page"]').textContent, 'Alpha Runs')
+  } finally { await app.unload() }
+})
+
+test('flyouts support keyboard navigation, Escape and outside dismissal', async () => {
+  const app = await mountSidebar({ collapsed: true, width: 56 })
+  try {
+    await app.render()
+    const doc = app.window.document
+    const toggle = app.container.querySelector('.lwb-cap-toggle')
+    const key = (name) => new app.window.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true })
+    await app.dispatch(toggle, key('ArrowDown'))
+    assert.equal(doc.activeElement.textContent, 'Alpha Home')
+    await app.dispatch(doc.activeElement, key('ArrowDown'))
+    assert.equal(doc.activeElement.textContent, 'Alpha Runs')
+    await app.dispatch(doc.activeElement, key('Home'))
+    assert.equal(doc.activeElement.textContent, 'Alpha Home')
+    await app.dispatch(doc.activeElement, key('End'))
+    assert.equal(doc.activeElement.textContent, 'Alpha Runs')
+    await app.dispatch(doc.activeElement, key('Escape'))
+    assert.equal(doc.querySelector('.lwb-cap-flyout'), null)
+    assert.equal(doc.activeElement, toggle)
+    await app.click(toggle)
+    await app.dispatch(doc.body, new app.window.Event('pointerdown', { bubbles: true }))
+    assert.equal(doc.querySelector('.lwb-cap-flyout'), null)
+    await app.click(toggle)
+    await app.dispatch(app.container.querySelector('.lwb-nav-item'), new app.window.FocusEvent('focusin', { bubbles: true }))
+    assert.equal(doc.querySelector('.lwb-cap-flyout'), null, 'leaving with Tab also dismisses the flyout')
+  } finally { await app.unload() }
+})
+
+test('only one flyout survives and layout, route, catalog changes clean it up', async () => {
+  const app = await mountSidebar({ collapsed: true, width: 56 })
+  let unloaded = false
+  try {
+    await app.render()
+    const doc = app.window.document
+    const open = () => app.click(app.container.querySelector('.lwb-cap-toggle'))
+    await open()
+    await app.click(app.container.querySelectorAll('.lwb-cap-toggle')[1])
+    assert.equal(doc.querySelectorAll('.lwb-cap-flyout').length, 1)
+    assert.equal(doc.querySelector('.lwb-cap-flyout').getAttribute('aria-label'), 'Beta')
+    await app.click(app.container.querySelectorAll('.lwb-cap-toggle')[1])
+    assert.equal(doc.querySelector('.lwb-cap-flyout'), null, 'clicking the trigger again closes it')
+    await open()
+    await app.click(app.container.querySelector('[data-icon="settings"]'))
+    assert.equal(doc.querySelector('.lwb-cap-flyout'), null, 'route changes close the flyout')
+    await open()
+    await app.render({ collapsed: false, width: 248 })
+    assert.equal(doc.querySelector('.lwb-cap-flyout'), null)
+    await app.render({ collapsed: true, width: 56 })
+    await open()
+    await app.setMobile(true)
+    assert.equal(doc.querySelector('.lwb-cap-flyout'), null)
+    assert.equal(app.container.querySelector('.lwb-sidebar').dataset.collapsed, 'false')
+    await app.setMobile(false)
+    await open()
+    app.setPacks([PACKS[1]])
+    await app.refreshCatalog()
+    assert.equal(doc.querySelector('.lwb-cap-flyout'), null, 'unloading a pack removes its flyout')
+    await open()
+    await app.unload()
+    unloaded = true
+    assert.equal(doc.querySelector('.lwb-cap-flyout'), null, 'unmount removes the portal')
+  } finally { if (!unloaded) await app.unload() }
+})
+
+test('reopen controls delegate to the native layout and mobile uses full groups', async () => {
+  for (const options of [{ collapsed: true, width: 56 }, { collapsed: true, width: 0, windowsTitlebar: true }, { platform: 'darwin' }]) {
+    const app = await mountSidebar(options)
+    try {
+      if (options.platform === 'darwin') await app.renderLeading()
+      else await app.render()
+      const control = app.window.document.querySelector(options.windowsTitlebar ? '.lwb-desktop-expand' : '.lwb-expand')
+      assert.equal(control.getAttribute('aria-label'), '展开侧栏')
+      await app.click(control)
+      assert.equal(app.toggleCalls(), 1)
+    } finally { await app.unload() }
+  }
+  const app = await mountSidebar({ mobile: true, collapsed: true, width: 0 })
+  try {
+    await app.render()
+    await app.click(app.container.querySelector('.lwb-cap-toggle'))
+    assert.deepEqual(app.groups()[0].menus, ['Alpha Home', 'Alpha Runs'])
+    assert.equal(app.window.document.querySelector('.lwb-cap-flyout'), null)
+    await app.click(app.container.querySelector('.lwb-collapse'))
+    assert.equal(app.toggleCalls(), 0, 'closing the drawer does not change native sidebar layout')
+    assert.equal(app.container.querySelector('.lwb-collapse').getAttribute('aria-label'), '关闭导航')
+    await app.click(app.container.querySelectorAll('.lwb-cap-menu button')[1])
+    assert.equal(app.container.querySelector('.lwb-sidebar').dataset.mobileOpen, 'false')
+    assert.equal(JSON.parse(app.window.localStorage.getItem(WORKBENCH_KEY)).capabilityPage, 'pack-a:runs')
+  } finally { await app.unload() }
 })

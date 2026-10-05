@@ -90,7 +90,8 @@ test('settings is the only primary navigation entry to native DSH runtime settin
   const source = await readFile(clientPath, 'utf8')
   assert.match(source, /function LwbRuntimeSettingsTrigger\(\{ openSettings \}\)/u)
   assert.match(source, /html\[data-platform='darwin'\] \.lwb-sidebar \{ padding-top:48px; \}/u)
-  assert.match(source, /html\[data-platform='darwin'\]:has\(\.lwb-sidebar\) \[data-shell-leading\] \{ display:none; \}/u)
+  assert.doesNotMatch(source, /\[data-shell-leading\] \{ display:none; \}/u)
+  assert.match(source, /ctx\.slots\.inject\('shell\.leading', \(\) => ctx\.slots\.register\(\{[\s\S]*?\}, LwbSidebarExpand\)/u)
   assert.match(source, /systemSettings: 'DSH 系统设置'/u)
   assert.match(source, /function SettingsPage\(\{ renderSlot \}\)/u)
   assert.match(source, /renderSlot\('sidebar\.settings', \{ wide: true \}\)/u)
@@ -185,7 +186,7 @@ test('loaded capability menus stay nested inside independently collapsible pack 
   assert.match(sidebar, /const \[expandedPacks, setExpandedPacks\] = React\.useState/u)
   assert.match(sidebar, /className: 'lwb-cap-group'/u)
   assert.match(sidebar, /className: 'lwb-cap-toggle'/u)
-  assert.match(sidebar, /'aria-expanded': wide \? expanded : undefined/u)
+  assert.match(sidebar, /'aria-expanded': wide \? expanded : flyout\?\.id === pack\.id/u)
   assert.match(sidebar, /className: 'lwb-cap-menu' \}, pack\.menus\.map/u)
   assert.doesNotMatch(sidebar, /packs\.flatMap/u)
   // A reload must show the same open groups, and neither a pending catalog nor a
