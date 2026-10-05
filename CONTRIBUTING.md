@@ -40,7 +40,9 @@ npm run dev -- --port 4174
 | `lwb/pack-sdk/` | 包清单校验、注册和作用域接口 |
 | `lwb/packs/` | 独立业务包；当前包含 `spoken-video` 与 `ai-arena` |
 | `scripts/setup-upstream.mjs` | 获取和构建锁定的 DSH |
-| `docs/` | 当前指南、开发契约及历史记录 |
+| `docs/` | 当前指南、开发契约及简短历史摘要 |
+
+文档按[索引](docs/README.md)维护：功能变化优先更新相关指南，接口变化更新契约；避免为每次分析、修复或验收新增独立记录。历史过程通过 Git 和 PR 追溯，确有必要的长期背景收敛到[历史摘要](docs/history.md)。
 
 工作台核心应保持通用，场景页面、业务数据和任务流程放在包内。新包参考[开发入门](docs/develop-a-pack.md)，不要复制个人模型凭据或现有运行数据。
 

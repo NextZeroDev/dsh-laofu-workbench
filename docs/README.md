@@ -1,66 +1,19 @@
 # 文档索引
 
-本仓库文档以老傅工作台公开源码和官方统一发行版为主，随仓库提供完整的口播视频内容创作能力包。官方发行版还随带需要会员权限的私有模型博主测评包；以下区分当前使用/开发指南与历史设计记录，避免把过渡方案当作当前操作说明。
+按当前问题选择文档即可，无需通读全部资料。这里维护当前指南与开发契约；已结束的讨论和验收记录收敛至[历史摘要](history.md)，原文可从 Git 查阅。
 
-## 使用工作台
-
-| 文档 | 内容 |
+| 你要做什么 | 阅读入口 |
 |---|---|
-| [项目首页](../README.md) | 工作台定位、账号权限、当前功能与安装入口 |
-| [快速开始](quickstart.md) | 从双端启动、LWB/BYOK 配置到第一条口播视频 |
-| [Desktop 与 Web](37-desktop-parity.md) | 双端启动、版本构建清单、共享数据与当前验收范围 |
-| [故障排查](troubleshooting.md) | 安装、鉴权、包加载、模型和媒体问题 |
-| [运行数据目录](31-runtime-data-layout.md) | 状态、凭据、附件、业务产物及可恢复副本 |
-| [许可证与商业使用](licensing-and-commercial-use.md) | 当前许可、非商业边界、LWB 服务和第三方组件范围 |
-| [第三方组件与资源](../THIRD_PARTY_NOTICES.md) | 来源、许可边界及待补充的出处记录 |
+| 安装、配置并完成第一次创作 | [快速开始](quickstart.md) |
+| 了解口播流程、任务详情和音视频衔接 | [口播视频指南](spoken-video.md) |
+| 使用五子棋模型竞技 | [AI 竞技台](ai-arena.md) |
+| 使用 Web / Desktop 或制作发行包 | [Desktop 与 Web](37-desktop-parity.md) |
+| 排查安装、模型、媒体或包加载问题 | [故障排查](troubleshooting.md) |
+| 查数据位置、备份和可恢复副本 | [运行数据目录](31-runtime-data-layout.md) |
+| 判断许可与商业使用范围 | [许可证与商业使用](licensing-and-commercial-use.md)、[第三方说明](../THIRD_PARTY_NOTICES.md) |
+| 开发新的场景能力包 | [开发入门](develop-a-pack.md)、[能力包契约](12-capability-packs.md) |
+| 理解产品、DSH 和业务包的职责 | [总体架构](01-architecture.md) |
+| 更新上游 DSH | [基座锁定与升级](08-base-lock.md) |
+| 接入 LWB 账号、文本模型和媒体服务 | [账号与服务契约](40-lwb-account-model-and-media-services.md) |
 
-## 开发与扩展
-
-| 文档 | 内容 |
-|---|---|
-| [贡献指南](../CONTRIBUTING.md) | 开发环境、验证、Issue 与 PR |
-| [AI竞技台](ai-arena.md) | 五子棋模型竞技、会话与用量、暂停恢复、回放及验收 |
-| [能力包开发入门](develop-a-pack.md) | 最小独立包与注册、加载、卸载 |
-| [总体架构](01-architecture.md) | 工作台与 DSH、业务包的职责边界 |
-| [能力包契约](12-capability-packs.md) | 清单、host/client 贡献及当前口播流程 |
-| [能力包内的会话与官方右栏](41-capability-session-surface.md) | 包如何渲染官方对话并让官方右栏跟随焦点卡片 |
-| [对话模块使用官方左栏](42-conversation-history-official.md) | 会话历史如何交回官方 Workspace 浏览器，以及包会话如何被过滤 |
-| [对话模块内的官方面板行](44-official-panel-rows.md) | 官方面板行（插件）与新会话为何进对话模块那一列，而不进 LWB 产品导航 |
-| [ATS 服务、能力包权益与多模型来源方案](39-ats-capability-service-and-pack-entitlements.md) | 公开能力包、ATS 账号权益、Provider 路由与仓库边界 |
-| [工作区与执行作用域](29-pack-owned-workspaces.md) | 生命周期、默认模型复用、任务及凭据隔离 |
-| [统一执行详情](32-execution-details.md) | 业务任务与 DSH 原生会话展示 |
-| [上游锁定](08-base-lock.md) | 运行时版本、构建和回滚边界 |
-| [升级流程](../lwb/upgrade/README.md) | 更新 DSH 的步骤 |
-| [产品层目录](../lwb/README.md) | 源码结构与宿主实现 |
-
-## 历史设计与验收记录
-
-当前新增功能与上线条件：[LWB 账号、模型档位与场景服务](40-lwb-account-model-and-media-services.md)。
-
-下面保留产品演进过程，用于理解设计背景，**不作为首次安装或当前功能说明**。其中的旧版本、`.lwb/` 路径、`file:test` 命令、个人参考工程和测试数量只代表记录时状态。当前命令见贡献指南，运行数据以目录契约为准；文中未提交的截图或私人参考项目不是构建依赖。
-
-- [11 LWB 工作台壳](11-lwb-workbench-shell.md)
-- [13 信号板设计（Signal Board）](13-signal-board.md)
-- [14 口播视频全链路推进分析](14-spoken-video-full-pipeline.md)
-- [15 信号板视觉设计（指挥中心）](15-signal-board-visual.md)
-- [16 信号模块梳理分析（人工与导入 / AI 内容日报 / 平台情报）](16-signal-module-analysis.md)
-- [17 选题模块梳理分析（账号定位 + 渠道最新批次 · DSH 统一执行）](17-topic-module-analysis.md)
-- [18 信号模块调整方案：双链路分治（无兼容版）](18-signal-module-restructure-plan.md)
-- [19 写稿模块分析（P2 规则质检 + P3 AI 起稿 · 合并实施）](19-script-module-analysis.md)
-- [20 信号页视觉美化分析与方案（命令条 + 信号卡片重塑）](20-signal-page-visual-polish-plan.md)
-- [21 信号模块简化分析：去掉信号卡工程动作、来源设置与手动导入入口](21-signal-module-simplification-analysis.md)
-- [22 账号模块分析（去版本号显示 + 账号卡片重塑）](22-account-module-analysis.md)
-- [23 选题模块重设计分析（账号 Tab 化 + 表单简化 + 任务卡/抽屉交互）](23-topic-module-account-tabs-analysis.md)
-- [24 写稿模块 UI 重设计分析（对齐选题页：账号 Tab + 选题选择器抽屉 + 任务卡 + 稿件工作台）](24-script-page-ui-redesign-analysis.md)
-- [25 发布 / 入队模块设计与实施记录（发布包装 Agent + 封面生图 + 单一生命线抽屉）](25-publish-module-analysis.md)
-- [26 发布模块简化：视频货架 + 单一发布资料抽屉（连根删除批准/入队/导出）](26-publish-module-simplification.md)
-- [27 内容安排模块重设计分析（定时全自动流水线）](27-content-schedule-module-analysis.md)
-- [DSH 0.1.6 升级与文件上传验收](28-dsh-016-upgrade.md)
-- [DSH 0.2.0 升级与验收](43-dsh-020-upgrade.md)
-- [UI 巡检与使用就绪评估](30-ui-audit-and-readiness.md)
-- [产品默认配置审计](32-product-defaults-audit.md)
-- [视频工程预检与修复](33-video-preflight-repair.md)
-- [34 账号 Tab 一致性（2026-09-17）](34-account-tabs-consistency.md)
-- [口播视频：配音、发布与内容安排交互细节](35-spoken-video-workflow-details.md)
-- [配音任务与内容安排的统一查询](36-audio-task-feed-integration.md)
-- [配音、字幕与视频的衔接](audio-video-handoff.md)
+项目功能见[项目首页](../README.md)，提交改动见[贡献指南](../CONTRIBUTING.md)。功能变化优先更新已有指南；不要为每次分析、修复或验收新增常驻文档。

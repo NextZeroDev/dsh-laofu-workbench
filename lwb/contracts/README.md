@@ -16,7 +16,7 @@ media connections use separate settings and credential namespaces.
 Current contracts:
 
 - [Capability pack manifest and lifecycle](../../docs/12-capability-packs.md)
-- [Workspace, execution scope and credentials](../../docs/29-pack-owned-workspaces.md)
+- [Workspace, execution scope and credentials](../../docs/12-capability-packs.md#工作区与执行作用域)
 - [Runtime data layout](../../docs/31-runtime-data-layout.md)
 - [Build your first pack](../../docs/develop-a-pack.md)
 

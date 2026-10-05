@@ -24,7 +24,7 @@ lwb/local/current/
 
 文件按需创建；空白实例不预置账号、会话或能力包业务数据。能力包的根目录由宿主分配，口播模块通过同一 `spokenVideoDataPath()` 函数定位 `data/`。普通工作区的源码和用户要求 Agent 创建的文件仍属于用户自己的目录，不属于产品运行状态。
 
-需要隔离并行运行的包可以在工作区内为每次运行申请一个目录（`sessions.create({ cwd })`，路径限定在包工作区内并逐段拒绝符号链接）。模型博主测评使用 `<包工作区>/runs/<taskId>/<runId>/`：一次测评一个任务目录，任务下每个模型会话一个目录，产物按会话归属。见 [41 能力包内的会话与官方右栏](41-capability-session-surface.md)。
+需要隔离并行运行的包可以在工作区内为每次运行申请一个目录（`sessions.create({ cwd })`，路径限定在包工作区内并逐段拒绝符号链接）。模型博主测评使用 `<包工作区>/runs/<taskId>/<runId>/`：一次测评一个任务目录，任务下每个模型会话一个目录，产物按会话归属。见 [包内会话与官方右栏](12-capability-packs.md#包内会话与官方右栏)。
 
 测试可通过 `LWB_DSH_HOME`、`LWB_PACK_REGISTRY` 指定独立临时位置。自动化测试使用退出后删除的系统临时目录；手动巡检使用 `lwb/local/verification/`，结束后删除，不能在项目根目录建立新的数据入口。
 
@@ -44,4 +44,4 @@ lwb/local/current/
 
 开发期允许不兼容旧数据；旧文件不删除，新版本不读取。用 `LWB_PRODUCT_HOME` 指向独立位置可整体隔离测试实例。两个 Host 不能并发修改同一根目录。DSH 原生 Profile 偏好分别存储。
 
-`npm test` 覆盖业务工作区隔离、设置原子写入、卸载生命周期与原生 Profile 装配；`npm run test:integration` 在临时数据根实测加载、卸载、重载、账号持久化与重启恢复。付费供应商调用另行验证。详见 [扩展边界](38-dsh-extension-boundary.md)。
+`npm test` 覆盖业务工作区隔离、设置原子写入、卸载生命周期与原生 Profile 装配；`npm run test:integration` 在临时数据根实测加载、卸载、重载、账号持久化与重启恢复。付费供应商调用另行验证。详见 [升级门禁](08-base-lock.md)。
