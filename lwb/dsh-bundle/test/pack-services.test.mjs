@@ -79,7 +79,8 @@ async function setup(t) {
         if (request.sessionId === 'sv-gone') return null
         return { asOfSeq: 171, values: {
           sessionStats: { turns: 1, steps: 28, llmMs: 5 },
-          tokenUsage: { totals: { outputTokens: 5 } },
+          // The wire view of this unit is its state's `totals`, not the state.
+          tokenUsage: { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 5 },
           contextPressure: { pressureTokens: 7, contextWindow: 100 },
           // Registered, client-visible, and none of the pack's business.
           titleInput: { first: { seq: 9, text: 'the first prompt verbatim' } },
