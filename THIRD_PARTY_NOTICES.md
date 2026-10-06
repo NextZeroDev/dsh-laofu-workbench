@@ -30,6 +30,20 @@
 
 以上未完成的出处记录是发布资料缺口，不表示已核验拥有开放再分发许可。贡献新的技能、音频、图片或字体时，应同时提交来源链接、版本、许可及必要署名；用户上传的素材由用户自行确认使用权限。
 
+## 规则与视觉参考（未作为运行时依赖）
+
+AI 竞技台的中国象棋实现只参考下列公开资料的规则、合法着法与棋盘视觉，未复制其代码，也不随发行包分发：
+
+| 资料 | 用途 | 来源与许可 |
+|---|---|---|
+| `@weshell/xiangqi.js` 1.0.3 | 开发期规则 parity 检查的对照实现 | [west-shell/xiangqi.js](https://github.com/west-shell/xiangqi.js)，BSD-2-Clause |
+| `xiangqi.js` | 规则与合法着法参考 | [lengyanyu258/xiangqi.js](https://github.com/lengyanyu258/xiangqi.js)，BSD-2-Clause |
+| `xiangqiboardjs` | 棋盘视觉参考 | [lengyanyu258/xiangqiboardjs](https://github.com/lengyanyu258/xiangqiboardjs)，MIT |
+| `lhttjdr/xiangqi` | 规则参考 | [lhttjdr/xiangqi](https://github.com/lhttjdr/xiangqi)，MIT |
+| `wukong-xiangqi` | 规则参考 | [maksimKorzh/wukong-xiangqi](https://github.com/maksimKorzh/wukong-xiangqi)，MIT |
+
+`@weshell/xiangqi.js` 不写入 manifest：按 `lwb/packs/ai-arena/test/xiangqi-reference-check.mjs` 顶部说明用 `npm install --no-save --package-lock=false` 临时安装，只服务于[AI 竞技台](docs/ai-arena.md)的规则交叉检查，不进发行包。Pikafish / Fairy-Stockfish（GPL-3.0）、ElephantEye（LGPL-2.1）、xqwlight（GPL-2.0）和 pychess-variants（AGPL-3.0）仅作为引擎或服务架构资料查阅，不作为本包运行时依赖。
+
 ## 外部服务与内容
 
 百炼、LWB/SciTiger 云端服务、公开信号来源及 AI 内容日报属于外部服务或内容来源。各自的 API 费用、使用规则、内容权利和可用性不由本项目许可证覆盖。工作台源码不附带服务额度；本地保存产物也不代表生成过程完全离线。购买 LWB 会员、积分或服务额度不自动授予项目源码的商业使用权。

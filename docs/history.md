@@ -10,6 +10,7 @@
 | 2026-09 下旬 | 执行详情、媒体衔接、视频预检 | 统一真实事件、快照与重试；见[口播指南](spoken-video.md) |
 | 2026-09-27 起 | LWB 账号与 ATS | Host 私有凭据、模型档位、目录；历史可用性核查不等于付费生成或计费验收 |
 | 2026-09-30 起 | DSH 0.2.0-rc.2、双端与原生 UI | 只维护精确基线；见[基座升级](08-base-lock.md)、[双端说明](37-desktop-parity.md) |
+| 2026-10 上旬 | AI 竞技台：五子棋与象棋、离线回放与视频 | 当前行为见[AI 竞技台](ai-arena.md)；移除快速模式、场景预算与时限的经过，以及逐次真机验收记录，原文见 Git 历史 |
 
 旧记录的测试数量、版本、路径和夹具只描述当时状态，不能替代当前 UI、付费服务或签名验收；淘汰实现不构成兼容承诺。
 
@@ -20,9 +21,13 @@
 ```sh
 git log --all --oneline -- docs/14-spoken-video-full-pipeline.md
 git show <commit>:docs/14-spoken-video-full-pipeline.md
+
+# 折叠进 docs/ai-arena.md 的逐次验收与实施记录
+git log --all --oneline -- docs/ai-arena.md
+git show <commit>:docs/ai-arena.md
 ```
 
-选删除前仍含文件的 commit；若选删除提交，用 `git show <commit>^:docs/14-spoken-video-full-pipeline.md`。其他旧记录同样查询，无需恢复到当前入口。
+选删除前仍含文件的 commit；若选删除提交，用 `git show <commit>^:docs/14-spoken-video-full-pipeline.md`。其他旧记录同样查询，无需恢复到当前入口。`docs/ai-arena.md` 仍在维护，只是日期流水账不再留在当前版本里；查阅时取折叠前的 commit。
 
 ## 资源出处保留说明
 
