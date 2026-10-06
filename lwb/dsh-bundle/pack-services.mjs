@@ -136,6 +136,9 @@ export class LwbPackServices {
         // example) bypasses create/resume, so it adopts the root it made.
         adopt: (agent) => this.adoptSession(id, agent),
         get: (sessionId) => sessions.get(sessionId)?.public || null,
+        // What the conversation actually did, for the pack to record beside its own
+        // results. Pack-owned sessions only; see sessionProjections for the key filter.
+        projections: (sessionId, keys) => this.sessionProjections(id, { kind: 'session', sessionId }, keys, tasks.signal),
       }),
       assertAgent: async (agent) => {
         const context = await this.workspaces.context(id)
@@ -454,5 +457,29 @@ export class LwbPackServices {
     if (!this.ctx.sessionController?.follow) throw new Error('当前环境不提供会话流服务。')
     const observing = AbortSignal.any([signal, this.forPack(id).signal])
     yield* this.ctx.sessionController.follow({ ...request, address, assistantStream: true }, observing)
+  }
+
+  /**
+   * Read a pack-owned session's registered projection values without activating an
+   * Agent, so a pack can record what the conversation actually did — model time,
+   * token buckets, context pressure — alongside its own results.
+   *
+   * Only the requested keys come back: the full baseline also carries unrelated
+   * projections (first-prompt text, todos, plans, permissions) that a pack has no
+   * business reading, and returning them would bloat every settle-time write.
+   * @param id - capability pack id.
+   * @param address - pack-owned session address.
+   * @param keys - projection keys to return, e.g. `['sessionStats', 'tokenUsage']`.
+   * @param signal - cancellation for the projection observation.
+   * @returns `{ asOfSeq, values }`, or null when the session no longer exists.
+   */
+  async sessionProjections(id, address, keys, signal) {
+    await this.assertSession(id, address)
+    if (!this.ctx.sessionController?.projections) throw new Error('当前环境不提供会话投影读取服务。')
+    const baseline = await this.ctx.sessionController.projections({ sessionId: address.sessionId }, signal)
+    if (!baseline) return null
+    const values = baseline.values || {}
+    const wanted = Array.isArray(keys) ? keys : []
+    return { asOfSeq: baseline.asOfSeq, values: Object.fromEntries(wanted.filter((key) => Object.hasOwn(values, key)).map((key) => [key, values[key]])) }
   }
 }

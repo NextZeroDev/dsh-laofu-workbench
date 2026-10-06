@@ -73,6 +73,18 @@ async function setup(t) {
         calls.push(['session.prompt', options])
         return { accepted: true }
       },
+      async projections(request) {
+        calls.push(['session.projections', request])
+        // A session whose log is gone reads as absent, not as zeroes.
+        if (request.sessionId === 'sv-gone') return null
+        return { asOfSeq: 171, values: {
+          sessionStats: { turns: 1, steps: 28, llmMs: 5 },
+          tokenUsage: { totals: { outputTokens: 5 } },
+          contextPressure: { pressureTokens: 7, contextWindow: 100 },
+          // Registered, client-visible, and none of the pack's business.
+          titleInput: { first: { seq: 9, text: 'the first prompt verbatim' } },
+        } }
+      },
     },
   }
   const workspaces = new LwbPackWorkspaces({ root })
@@ -433,4 +445,37 @@ test('restricted persistent Sessions enforce per-request parameters without savi
     isolate: { compaction: true }, config: [{ id: 'compaction-basic', name: '@deepseek-ai/dsh-compaction-basic' }],
   }])
   for (const maxTokens of [0, 127, 393217, 1.5, NaN]) await assert.rejects(first.sessions.create({ ...options, maxTokens }), /输出上限/)
+})
+
+test('a pack reads only the projection keys it asked for, and only from its own sessions', async (t) => {
+  const { first, second, calls } = await setup(t)
+  const session = await first.sessions.create({ provider: 'deepseek-account', model: 'deepseek-flash' })
+
+  const read = await first.sessions.projections(session.id, ['sessionStats', 'tokenUsage', 'contextPressure'])
+  assert.equal(read.asOfSeq, 171, 'the log position travels with the values')
+  assert.deepEqual(Object.keys(read.values).sort(), ['contextPressure', 'sessionStats', 'tokenUsage'])
+  // The baseline also carries the first prompt verbatim and other domains' state:
+  // a pack asks for what it needs and gets only that.
+  assert.equal('titleInput' in read.values, false)
+
+  // A key the host does not serve is simply absent rather than an error, so a pack
+  // written against a newer host still works on an older one.
+  const partial = await first.sessions.projections(session.id, ['sessionStats', 'subagentTiming'])
+  assert.deepEqual(Object.keys(partial.values), ['sessionStats'])
+
+  // The ownership fence applies exactly as it does to page and follow.
+  await assert.rejects(second.sessions.projections(session.id, ['sessionStats']), /该会话不属于此能力包/u)
+  // The read is async, so a bad address rejects rather than throwing. A non-string
+  // id never reaches a lookup; an unknown one is simply not owned.
+  await assert.rejects(first.sessions.projections(undefined, ['sessionStats']), /能力包会话地址无效/u)
+  await assert.rejects(first.sessions.projections('', ['sessionStats']), /该会话不属于此能力包/u)
+
+  // A session that no longer exists reports nothing to read, not an empty record.
+  await first.sessions.adopt({ session: { header: { cwd: (await first.context()).workspacePath }, id: 'sv-gone' } })
+  assert.equal(await first.sessions.projections('sv-gone', ['sessionStats']), null)
+
+  // Reads never activate an Agent or a Session: they only consult projections.
+  assert.equal(calls.filter(([kind]) => kind === 'create').length, 0)
+  // Three reads reached the host; the refused ones never got that far.
+  assert.equal(calls.filter(([kind]) => kind === 'session.projections').length, 3)
 })
