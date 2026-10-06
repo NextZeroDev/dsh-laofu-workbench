@@ -1725,7 +1725,7 @@ window.__ModuleLoader__.load({
       const [activationCode, setActivationCode] = React.useState('');
       const [formError, setFormError] = React.useState('');
       const [notice, setNotice] = React.useState('');
-      const [purchaseTab, setPurchaseTab] = React.useState('recharge');
+      const [purchaseTab, setPurchaseTab] = React.useState('membership');
       const [purchaseOptions, setPurchaseOptions] = React.useState({ phase: 'idle', packages: [], plans: [], error: null });
       const [pendingPayment, setPendingPayment] = React.useState(null);
       const [purchasingCode, setPurchasingCode] = React.useState('');
@@ -1852,8 +1852,8 @@ window.__ModuleLoader__.load({
             ),
             purchaseOptions.error && h('p', { className: 'lwb-dialog-error', role: 'alert' }, purchaseOptions.error),
             h('div', { className: 'lwb-purchase-tabs', role: 'tablist' },
-              h('button', { type: 'button', role: 'tab', 'aria-selected': purchaseTab === 'recharge', className: purchaseTab === 'recharge' ? 'active' : '', onClick: () => setPurchaseTab('recharge') }, copy.lwbRechargePackages),
               h('button', { type: 'button', role: 'tab', 'aria-selected': purchaseTab === 'membership', className: purchaseTab === 'membership' ? 'active' : '', onClick: () => setPurchaseTab('membership') }, copy.lwbMembershipPlans),
+              h('button', { type: 'button', role: 'tab', 'aria-selected': purchaseTab === 'recharge', className: purchaseTab === 'recharge' ? 'active' : '', onClick: () => setPurchaseTab('recharge') }, copy.lwbRechargePackages),
             ),
             purchaseTab === 'recharge'
               ? h('div', { className: 'lwb-purchase-grid' }, purchaseOptions.packages.length ? purchaseOptions.packages.map((item) => h('article', { className: 'lwb-purchase-card', key: item.code }, h('strong', null, item.name), h('b', null, `¥${(Number(item.amountCents || 0) / 100).toFixed(2)}`), h('span', null, `${copy.lwbPointsAmount}: ${item.totalPoints || item.pointsAmount || 0}`), item.bonusPoints ? h('span', null, `${copy.lwbBonusPoints}: ${item.bonusPoints}`) : null, h('button', { type: 'button', className: 'lwb-primary-button', disabled: Boolean(purchasingCode), onClick: () => { void createPurchase('recharge', item.code); } }, purchasingCode === `recharge:${item.code}` ? copy.lwbCreatingOrder : copy.lwbPayAlipay))) : h('p', { className: 'lwb-account-muted' }, copy.lwbNoPackages))
