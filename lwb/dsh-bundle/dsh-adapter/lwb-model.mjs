@@ -4,9 +4,22 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 
 // Use published DSH/pi-ai APIs. No upstream files or user provider settings are edited.
 const ROUTE = 'lwb'
+// The output budget one request asks for. The catalog's `maxOutputTokens` stays the
+// model's real capability (ATS reports the official ceiling and asks clients to send
+// their own `max_tokens`); this only bounds what a single turn requests. That matters
+// for cost: ATS freezes points against the requested cap, so omitting it would freeze
+// against the full official ceiling — for Kimi-K3 that is ~105 million points.
 const INTERACTIVE_MAX_TOKENS = 32768
 const retryPolicy = resolveRetryPolicy({ mode: 'normal', maxRetries: 0 }, 'LWB')
-const effectiveMaxTokens = item => Math.min(Number.isInteger(item.maxOutputTokens) ? item.maxOutputTokens : INTERACTIVE_MAX_TOKENS, INTERACTIVE_MAX_TOKENS)
+/** The model's own output capability, as advertised by the ATS catalog. */
+const modelMaxOutputTokens = item => {
+  const declared = Number.isInteger(item?.maxOutputTokens) ? item.maxOutputTokens
+    : Number.isInteger(item?.maxTokens) ? item.maxTokens
+    : undefined
+  return declared !== undefined && declared > 0 ? declared : INTERACTIVE_MAX_TOKENS
+}
+/** The per-request cap this client sends, never above the model's own capability. */
+const requestMaxTokens = item => Math.min(modelMaxOutputTokens(item), INTERACTIVE_MAX_TOKENS)
 
 export class LwbModelAdapter extends LlmAdapter {
   constructor(client, ctx) { super(); this.client = client; this.ctx = ctx }
@@ -17,8 +30,7 @@ export class LwbModelAdapter extends LlmAdapter {
     return (await this.client.catalog()).models.filter(item => item.available).map(item => this.info(item))
   }
   info(item) {
-    const maxOutputTokens = effectiveMaxTokens(item)
-    return { provider: ROUTE, id: item.id, name: item.name, inputModalities: item.supportsVision ? ['text', 'image'] : ['text'], context: { contextWindow: item.contextWindow }, maxOutputTokens, defaultMaxTokens: maxOutputTokens }
+    return { provider: ROUTE, id: item.id, name: item.name, inputModalities: item.supportsVision ? ['text', 'image'] : ['text'], context: { contextWindow: item.contextWindow }, maxOutputTokens: modelMaxOutputTokens(item), defaultMaxTokens: requestMaxTokens(item) }
   }
   async resolveModel(provider, model) {
     if (provider !== ROUTE) throw new LlmError('无效的 LWB 模型来源。', 'NO_ADAPTER')
@@ -43,8 +55,11 @@ export class LwbModelAdapter extends LlmAdapter {
     const credential = await this.client.serviceCredential()
     assertCurrent()
     const baseUrl = `${this.client.baseUrl}/api/lwb/v1`
-    const maxTokens = effectiveMaxTokens(item)
-    const model = { id: item.id, name: item.name, api: 'openai-completions', provider: ROUTE, baseUrl, reasoning: false, input: item.supportsVision ? ['text', 'image'] : ['text'], contextWindow: item.contextWindow, maxTokens, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, compat: { supportsStore: false, supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' } }
+    // pi-ai sizes the model with the real ceiling; the request default is what this
+    // client actually asks for, so ATS reserves points against the smaller number.
+    const modelMaxTokens = modelMaxOutputTokens(item)
+    const maxTokens = requestMaxTokens(item)
+    const model = { id: item.id, name: item.name, api: 'openai-completions', provider: ROUTE, baseUrl, reasoning: false, input: item.supportsVision ? ['text', 'image'] : ['text'], contextWindow: item.contextWindow, maxTokens: modelMaxTokens, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, compat: { supportsStore: false, supportsDeveloperRole: false, supportsReasoningEffort: false, maxTokensField: 'max_tokens' } }
     const api = openAICompletionsApi()
     const piProvider = { id: ROUTE, name: 'LWB 模型服务', baseUrl, auth: { apiKey: { name: 'LWB', resolve: async ({ credential: key }) => ({ auth: { apiKey: key?.key }, source: 'LWB' }) } }, getModels: () => [model], stream: (...args) => api.stream(...args), streamSimple: (...args) => api.streamSimple(...args) }
     const profiles = new Map([[ROUTE, { provider: ROUTE, displayName: 'LWB 模型服务', api: 'openai-completions', baseURL: baseUrl, streamIdleTimeoutMs: 90000, maxRequestImageBytes: 20 * 1024 * 1024, requestImagePixelBudget: 20000000, requestImageMaxBytes: 10 * 1024 * 1024, retryPolicy, piProvider, modelErrors: new Map(), configuredMaxTokens: new Map([[item.id, maxTokens]]) }]])
@@ -56,8 +71,14 @@ export class LwbModelAdapter extends LlmAdapter {
       resolveImageAccess: (attachments, ref) => resolveImageAttachmentAccess(attachments, hostPath => this.ctx.get('fs')?.processPathFromHostPath(hostPath), ref),
     })
     const signal = options.signal ? AbortSignal.any([options.signal, this.client.serviceAbort.signal]) : this.client.serviceAbort.signal
+    // DSH's call layer injects `defaultMaxTokens` and enforces it through the prepared
+    // config, but a direct dispatch would otherwise fall back to the model's full
+    // capability. ATS freezes points against whatever cap the request names, so a
+    // request that names none would freeze against the official ceiling (Kimi-K3:
+    // ~105 million points). Only fill the gap; an explicit caller cap is respected.
+    const request = Number.isInteger(options.maxTokens) && options.maxTokens > 0 ? options : { ...options, maxTokens }
     try {
-      for await (const chunk of adapter.stream({ ...options, signal })) {
+      for await (const chunk of adapter.stream({ ...request, signal })) {
         if (chunk.type === 'finish' && chunk.reason?.failure?.code === 'AUTH') await this.client.discardServiceCredential(generation)
         yield chunk
       }

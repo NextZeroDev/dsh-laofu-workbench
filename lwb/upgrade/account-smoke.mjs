@@ -13,8 +13,12 @@ const serve = process.argv.includes('--serve')
 const catalogUnavailable = process.argv.includes('--catalog-unavailable')
 const home = await realpath(await mkdtemp(join(tmpdir(), 'lwb-account-acceptance-')))
 const catalog = { schemaVersion: 1, models: [
-  { id: 'lwb-fast', name: '快速', available: true, supportsTools: true, supportsVision: false, contextWindow: 128000, maxOutputTokens: 8192 },
-  ...[['lwb-balanced', '均衡'], ['lwb-ultimate', '极致']].map(([id, name]) => ({ id, name, available: false, reason: '服务暂未开放' })),
+  { id: 'qwen3.8-max', name: 'Qwen 3.8 Max', available: true, supportsTools: true, supportsVision: true, contextWindow: 1000000, maxInputTokens: 991808, maxOutputTokens: 131072, maxTokens: 131072 },
+  { id: 'qwen3.8-flash', name: 'Qwen 3.8 Flash', available: true, supportsTools: true, supportsVision: true, contextWindow: 1000000, maxInputTokens: 991808, maxOutputTokens: 131072, maxTokens: 131072 },
+  { id: 'deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', available: true, supportsTools: true, supportsVision: true, contextWindow: 1000000, maxInputTokens: 1000000, maxOutputTokens: 393216, maxTokens: 393216 },
+  { id: 'glm-5.3', name: 'GLM 5.3', available: true, supportsTools: true, supportsVision: false, contextWindow: 1000000, maxInputTokens: 1048576, maxOutputTokens: 131072, maxTokens: 131072 },
+  { id: 'kimi-k3', name: 'Kimi K3', available: true, supportsTools: true, supportsVision: true, contextWindow: 1000000, maxInputTokens: 1048576, maxOutputTokens: 1048576, maxTokens: 1048576 },
+  { id: 'MiniMax/MiniMax-M3', name: 'MiniMax M3', available: false, reason: '服务暂未开放', supportsTools: true, supportsVision: true, contextWindow: 1000000, maxOutputTokens: 131072, maxTokens: 131072 },
 ], services: Object.fromEntries(['tts', 'subtitle', 'cover-image'].map(id => [id, { available: true, minimumPoints: 10000 }])) }
 const mock = createServer(async (req, res) => {
   let raw = ''; for await (const chunk of req) raw += chunk
@@ -31,7 +35,7 @@ const mock = createServer(async (req, res) => {
     if (req.url === '/api/lwb/bootstrap') return send({ application: 'lwb', userId: '7', credential: { apiKey: 'local-key-only', apiKeyId: '11' } })
     if (['/api/recharge-packages', '/api/membership/plans'].includes(req.url)) return send([])
   }
-  if (req.url === '/api/lwb/v1/chat/completions' && req.headers.authorization === 'Bearer local-key-only' && data.model === 'lwb-fast') {
+  if (req.url === '/api/lwb/v1/chat/completions' && req.headers.authorization === 'Bearer local-key-only' && data.model === 'deepseek-v4.1-flash') {
     res.writeHead(200, { 'content-type': 'text/event-stream' })
     for (const [delta, finish_reason] of [[{ role: 'assistant', content: 'LWB 本地验收对话成功。' }, null], [{}, 'stop']]) res.write(`data: ${JSON.stringify({ id: 'local-1', object: 'chat.completion.chunk', created: 1, model: data.model, choices: [{ index: 0, delta, finish_reason }] })}\n\n`)
     return res.end('data: [DONE]\n\n')
@@ -96,9 +100,9 @@ try {
       assert.match(state.reason, /更新 ATS/u)
     }
   } else {
-    assert.deepEqual((await models()).groups.find(g => g.id === 'lwb').models.map(m => m.name), ['快速'])
-    await rpc('lwbAccount/setTaskModel', { mode: 'specified', provider: 'lwb', model: 'lwb-fast' })
-    assert.deepEqual((await models()).selection, { provider: 'lwb', model: 'lwb-fast' })
+    assert.deepEqual((await models()).groups.find(g => g.id === 'lwb').models.map(m => m.name), ['Qwen 3.8 Max', 'Qwen 3.8 Flash', 'DeepSeek V4.1 Flash', 'GLM 5.3', 'Kimi K3'])
+    await rpc('lwbAccount/setTaskModel', { mode: 'specified', provider: 'lwb', model: 'deepseek-v4.1-flash' })
+    assert.deepEqual((await models()).selection, { provider: 'lwb', model: 'deepseek-v4.1-flash' })
     assert.equal((await rpc('spokenVideo/mediaStatus')).connection.providers.lwb.configured, true)
   }
   await rpc('spokenVideo/configureMediaConnection', { provider: 'bailian', apiKey: 'local-bailian-only' })

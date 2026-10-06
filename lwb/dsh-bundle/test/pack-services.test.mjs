@@ -239,10 +239,10 @@ test('missing selection points to scene model settings; native execution errors 
 
 test('independent scene model governs all pack roots without modifying DSH defaults', async t => {
   const { services, first, second, calls, ctx } = await setup(t)
-  services.taskModel = { selection: () => ({ provider: 'lwb', model: 'lwb-fast' }) }
+  services.taskModel = { selection: () => ({ provider: 'lwb', model: 'deepseek-v4.1-flash' }) }
   await first.withAgent(() => {})
   await second.withAgent(() => {})
-  assert.deepEqual(calls.filter(([kind]) => kind === 'create').map(([, options]) => options.agentOptions), [{ provider: 'lwb', model: 'lwb-fast' }, { provider: 'lwb', model: 'lwb-fast' }])
+  assert.deepEqual(calls.filter(([kind]) => kind === 'create').map(([, options]) => options.agentOptions), [{ provider: 'lwb', model: 'deepseek-v4.1-flash' }, { provider: 'lwb', model: 'deepseek-v4.1-flash' }])
   assert.equal(ctx.agentDefaultModel.currentSelection().model, 'dsh-default')
 })
 

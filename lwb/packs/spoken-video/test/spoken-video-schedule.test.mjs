@@ -547,7 +547,7 @@ test('depth packaging runs the whole chain and records a full lifeline', async (
 })
 
 test('scheduled roots use the independent scene model including reasoning selection', async t => {
-  const selection = { provider: 'lwb', model: 'lwb-fast', reasoningEffort: 'low' }
+  const selection = { provider: 'lwb', model: 'deepseek-v4.1-flash', reasoningEffort: 'low' }
   const { host, currentAgent, fake } = await setup(t, { hostOptions: { modelSelection: () => selection } })
   const created = await createTask(host, currentAgent, { depth: 'script' })
   const { runId } = await host.runSchedule(currentAgent, { scheduleId: created.id })

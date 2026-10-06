@@ -80,8 +80,8 @@ test('child execution explicitly inherits the captured scene model', async () =>
   let captured
   harness.subagents.start = async (mode, request) => { captured = request; return start(mode, request) }
   const executor = createAgentExecutor(harness.ctx, harness.subagents, 'video-creator')
-  await executor({ prompt: 'create video', agent: { id: 'parent', options: { provider: 'lwb', model: 'lwb-fast', reasoningEffort: 'low' } } })
-  assert.deepEqual(captured.agentOptions, { provider: 'lwb', model: 'lwb-fast', reasoningEffort: 'low' })
+  await executor({ prompt: 'create video', agent: { id: 'parent', options: { provider: 'lwb', model: 'deepseek-v4.1-flash', reasoningEffort: 'low' } } })
+  assert.deepEqual(captured.agentOptions, { provider: 'lwb', model: 'deepseek-v4.1-flash', reasoningEffort: 'low' })
 })
 
 test('fails clearly after the same creator session reaches three output ceilings', async () => {

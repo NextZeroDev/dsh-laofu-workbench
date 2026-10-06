@@ -1,10 +1,10 @@
-# LWB 账号、模型档位与场景服务接入
+# LWB 账号、文本模型与场景服务接入
 
-本文维护当前 LWB 账号、文本模型档位及媒体服务契约。清单与会员包接入见[能力包契约](12-capability-packs.md)。DSH 账号与 LWB 账号独立，登录 LWB 不是启动工作台的前置条件。公开核心与能力包不包含 ATS 私有供应商凭据、价格或计费实现。
+本文维护当前 LWB 账号、文本模型及媒体服务契约。清单与会员包接入见[能力包契约](12-capability-packs.md)。DSH 账号与 LWB 账号独立，登录 LWB 不是启动工作台的前置条件。公开核心与能力包不包含 ATS 私有供应商凭据、价格或计费实现。
 
 ## 产品行为
 
-- 基础对话继续使用 DSH 原生模型选择器。登录 LWB 后新增「LWB 模型服务」来源，客户端只展示「快速」「均衡」「极致」档位名称；只有服务端确认可用的档位进入可选模型列表。
+- 基础对话继续使用 DSH 原生模型选择器。登录 LWB 后新增「LWB 模型服务」来源，客户端展示 ATS 目录返回的六个真实模型（千问 3.8 Max / 千问 3.8 Flash / DeepSeek V4.1 Flash / GLM 5.3 / Kimi K3 / MiniMax M3）；只有服务端确认可用的模型进入可选模型列表。
 - 设置增加「场景任务默认模型」。默认「跟随 DSH 默认模型」，也可指定独立模型，包括官方、自定义和 LWB 来源。独立选择覆盖各场景包的文本任务、视频 Agent、子任务和定时任务，不改写 DSH 对话的默认模型。
 - 「场景任务默认模型」的候选按路由标注凭据可用性（未配置凭据 / 凭据状态未知），**只提示不禁止**：可以先保存尚未配置凭据的模型再补齐配置。若生效路由可证伪缺凭据，定时任务表单会给出警告，轮次开始前直接失败并写明路由与凭据引用，不再空跑到选题阶段。账号、设备或 OAuth 认证的路由不标注。
 - 新任务捕获模型选择，进行中的任务和其子任务不随设置变更切换模型。配音、字幕、封面生图服务仍在各自模块选择，不受文本模型设置控制。
@@ -14,27 +14,32 @@
 - LWB 账号卡片始终显示一条说明：不登录 LWB 账号也能使用工作台（对话、DSH 系统设置、自带凭据 BYOK 均不需要登录），LWB 账号主要用于加载部分场景能力包以及使用这些能力包对应的语音服务和图片服务。登录始终可选，不是启动前置条件。
 - 账号状态在前台每 15 秒及重新聚焦时同步，媒体任务结束、付款成功后额外刷新。网络失败显示错误而不伪造退出；刷新令牌被拒绝时清除登录。
 
-## 档位与上线前提
+## 模型与上线前提
 
-映射由 ATS 私有服务管理，公开客户端仅使用稳定别名。
+公开客户端直接使用 ATS 目录里的真实模型 ID，不再有档位别名或服务端模型映射。
 
-| 名称 | 客户端 ID | ATS 默认映射 | 服务端覆盖变量 |
+| 客户端 ID | 上下文窗口 | 最大输出 | 输入模态 |
 | --- | --- | --- | --- |
-| 快速 | `lwb-fast` | `qwen-plus` | `LWB_MODEL_FAST` |
-| 均衡 | `lwb-balanced` | `deepseek-v4.1-flash` | `LWB_MODEL_BALANCED` |
-| 极致 | `lwb-ultimate` | `deepseek-v4.1-flash` | `LWB_MODEL_ULTIMATE` |
+| `qwen3.8-max` | 1,000,000 | 131,072 | 文本 + 图片 |
+| `qwen3.8-flash` | 1,000,000 | 131,072 | 文本 + 图片 |
+| `deepseek-v4.1-flash` | 1,000,000 | 393,216 | 文本 + 图片 |
+| `glm-5.3` | 1,000,000 | 131,072 | 纯文本 |
+| `kimi-k3` | 1,000,000 | 1,048,576 | 文本 + 图片 |
+| `MiniMax/MiniMax-M3` | 1,000,000 | 131,072 | 文本 + 图片 |
 
-以上是服务端默认映射，实际部署可覆盖。代码不静默替换模型；未配置或不可用的档位不可选，并在设置中显示原因。
+`maxOutputTokens` 与 `contextWindow` 由 ATS 按官方能力口径下发，客户端原样展示。**每个请求都由客户端自己携带输出上限**：适配器把它固定为 32,768（模型自身上限更低时取更小值），因为 ATS 按请求声明的上限预冻结积分；省略该上限会让单次请求按官方满额冻结（Kimi K3 约 1.05 亿积分）。需要更长输出时由调用方显式传入 `maxTokens`。
 
-可用文本档位要求模型启用、有生效计价记录、支持流式和工具调用。封面默认模型由 `LWB_COVER_MODEL` 管理（默认 `wan2.7-image`）；客户端不能指定 LWB 封面的真实模型。
+可用模型要求模型启用、有生效计价记录、支持流式和工具调用。封面默认模型由 `LWB_COVER_MODEL` 管理（默认 `wan2.7-image`）；客户端不能指定 LWB 封面的真实模型。
 
 先部署 ATS 接口与迁移，再发布客户端。旧 ATS 缺少目录接口时，账号仍可登录/购买，服务面板明确提示更新 ATS。历史接口可用性核查见[历史摘要](history.md)，不替代真实生成与计费验收。
+
+**旧档位迁移**：`lwb-fast` / `lwb-balanced` / `lwb-ultimate` 已废弃。启动时 `prepareLwbProfile` 会把 profile 补丁层的 `agent-default-model` 与 `settings/task-model.json` 里的旧档位改写为新模型（分别映射到 `qwen3.8-flash` 与 `deepseek-v4.1-flash`），幂等且只改写 provider 为 `lwb` 的条目。历史会话日志也记录了旧档位，但它们是拼接的 zstd 多帧、Node 的 zlib 只解第一帧，因此不改写；打开这类历史会话需要重新选择一次模型。
 
 ## 运行时边界
 
 ```text
 Web / 官方 Desktop → 同一 LWB client 和场景包
-  ├─ 基础对话 → DSH LlmAdapter → LWB 档位 → ATS 原生计费代理
+  ├─ 基础对话 → DSH LlmAdapter → LWB 模型 → ATS 原生计费代理
   ├─ 场景文本 → 场景默认模型 → DSH Agent / Subagent
   └─ 媒体 → 包作用域 account.open(service) → ATS 任务服务
 ```
@@ -53,9 +58,9 @@ Host 私有凭据库保存两个独立条目：`lwb-ats-session`（登录会话�
 
 | 接口 | 认证 | 用途 |
 | --- | --- | --- |
-| `GET /api/lwb/catalog` | ATS JWT | 档位/媒体服务可用性、最低积分 |
+| `GET /api/lwb/catalog` | ATS JWT | 模型/媒体服务可用性、最低积分 |
 | `POST /api/lwb/bootstrap` | ATS JWT | 创建或复用 LWB 专用服务 Key，仅 Host 使用 |
-| `POST /api/lwb/v1/chat/completions` | API Key | 解析档位并进入现有 ProxyService 计费/流式处理 |
+| `POST /api/lwb/v1/chat/completions` | API Key | 校验模型并进入现有 ProxyService 计费/流式处理 |
 | `POST /api/lwb/cover-images` | API Key | 服务端确定模型，进入现有图片任务代理 |
 
 音频、字幕、文件上传及任务查询复用 ATS 现有 `/api/v1/tts/jobs`、`/api/v1/subtitle/jobs`、`/api/v1/media/audio-uploads`、`/api/v1/tasks/:id`。`status().entitlements` 仍为 `null`，尚无独立的逐包权益端点。当前会员包通过 manifest 的 `access: { account: 'lwb', membershipRequired: true }` 启用 Host 校验：读取 ATS 会员套餐、状态与到期时间，在加载及业务请求时拒绝不符合条件的账号。会员状态短暂缓存，账号变化或刷新会失效；客户端菜单只显示结果，不是权限事实源。私有会员包源码独立分发，会员与服务购买不授予公开源码的商业使用权。
