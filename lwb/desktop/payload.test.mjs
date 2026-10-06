@@ -39,6 +39,12 @@ async function fixtureProject(t) {
   await writeFileAt(root, 'lwb/packs/pack-one/node_modules/dep/index.js')
   await writeFileAt(root, 'lwb/packs/pack-one/test/ignored.test.mjs')
   await writeFileAt(root, 'lwb/packs/pack-one/.git/config')
+  // A private pack checkout carries build bookkeeping, preview output and CI
+  // workflows that the release runner archives without.
+  await writeFileAt(root, 'lwb/packs/pack-one/.build/product-source.tar.gz')
+  await writeFileAt(root, 'lwb/packs/pack-one/.build/inputs.json')
+  await writeFileAt(root, 'lwb/packs/pack-one/.preview/out/index.html', '<!doctype html>\n')
+  await writeFileAt(root, 'lwb/packs/pack-one/.github/workflows/test-build.yml', 'name: test\n')
   // Present on disk but absent from the edition: it must not ship.
   await writeFileAt(root, 'lwb/packs/secret-pack/lwb-pack.json')
   await writeFileAt(root, 'lwb/packs/secret-pack/index.mjs')
@@ -62,7 +68,7 @@ test('only the listed edition packs reach the payload', async (t) => {
   ])
 })
 
-test('dependencies, test trees and repository metadata never ship', async (t) => {
+test('dependencies, test trees, repository metadata and build residue never ship', async (t) => {
   const root = await fixtureProject(t)
   const payload = join(root, 'payload')
   await assembleProductPayload({
@@ -71,7 +77,7 @@ test('dependencies, test trees and repository metadata never ship', async (t) =>
     payload,
   })
   const files = await listFiles(payload)
-  for (const excluded of ['node_modules', '/test/', '.git']) {
+  for (const excluded of ['node_modules', '/test/', '.git', '/.build/', '/.preview/', '/.github/']) {
     assert.ok(!files.some(file => file.includes(excluded)), `${excluded} must not ship, got ${files.join(', ')}`)
   }
 })

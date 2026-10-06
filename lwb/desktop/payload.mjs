@@ -4,6 +4,10 @@
  * Capability packs come from the resolved edition one at a time, so a directory
  * that is merely present under `lwb/packs/` can never reach a product build.
  * Dependencies, pack test trees and repository metadata are excluded everywhere.
+ * A pack checkout's build bookkeeping (`.build`), preview output (`.preview`)
+ * and CI workflows (`.github`) are excluded too: the release runner archives
+ * tracked pack sources without them, so a local build that shipped them would
+ * produce a different payload, and a different build id, for the same revision.
  * `onFile` receives a location-independent key for every file that ships, which
  * keeps a build id reproducible when a private pack is checked out elsewhere.
  */
@@ -12,7 +16,7 @@ import { join, relative, sep } from 'node:path'
 
 /** Product directories that always ship, with the pack set beside them. */
 export const PRODUCT_PATHS = ['dsh-bundle', 'pack-sdk', 'profile-setup.mjs']
-const EXCLUDED = new Set(['node_modules', 'test', '.git'])
+const EXCLUDED = new Set(['node_modules', 'test', '.git', '.build', '.preview', '.github'])
 
 /**
  * @param {object} options
