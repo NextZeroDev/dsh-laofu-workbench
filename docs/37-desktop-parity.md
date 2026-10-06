@@ -47,6 +47,29 @@ npm run package:desktop
 
 安装版由 bootstrap 在系统 appData 下创建产品数据根（可显式覆盖，见下节），将本次构建的产品资源放到可写 runtime 中，再通过公共 Profile API 装配 LWB，最后在加载官方 main 时应用上述入口策略。业务工作区在 runtime 外，能力包不静态启用。发布上传被禁用。
 
+### 一键打包
+
+在本机（macOS 或 Windows）打当前平台的可测试便携包，不需要手写环境变量：
+
+```bash
+npm run package:oneclick                 # commercial + 未签名便携包，版本号带 -test.<构建号>
+npm run package:mac                      # 同上，但构建机不是 macOS 时直接报错
+npm run package:win                      # 同上，但构建机不是 Windows 时直接报错
+npm run package:oneclick -- --dry-run    # 只打印解析后的输入与将要执行的命令
+npm run package:oneclick -- --plan       # 只解析版别与随带能力包
+npm run package:oneclick -- --community --release
+```
+
+`scripts/package-desktop.mjs` 负责补齐三项输入，再复用官方打包流程：
+
+| 输入 | 解析规则 |
+| --- | --- |
+| `LWB_COMMERCIAL_PACK_DIR` | 未设置时按 `../dsh-laofu-workbench-commercial`、`../laofu-commercial-pack` 顺序探测；显式设置的值不合法时直接失败，不会静默降级成 community |
+| `LWB_DESKTOP_BUILD_NUMBER` | 未设置时用本地日期 `YYYYMMDD`；环境里的 `GITHUB_RUN_NUMBER` 次之 |
+| `ELECTRON_MIRROR` | 未设置时先探测 `github.com`；不可达才切到 `https://cdn.npmmirror.com/binaries/electron/`（`LWB_ELECTRON_MIRROR=off` 可关掉探测） |
+
+目标平台由构建机决定（官方准备把 target 绑定到 host），所以 Windows 包在 Windows 上构建：本机或发行 runner。构建结束后脚本打印本次新增的产物、大小与 SHA256，并给出可复现的命令行。`--signed` 改用官方签名环境文件，`--release` 使用正式版本号，`--dir` 只出未打包 App。发行用的 `SHA256SUMS.txt` 与构建报告仍由 `node scripts/collect-desktop-artifacts.mjs --edition <edition> --target <target>` 汇总；该命令哈希目录内的全部产物，只适合干净的产物目录。
+
 ### 统一官方便携版构建
 
 当前阶段发布便携版测试包，不需要安装器或管理员权限。缺少正式发行证书时，可构建未签名便携包：
