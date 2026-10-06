@@ -94,7 +94,7 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0, gameId = rememb
     h('div', { className: 'ar-submit' }, h('span', { className: 'ar-muted' }, '按棋规判定胜负 · 违规重试一次后判负'), h('button', { className: 'ar-button ar-primary', type: 'submit', disabled: busy || selected.some(key => !models.some(model => model.key === key && model.selectable !== false)) }, h(Play, { size: 16 }), busy ? '准备比赛…' : '开始比赛')),
     (error || catalog.error) && h('div', { className: 'ar-error', role: 'alert' }, error || catalog.error)), confirmation)
 }
-function Conversation({ match, turnId, renderConversation }) {
+function Conversation({ match, turnId, renderConversation, focusSession }) {
   const [player, setPlayer] = React.useState(null), [selected, setSelected] = React.useState(null)
   React.useEffect(() => { setPlayer(null); setSelected(null) }, [turnId])
   const turns = turnRecords(match)
@@ -105,7 +105,8 @@ function Conversation({ match, turnId, renderConversation }) {
     || (following?.request.player === currentPlayer ? following : choices.at(-1))
   const usage = turnUsage(current?.response?.usage)
   const count = value => value === null || value === undefined ? '—' : value.toLocaleString()
-  return h('section', { className: 'ar-conversation', 'aria-label': 'DSH 官方对话' },
+  const focus = () => { if (current?.sessionId) focusSession?.(current.sessionId) }
+  return h('section', { className: 'ar-conversation', 'aria-label': 'DSH 官方对话', onPointerDownCapture: focus, onFocusCapture: focus },
     h('div', { className: 'ar-conversation-head' }, h('h2', { className: 'ar-section-title' }, 'DSH 官方对话'), h('span', { className: 'ar-chip' }, '比赛会话 · 只读')),
     h('div', { className: 'ar-actions' }, [0, 1].map(index => h('button', { key: index, type: 'button', className: `ar-button${currentPlayer === index ? ' ar-live' : ''}`, 'aria-pressed': currentPlayer === index, onClick: () => { setPlayer(index); setSelected(null) } }, `${playerSide(match.game, index)} · ${match.players[index].name}`)),
       h('select', { className: 'ar-select ar-turn-select', 'aria-label': '查看决策会话', value: current?.request.turnId || '', onChange: event => setSelected(event.target.value) }, choices.map(turn => h('option', { key: turn.request.turnId, value: turn.request.turnId }, `第 ${turn.moveNumber} 手${turn.request.attempt ? ` · 重试 ${turn.request.attempt}` : ''}${turn.error ? ' · 未完成' : ''}`)))),
@@ -115,7 +116,7 @@ function Conversation({ match, turnId, renderConversation }) {
     current?.sessionId && renderConversation ? renderConversation({ sessionId: current.sessionId, readOnly: true }) : h('div', { className: 'ar-empty' }, current ? '正在准备会话，或该历史记录没有会话编号。' : '首个决策开始后显示官方对话。'),
     h('details', { className: 'ar-raw' }, h('summary', null, '实际请求参数与原始结果'), h('pre', null, JSON.stringify(current || {}, null, 2))))
 }
-function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 }) {
+function MatchView({ id, initial, onChange, renderConversation, focusSession, activeCount = 0 }) {
   const [confirm, confirmation] = useConfirmation()
   const data = useQuery('match', { id }, id), match = data.value || initial
   const [step, setStep] = React.useState(null), [playing, setPlaying] = React.useState(false), [speed, setSpeed] = React.useState('1')
@@ -189,10 +190,10 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
     h('div', { className: 'ar-export' }, h('div', { className: 'ar-actions' }, h(Button, { icon: FileText, disabled: !!busy, onClick: () => run('report', () => downloadRecord('markdown')) }, '战报'), h(Button, { icon: Download, disabled: !!busy, onClick: () => run('json', () => downloadRecord('json')) }, '完整记录'), h(Button, { icon: Play, disabled: !!busy, onClick: () => run('html', () => downloadRecord('html')) }, '离线回放')),
       h('div', { className: 'ar-actions' }, h('label', null, '视频', h('select', { className: 'ar-select', value: orientation, 'aria-label': '视频画幅', onChange: event => setOrientation(event.target.value) }, h('option', { value: 'landscape' }, '横屏 16:9'), h('option', { value: 'portrait' }, '竖屏 9:16'))), h(Button, { icon: Film, disabled: !!busy || match.export?.status === 'running' || !['finished', 'cancelled'].includes(match.status) || !moves.length, onClick: () => run('render', () => api('exportVideo', { id, orientation })) }, match.export?.status === 'running' ? '渲染中…' : '导出 MP4'), match.export?.status === 'succeeded' && h(React.Fragment, null, h(IconButton, { icon: Eye, title: '预览成片', disabled: !!busy, onClick: () => run('preview', () => video(true)) }), h(IconButton, { icon: Download, title: '下载 MP4', disabled: !!busy, onClick: () => run('video', () => video(false)) })))),
     match.export?.status === 'failed' && h('p', { className: 'ar-error' }, match.export.error), notice && h('p', { className: 'ar-notice', role: 'status' }, notice), videoUrl && h('video', { className: 'ar-video', src: videoUrl, controls: true }),
-    h(Conversation, { match, turnId: step === null ? match.events.findLast(event => event.type === 'request')?.turnId : frame.current?.turnId, renderConversation }), confirmation)
+    h(Conversation, { match, turnId: step === null ? match.events.findLast(event => event.type === 'request')?.turnId : frame.current?.turnId, renderConversation, focusSession }), confirmation)
 }
 function Player({ player, index, gameId = 'gomoku' }) { return h('div', { className: 'ar-player', 'data-game': gameId }, h('i', { className: 'ar-stone', 'data-player': index }), h('div', null, h('strong', null, player.name), h('small', null, `${sideLabel(gameId, index)} / ${player.providerName}`))) }
-function Arena({ renderConversation }) {
+function Arena({ renderConversation, focusSession }) {
   const [freshEntry] = React.useState(() => arenaEntryMode === 'fresh')
   const [selectedGame, setSelectedGame] = React.useState(rememberedGameId)
   const [id, setId] = React.useState(null), [initial, setInitial] = React.useState(null), [setup, setSetup] = React.useState(freshEntry)
@@ -202,13 +203,13 @@ function Arena({ renderConversation }) {
   React.useEffect(() => { if (freshEntry) arenaEntryMode = 'resume' }, [freshEntry])
   const displayedActiveCount = initial && ['running', 'pausing'].includes(initial.status) && !matches.some(match => match.id === initial.id) ? activeCount + 1 : activeCount
   return h(Frame, { tone: 'orange', kicker: '模型对战', title: 'AI竞技台', subtitle: '五子棋 / 中国象棋 · 模型自主决策 · 逐手回放', actions: h(Button, { primary: true, className: 'ar-config-button', icon: Settings2, onClick: () => setSetup(previous => !previous) }, '参赛配置') }, h(Setup, { gameId: selectedGame, onGameChange: setSelectedGame, open: setup, onOpenChange: setSetup, activeCount, onStarted: match => { setInitial(match); setId(match.id); rememberedId = match.id; setSetup(false); matchesData.refresh() } }),
-    id ? h(MatchView, { key: id, id, initial, activeCount: displayedActiveCount, renderConversation }) : h('div', { className: 'ar-match', 'data-game': selectedGame }, h('div', { className: 'ar-board-col' }, h('div', { className: 'ar-scoreboard' }, h(Player, { index: 0, gameId: selectedGame, player: { name: '待选模型', providerName: '未参赛' } }), h('span', { className: 'ar-vs' }, 'VS'), h(Player, { index: 1, gameId: selectedGame, player: { name: '待选模型', providerName: '未参赛' } })), h('div', { className: 'ar-board', dangerouslySetInnerHTML: { __html: boardSvg([], { gameId: selectedGame }) } })), h('aside', { className: 'ar-commentary' }, h('div', { className: 'ar-commentary-head' }, h('h2', { className: 'ar-section-title' }, '选手发言'), h('span', { className: 'ar-chip' }, '未开始')), h('div', { className: 'ar-speaking', 'data-thinking': true }, h('div', { className: 'ar-speaking-name' }, h(MessageCircle), '等待参赛选手'), h('p', null, '比赛尚未开始')), h('div', { className: 'ar-transcript-title' }, '回合记录'), h('div', { className: 'ar-empty' }, activeCount ? `已有 ${activeCount} 场比赛进行中，可在比赛记录中查看。` : '暂无回合记录'))))
+    id ? h(MatchView, { key: id, id, initial, activeCount: displayedActiveCount, renderConversation, focusSession }) : h('div', { className: 'ar-match', 'data-game': selectedGame }, h('div', { className: 'ar-board-col' }, h('div', { className: 'ar-scoreboard' }, h(Player, { index: 0, gameId: selectedGame, player: { name: '待选模型', providerName: '未参赛' } }), h('span', { className: 'ar-vs' }, 'VS'), h(Player, { index: 1, gameId: selectedGame, player: { name: '待选模型', providerName: '未参赛' } })), h('div', { className: 'ar-board', dangerouslySetInnerHTML: { __html: boardSvg([], { gameId: selectedGame }) } })), h('aside', { className: 'ar-commentary' }, h('div', { className: 'ar-commentary-head' }, h('h2', { className: 'ar-section-title' }, '选手发言'), h('span', { className: 'ar-chip' }, '未开始')), h('div', { className: 'ar-speaking', 'data-thinking': true }, h('div', { className: 'ar-speaking-name' }, h(MessageCircle), '等待参赛选手'), h('p', null, '比赛尚未开始')), h('div', { className: 'ar-transcript-title' }, '回合记录'), h('div', { className: 'ar-empty' }, activeCount ? `已有 ${activeCount} 场比赛进行中，可在比赛记录中查看。` : '暂无回合记录'))))
 }
-function History({ renderConversation }) {
+function History({ renderConversation, focusSession }) {
   const list = useQuery('matches'), [id, setId] = React.useState(null), [search, setSearch] = React.useState(''), [status, setStatus] = React.useState('')
   React.useEffect(() => { const timer = setInterval(list.refresh, 2000); return () => clearInterval(timer) }, [list.refresh])
   const matches = list.value || [], filtered = matches.filter(match => (!status || match.status === status) && `${match.title} ${gameName(match.game)} ${match.id}`.toLowerCase().includes(search.trim().toLowerCase()))
-  if (id) return h(Frame, { tone: 'cyan', kicker: '比赛记录', title: '比赛回放', subtitle: matches.find(match => match.id === id)?.title, actions: h(Button, { primary: true, className: 'ar-back-button', icon: ArrowLeft, onClick: () => setId(null) }, '返回记录') }, h(MatchView, { key: id, id, activeCount: activeMatchCount(matches), onChange: list.refresh, renderConversation }))
+  if (id) return h(Frame, { tone: 'cyan', kicker: '比赛记录', title: '比赛回放', subtitle: matches.find(match => match.id === id)?.title, actions: h(Button, { primary: true, className: 'ar-back-button', icon: ArrowLeft, onClick: () => setId(null) }, '返回记录') }, h(MatchView, { key: id, id, activeCount: activeMatchCount(matches), onChange: list.refresh, renderConversation, focusSession }))
   return h(Frame, { tone: 'cyan', kicker: '对战档案', title: '比赛记录', subtitle: '五子棋 / 中国象棋', actions: h(IconButton, { icon: RefreshCw, title: '刷新比赛记录', onClick: list.refresh }) }, list.error && h('p', { className: 'ar-error' }, list.error),
     h(StatBar, { items: [{ label: '全部比赛', value: matches.length, tone: 'brand' }, { label: '正在比赛', value: activeMatchCount(matches) }, { label: '已结束', value: matches.filter(match => match.status === 'finished').length, tone: 'green' }, { label: '累计落子', value: matches.reduce((total, match) => total + match.moves, 0) }] }),
     h('div', { className: 'ar-history-toolbar' }, h('h2', { className: 'ar-section-title' }, '对战记录'), h('div', { className: 'ar-actions' }, h('input', { className: 'ar-search', type: 'search', placeholder: '搜索模型或比赛编号', 'aria-label': '搜索比赛', value: search, onChange: event => setSearch(event.target.value) }), h('select', { className: 'ar-select', 'aria-label': '比赛状态筛选', value: status, onChange: event => setStatus(event.target.value) }, h('option', { value: '' }, '全部状态'), Object.entries(statusLabel).map(([value, label]) => h('option', { key: value, value }, label))))),

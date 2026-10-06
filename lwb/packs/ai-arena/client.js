@@ -717,7 +717,7 @@ function Setup({ onStarted, open, onOpenChange, activeCount = 0, gameId = rememb
     (error || catalog.error) && h2("div", { className: "ar-error", role: "alert" }, error || catalog.error)
   ), confirmation);
 }
-function Conversation({ match, turnId, renderConversation }) {
+function Conversation({ match, turnId, renderConversation, focusSession }) {
   const [player, setPlayer] = import_react4.default.useState(null), [selected, setSelected] = import_react4.default.useState(null);
   import_react4.default.useEffect(() => {
     setPlayer(null);
@@ -730,9 +730,12 @@ function Conversation({ match, turnId, renderConversation }) {
   const current = choices.find((turn) => turn.request.turnId === selected) || (following?.request.player === currentPlayer ? following : choices.at(-1));
   const usage = turnUsage(current?.response?.usage);
   const count = (value) => value === null || value === void 0 ? "\u2014" : value.toLocaleString();
+  const focus = () => {
+    if (current?.sessionId) focusSession?.(current.sessionId);
+  };
   return h2(
     "section",
-    { className: "ar-conversation", "aria-label": "DSH \u5B98\u65B9\u5BF9\u8BDD" },
+    { className: "ar-conversation", "aria-label": "DSH \u5B98\u65B9\u5BF9\u8BDD", onPointerDownCapture: focus, onFocusCapture: focus },
     h2("div", { className: "ar-conversation-head" }, h2("h2", { className: "ar-section-title" }, "DSH \u5B98\u65B9\u5BF9\u8BDD"), h2("span", { className: "ar-chip" }, "\u6BD4\u8D5B\u4F1A\u8BDD \xB7 \u53EA\u8BFB")),
     h2(
       "div",
@@ -749,7 +752,7 @@ function Conversation({ match, turnId, renderConversation }) {
     h2("details", { className: "ar-raw" }, h2("summary", null, "\u5B9E\u9645\u8BF7\u6C42\u53C2\u6570\u4E0E\u539F\u59CB\u7ED3\u679C"), h2("pre", null, JSON.stringify(current || {}, null, 2)))
   );
 }
-function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 }) {
+function MatchView({ id, initial, onChange, renderConversation, focusSession, activeCount = 0 }) {
   const [confirm, confirmation] = useConfirmation();
   const data = useQuery("match", { id }, id), match = data.value || initial;
   const [step, setStep] = import_react4.default.useState(null), [playing, setPlaying] = import_react4.default.useState(false), [speed, setSpeed] = import_react4.default.useState("1");
@@ -899,14 +902,14 @@ function MatchView({ id, initial, onChange, renderConversation, activeCount = 0 
     match.export?.status === "failed" && h2("p", { className: "ar-error" }, match.export.error),
     notice && h2("p", { className: "ar-notice", role: "status" }, notice),
     videoUrl && h2("video", { className: "ar-video", src: videoUrl, controls: true }),
-    h2(Conversation, { match, turnId: step === null ? match.events.findLast((event) => event.type === "request")?.turnId : frame.current?.turnId, renderConversation }),
+    h2(Conversation, { match, turnId: step === null ? match.events.findLast((event) => event.type === "request")?.turnId : frame.current?.turnId, renderConversation, focusSession }),
     confirmation
   );
 }
 function Player({ player, index, gameId = "gomoku" }) {
   return h2("div", { className: "ar-player", "data-game": gameId }, h2("i", { className: "ar-stone", "data-player": index }), h2("div", null, h2("strong", null, player.name), h2("small", null, `${sideLabel(gameId, index)} / ${player.providerName}`)));
 }
-function Arena({ renderConversation }) {
+function Arena({ renderConversation, focusSession }) {
   const [freshEntry] = import_react4.default.useState(() => arenaEntryMode === "fresh");
   const [selectedGame, setSelectedGame] = import_react4.default.useState(rememberedGameId);
   const [id, setId] = import_react4.default.useState(null), [initial, setInitial] = import_react4.default.useState(null), [setup, setSetup] = import_react4.default.useState(freshEntry);
@@ -940,17 +943,17 @@ function Arena({ renderConversation }) {
       setSetup(false);
       matchesData.refresh();
     } }),
-    id ? h2(MatchView, { key: id, id, initial, activeCount: displayedActiveCount, renderConversation }) : h2("div", { className: "ar-match", "data-game": selectedGame }, h2("div", { className: "ar-board-col" }, h2("div", { className: "ar-scoreboard" }, h2(Player, { index: 0, gameId: selectedGame, player: { name: "\u5F85\u9009\u6A21\u578B", providerName: "\u672A\u53C2\u8D5B" } }), h2("span", { className: "ar-vs" }, "VS"), h2(Player, { index: 1, gameId: selectedGame, player: { name: "\u5F85\u9009\u6A21\u578B", providerName: "\u672A\u53C2\u8D5B" } })), h2("div", { className: "ar-board", dangerouslySetInnerHTML: { __html: boardSvg([], { gameId: selectedGame }) } })), h2("aside", { className: "ar-commentary" }, h2("div", { className: "ar-commentary-head" }, h2("h2", { className: "ar-section-title" }, "\u9009\u624B\u53D1\u8A00"), h2("span", { className: "ar-chip" }, "\u672A\u5F00\u59CB")), h2("div", { className: "ar-speaking", "data-thinking": true }, h2("div", { className: "ar-speaking-name" }, h2(MessageCircle), "\u7B49\u5F85\u53C2\u8D5B\u9009\u624B"), h2("p", null, "\u6BD4\u8D5B\u5C1A\u672A\u5F00\u59CB")), h2("div", { className: "ar-transcript-title" }, "\u56DE\u5408\u8BB0\u5F55"), h2("div", { className: "ar-empty" }, activeCount ? `\u5DF2\u6709 ${activeCount} \u573A\u6BD4\u8D5B\u8FDB\u884C\u4E2D\uFF0C\u53EF\u5728\u6BD4\u8D5B\u8BB0\u5F55\u4E2D\u67E5\u770B\u3002` : "\u6682\u65E0\u56DE\u5408\u8BB0\u5F55")))
+    id ? h2(MatchView, { key: id, id, initial, activeCount: displayedActiveCount, renderConversation, focusSession }) : h2("div", { className: "ar-match", "data-game": selectedGame }, h2("div", { className: "ar-board-col" }, h2("div", { className: "ar-scoreboard" }, h2(Player, { index: 0, gameId: selectedGame, player: { name: "\u5F85\u9009\u6A21\u578B", providerName: "\u672A\u53C2\u8D5B" } }), h2("span", { className: "ar-vs" }, "VS"), h2(Player, { index: 1, gameId: selectedGame, player: { name: "\u5F85\u9009\u6A21\u578B", providerName: "\u672A\u53C2\u8D5B" } })), h2("div", { className: "ar-board", dangerouslySetInnerHTML: { __html: boardSvg([], { gameId: selectedGame }) } })), h2("aside", { className: "ar-commentary" }, h2("div", { className: "ar-commentary-head" }, h2("h2", { className: "ar-section-title" }, "\u9009\u624B\u53D1\u8A00"), h2("span", { className: "ar-chip" }, "\u672A\u5F00\u59CB")), h2("div", { className: "ar-speaking", "data-thinking": true }, h2("div", { className: "ar-speaking-name" }, h2(MessageCircle), "\u7B49\u5F85\u53C2\u8D5B\u9009\u624B"), h2("p", null, "\u6BD4\u8D5B\u5C1A\u672A\u5F00\u59CB")), h2("div", { className: "ar-transcript-title" }, "\u56DE\u5408\u8BB0\u5F55"), h2("div", { className: "ar-empty" }, activeCount ? `\u5DF2\u6709 ${activeCount} \u573A\u6BD4\u8D5B\u8FDB\u884C\u4E2D\uFF0C\u53EF\u5728\u6BD4\u8D5B\u8BB0\u5F55\u4E2D\u67E5\u770B\u3002` : "\u6682\u65E0\u56DE\u5408\u8BB0\u5F55")))
   );
 }
-function History({ renderConversation }) {
+function History({ renderConversation, focusSession }) {
   const list = useQuery("matches"), [id, setId] = import_react4.default.useState(null), [search, setSearch] = import_react4.default.useState(""), [status, setStatus] = import_react4.default.useState("");
   import_react4.default.useEffect(() => {
     const timer = setInterval(list.refresh, 2e3);
     return () => clearInterval(timer);
   }, [list.refresh]);
   const matches = list.value || [], filtered = matches.filter((match) => (!status || match.status === status) && `${match.title} ${gameName(match.game)} ${match.id}`.toLowerCase().includes(search.trim().toLowerCase()));
-  if (id) return h2(Frame, { tone: "cyan", kicker: "\u6BD4\u8D5B\u8BB0\u5F55", title: "\u6BD4\u8D5B\u56DE\u653E", subtitle: matches.find((match) => match.id === id)?.title, actions: h2(Button, { primary: true, className: "ar-back-button", icon: ArrowLeft, onClick: () => setId(null) }, "\u8FD4\u56DE\u8BB0\u5F55") }, h2(MatchView, { key: id, id, activeCount: activeMatchCount(matches), onChange: list.refresh, renderConversation }));
+  if (id) return h2(Frame, { tone: "cyan", kicker: "\u6BD4\u8D5B\u8BB0\u5F55", title: "\u6BD4\u8D5B\u56DE\u653E", subtitle: matches.find((match) => match.id === id)?.title, actions: h2(Button, { primary: true, className: "ar-back-button", icon: ArrowLeft, onClick: () => setId(null) }, "\u8FD4\u56DE\u8BB0\u5F55") }, h2(MatchView, { key: id, id, activeCount: activeMatchCount(matches), onChange: list.refresh, renderConversation, focusSession }));
   return h2(
     Frame,
     { tone: "cyan", kicker: "\u5BF9\u6218\u6863\u6848", title: "\u6BD4\u8D5B\u8BB0\u5F55", subtitle: "\u4E94\u5B50\u68CB / \u4E2D\u56FD\u8C61\u68CB", actions: h2(IconButton, { icon: RefreshCw, title: "\u5237\u65B0\u6BD4\u8D5B\u8BB0\u5F55", onClick: list.refresh }) },

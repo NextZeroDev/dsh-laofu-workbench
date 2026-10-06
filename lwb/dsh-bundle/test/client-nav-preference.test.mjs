@@ -433,12 +433,11 @@ test('only one flyout survives and layout, route, catalog changes clean it up', 
 })
 
 test('reopen controls delegate to the native layout and mobile uses full groups', async () => {
-  for (const options of [{ collapsed: true, width: 56 }, { collapsed: true, width: 0, windowsTitlebar: true }, { platform: 'darwin' }]) {
+  for (const options of [{ collapsed: true, width: 56 }, { collapsed: true, width: 0 }, { collapsed: true, width: 0, windowsTitlebar: true }, { collapsed: true, width: 0, platform: 'darwin' }]) {
     const app = await mountSidebar(options)
     try {
-      if (options.platform === 'darwin') await app.renderLeading()
-      else await app.render()
-      const control = app.window.document.querySelector(options.windowsTitlebar ? '.lwb-desktop-expand' : '.lwb-expand')
+      await app.render()
+      const control = app.window.document.querySelector(options.width === 0 ? '.lwb-desktop-expand' : '.lwb-expand')
       assert.equal(control.getAttribute('aria-label'), '展开侧栏')
       await app.click(control)
       assert.equal(app.toggleCalls(), 1)

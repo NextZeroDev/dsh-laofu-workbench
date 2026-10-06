@@ -12,7 +12,8 @@ test('readonly official conversations block input and branching while preserving
   const previous = { reason: 'existing blocker' }
   let block = previous, disconnected = false, update
   const send = {}, copy = { getAttribute: () => '复制' }, branch = { getAttribute: () => '分支' }
-  const seat = { querySelectorAll: () => [send] }
+  const card = { hidden: false, inert: false, querySelectorAll: () => [send] }
+  const seat = { style: {}, querySelector: selector => selector === '[data-composer-card]' ? card : null, querySelectorAll: () => [send] }
   const element = { querySelectorAll: selector => selector.includes('composer') ? [seat] : [copy, branch] }
   const surface = vm.runInNewContext(`(${source.slice(start, end)})`, {
     React: { useRef: () => ({ current: element }), useLayoutEffect: effect => effects.push(effect) },
@@ -23,15 +24,16 @@ test('readonly official conversations block input and branching while preserving
   const props = surface({ sessionId: 'arena-session', children: 'official-chat' })
   for (const effect of effects) cleanups.push(effect())
   assert.notEqual(block, previous)
-  assert.equal(seat.inert, true)
-  assert.equal(seat.hidden, true)
+  assert.equal(seat.style.display, 'contents')
+  assert.equal(card.inert, true)
+  assert.equal(card.hidden, true)
   assert.equal(send.disabled, true)
   assert.equal(branch.disabled, true)
   assert.equal(copy.disabled, undefined)
-  const lateSend = {}; seat.querySelectorAll = () => [lateSend]; update()
+  const lateSend = {}; card.querySelectorAll = () => [lateSend]; update()
   assert.equal(lateSend.disabled, true)
   let refused = 0
-  props.onClickCapture({ target: { closest: () => seat }, preventDefault() { refused++ }, stopPropagation() { refused++ } })
+  props.onClickCapture({ target: { closest: selector => selector.includes('data-composer-card') ? card : null }, preventDefault() { refused++ }, stopPropagation() { refused++ } })
   assert.equal(refused, 2)
   props.onClickCapture({ target: { closest: () => null }, preventDefault() { refused++ }, stopPropagation() { refused++ } })
   assert.equal(refused, 2)

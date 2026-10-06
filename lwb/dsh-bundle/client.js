@@ -664,6 +664,7 @@ window.__ModuleLoader__.load({
       .lwb-expand,.lwb-desktop-expand { display:grid; width:28px; height:28px; place-items:center; border:0; border-radius:6px; color:var(--lwb-muted); background:transparent; cursor:pointer; -webkit-app-region:no-drag; }
       .lwb-expand:hover,.lwb-desktop-expand:hover,.lwb-collapse:hover { color:var(--lwb-blue); background:var(--lwb-blue-soft); }
       .lwb-desktop-expand { position:fixed; top:calc((var(--dsh-windows-titlebar-height,36px) - 28px)/2); left:12px; z-index:30; }
+      .lwb-desktop-expand[data-platform="darwin"] { top:11px; left:88px; }
       .lwb-cap-flyout { position:fixed; z-index:40; display:flex; flex-direction:column; box-sizing:border-box; width:min(264px,calc(100vw - 16px)); max-height:calc(100dvh - 16px); padding:8px; border:1px solid var(--lwb-line); border-radius:10px; background:var(--lwb-surface); color:var(--lwb-ink); box-shadow:0 8px 28px rgba(20,34,49,.16); font:14px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; }
       .lwb-cap-flyout-title { flex:none; padding:7px 9px 10px; border-bottom:1px solid var(--lwb-line); margin-bottom:5px; font-weight:700; overflow-wrap:anywhere; }
       .lwb-cap-flyout-items { display:grid; min-height:0; gap:2px; overflow-y:auto; overscroll-behavior:contain; }
@@ -1376,6 +1377,11 @@ window.__ModuleLoader__.load({
       });
 
       const flyoutPack = !wide && flyout && packs.find((pack) => pack.id === flyout.id);
+      // A zero-width column is the desktop hidden-sidebar contract. Keep the
+      // reopen control independent of platform markers and slot timing: a
+      // preload marker can arrive after the first render, but the body portal
+      // must already be available when the column disappears.
+      const desktopCollapsed = sidebarCollapsed && width === 0;
       return h('aside', { className: 'lwb-sidebar', 'data-collapsed': sidebarCollapsed ? 'true' : 'false', 'data-mobile-open': state.mobileNavOpen ? 'true' : 'false', 'aria-label': copy.workbenchFeatures },
         h('div', { className: 'lwb-sidebar-head' },
           h('button', { type: 'button', className: 'lwb-brand', title: '老傅工作台', onClick: () => navTo('conversation') },
@@ -1399,8 +1405,10 @@ window.__ModuleLoader__.load({
         ),
         h('div', { className: 'lwb-sidebar-foot', title: copy.localWorkbench }, h('span', { className: 'lwb-user-avatar' }, '老'), wide && h('span', null, copy.localWorkbench)),
         flyoutPack && h(LwbPackFlyout, { key: flyoutPack.id, pack: flyoutPack, anchor: flyout.anchor, state, onClose: closeFlyout }),
-        sidebarCollapsed && width === 0 && document.documentElement.hasAttribute('data-windows-titlebar')
-          && createPortal(h(LwbSidebarExpand, { className: 'lwb-desktop-expand' }), document.body),
+        desktopCollapsed && createPortal(h(LwbSidebarExpand, {
+          className: 'lwb-desktop-expand',
+          'data-platform': document.documentElement.dataset.platform === 'darwin' ? 'darwin' : 'windows',
+        }), document.body),
       );
     }
 
@@ -1956,9 +1964,15 @@ window.__ModuleLoader__.load({
         if (!element) return;
         const lock = () => {
           for (const seat of element.querySelectorAll('[data-conversation-region="composer"]')) {
-            seat.hidden = true;
-            seat.inert = true;
-            for (const control of seat.querySelectorAll('button,input,textarea,select')) control.disabled = true;
+            // Keep the composer dock mounted: DSH puts the session statistics
+            // pills there. Only the editable input card is hidden and disabled.
+            seat.style.display = 'contents';
+            const card = seat.querySelector('[data-composer-card]');
+            if (card) {
+              card.hidden = true;
+              card.inert = true;
+              for (const control of card.querySelectorAll('button,input,textarea,select')) control.disabled = true;
+            }
           }
           const branchLabel = services.locale?.bind?.('chat')?.('message.branch');
           for (const control of element.querySelectorAll('[data-turn-tail] button')) {
@@ -1974,7 +1988,7 @@ window.__ModuleLoader__.load({
         return () => observer.disconnect();
       }, []);
       const guard = event => {
-        if (event.target.closest?.('[data-conversation-region="composer"]')) {
+        if (event.target.closest?.('[data-composer-card],[data-composer-input]')) {
           event.preventDefault(); event.stopPropagation();
         }
       };
@@ -2564,11 +2578,6 @@ window.__ModuleLoader__.load({
           disposeSidebar = undefined;
         };
         enableSidebar();
-        // AppFrame displays this seat beside the traffic lights only while the
-        // macOS sidebar is collapsed. The official ui-sidebar is disabled.
-        const disposeSidebarLeading = ctx.slots.inject('shell.leading', () => ctx.slots.register({
-          name: 'shell.leading', priority: -10, registrant: 'lwb-workbench',
-        }, LwbSidebarExpand));
         // The conversation column renders `sidebar.panellist`, so its rows are
         // projected here for the same reason the official shell projects them:
         // registration and locale changes both move a row's label, and a later
@@ -2615,7 +2624,6 @@ window.__ModuleLoader__.load({
           favicon.remove();
           oldIcons.forEach(icon => document.head.append(icon));
           disableSidebar();
-          disposeSidebarLeading?.();
           disposeConversationPanels?.();
           disposeConversationPanelLabels?.();
           conversationPanels.rows = [];
