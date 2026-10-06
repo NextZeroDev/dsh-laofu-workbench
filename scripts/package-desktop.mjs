@@ -18,16 +18,16 @@
  * Windows package is built on Windows: locally, or on the release runner.
  */
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, readFileSync } from 'node:fs'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import {
-  artifactDirectory, artifactExtensions, probeDownload, resolveBuildNumber, resolveCommercialPackDir,
-  resolveEditionName, resolveElectronMirror, resolveHostTarget, unpackedApp,
+  artifactDirectory, probeDownload, resolveBuildNumber, resolveCommercialPackDir,
+  resolveEditionName, resolveElectronMirror, resolveHostTarget,
 } from '../lwb/desktop/package-inputs.mjs'
+import { artifactSnapshot, reportArtifacts } from '../lwb/desktop/package-report.mjs'
 
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const UPSTREAM_MARKER = join(PROJECT_ROOT, 'vendor', 'deepseek-harness', 'apps', 'desktop', 'package.json')
@@ -41,6 +41,7 @@ Options:
   --edition <name>       capability-pack set to ship: commercial (default) or community
   --community            shorthand for --edition community
   --host <mac|win>       refuse to run unless the build host matches
+                         (--dry-run still prints that platform's command)
   --build-number <n>     test build number; default is the local date (YYYYMMDD)
   --signed               use the official signing environment instead of an unsigned test build
   --release              name the artifact as a release build (no -test.<n> suffix)
@@ -67,11 +68,16 @@ async function resolveInputs(values, manifest) {
   assertNodeEngine(manifest)
   if (!existsSync(UPSTREAM_MARKER)) fail('The pinned DSH checkout is missing; run npm run setup before packaging.')
   const edition = resolveEditionName(values.community ? 'community' : values.edition)
-  const target = resolveHostTarget(process.platform, process.arch)
   const expected = values.host === undefined ? undefined : values.host === 'mac' ? 'darwin' : 'win32'
+  // A named host also names the target, so --dry-run can print another
+  // platform's command from any build machine.
+  const target = resolveHostTarget(expected ?? process.platform, process.arch)
   if (expected !== undefined && expected !== process.platform) {
-    fail(`--host ${values.host} needs a ${expected} build host, but this host is ${process.platform}. `
-      + 'Windows packages are built on Windows, locally or on the release runner.')
+    const message = `--host ${values.host} needs a ${expected} build host, but this host is ${process.platform}. `
+      + 'Windows packages are built on Windows, locally or on the release runner.'
+    if (values['dry-run'] !== true) fail(message)
+    console.log(`Note: ${message}`)
+    console.log('      Printing the command this host would refuse to run.\n')
   }
   const pack = edition === 'commercial'
     ? resolveCommercialPackDir({
@@ -138,70 +144,6 @@ function reproduction(env, forward) {
   return prefix.length === 0 ? command : `${prefix.join(' \\\n  ')} \\\n${command}`
 }
 
-/** Names directly inside one directory, or an empty set when it does not exist. */
-async function listing(directory) {
-  try {
-    return new Set((await readdir(directory, { withFileTypes: true })).map(entry => entry.name))
-  } catch {
-    return new Set()
-  }
-}
-
-/** Byte size in a short human unit. */
-function readable(bytes) {
-  const units = ['B', 'KB', 'MB', 'GB']
-  let value = bytes
-  let unit = 0
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024
-    unit += 1
-  }
-  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`
-}
-
-/** Streamed SHA-256 of one file. */
-async function checksum(path) {
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(path)) hash.update(chunk)
-  return hash.digest('hex')
-}
-
-/**
- * Report this run's unpacked app, its build id, and the artifact files it wrote.
- * @param directory - artifact directory of the edition and target.
- * @param target - resolved target name.
- * @param productName - product name of the edition being packaged.
- * @param before - artifact directory entries captured before the build ran.
- */
-async function reportArtifacts(directory, target, productName, before) {
-  const { app, manifest, launch } = unpackedApp(directory, target, productName)
-  if (!existsSync(app)) {
-    console.log(`\nNo unpacked app at ${app}; inspect ${directory} for what the build wrote.`)
-    return
-  }
-  console.log(`\nUnpacked app: ${app}`)
-  if (existsSync(manifest)) {
-    const build = JSON.parse(readFileSync(manifest, 'utf8'))
-    console.log(`  build id  ${build.id}  (first launch copies it to runtime/${build.id})`)
-  }
-  console.log(`Launch with: ${launch}`)
-
-  const extensions = artifactExtensions(target)
-  const files = (await readdir(directory, { withFileTypes: true }))
-    .filter(entry => entry.isFile() && !before.has(entry.name))
-  if (files.length === 0) {
-    console.log(`\nNo new artifact files in ${directory}.`)
-    return
-  }
-  console.log(`\nNew artifact files in ${directory}:`)
-  for (const entry of files) {
-    const path = join(directory, entry.name)
-    const { size } = await stat(path)
-    const digest = extensions.some(extension => entry.name.endsWith(extension)) ? `  sha256 ${await checksum(path)}` : ''
-    console.log(`  ${entry.name}  ${readable(size)}${digest}`)
-  }
-}
-
 /** Resolve the inputs, run the official packaging flow, and report the artifacts. */
 async function main() {
   const { values } = parseArgs({
@@ -247,7 +189,7 @@ async function main() {
   }
 
   const directory = artifactDirectory(PROJECT_ROOT, inputs.edition, inputs.target)
-  const before = await listing(directory)
+  const before = await artifactSnapshot(directory)
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
   const result = spawnSync(npm, command.args, {
     cwd: PROJECT_ROOT,
@@ -263,7 +205,7 @@ async function main() {
   if (values.plan) return
   const editions = JSON.parse(await readFile(join(PROJECT_ROOT, 'lwb', 'desktop', 'editions.json'), 'utf8'))
   const productName = editions.editions[inputs.edition]?.productName ?? manifest.name
-  await reportArtifacts(directory, inputs.target, productName, before)
+  await reportArtifacts({ directory, target: inputs.target, productName, before })
   console.log('\nReproduce this build with:')
   console.log(`  ${reproduction(command.env, command.forward)}`)
 }
