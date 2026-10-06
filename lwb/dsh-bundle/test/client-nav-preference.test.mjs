@@ -439,6 +439,11 @@ test('reopen controls delegate to the native layout and mobile uses full groups'
       await app.render()
       const control = app.window.document.querySelector(options.width === 0 ? '.lwb-desktop-expand' : '.lwb-expand')
       assert.equal(control.getAttribute('aria-label'), '展开侧栏')
+      assert.equal(control.className, options.width === 0 ? 'lwb-desktop-expand' : 'lwb-expand')
+      // A zero-width column clips its own rail, so the desktop control has to
+      // live outside the sidebar element; the stylesheet then places it in the
+      // window chrome for both platforms.
+      assert.equal(app.container.contains(control), options.width !== 0)
       await app.click(control)
       assert.equal(app.toggleCalls(), 1)
     } finally { await app.unload() }

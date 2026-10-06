@@ -92,7 +92,14 @@ test('settings is the only primary navigation entry to native DSH runtime settin
   assert.match(source, /html\[data-platform='darwin'\] \.lwb-sidebar \{ padding-top:48px; \}/u)
   assert.doesNotMatch(source, /\[data-shell-leading\] \{ display:none; \}/u)
   assert.match(source, /const desktopCollapsed = sidebarCollapsed && width === 0/u)
-  assert.match(source, /createPortal\(h\(LwbSidebarExpand, \{[\s\S]*?'data-platform':/u)
+  assert.match(source, /createPortal\(h\(LwbSidebarExpand, \{ className: 'lwb-desktop-expand' \}\), document\.body\)/u)
+  assert.match(source, /html\[data-platform='darwin'\] \.lwb-desktop-expand \{ top:11px; left:88px; \}/u)
+  assert.match(source, /html\[data-platform='darwin'\]\[data-fullscreen\] \.lwb-desktop-expand \{ left:12px; \}/u)
+  assert.match(source, /\.lwb-overlay-head \{[^}]*padding-left:max\(28px,var\(--dsh-frame-leading-clearance,0px\)\);/u)
+  assert.match(source, /\.lwb-conversation-pane-head \{[^}]*padding-left:max\(var\(--dsh-sidebar-inline-padding\),var\(--dsh-frame-leading-clearance,0px\)\);/u)
+  // The narrow drawer places the pane itself, so the frame's leading clearance
+  // must not pad its head there.
+  assert.match(source, /@media \(max-width:680px\)[\s\S]*?\.lwb-conversation-pane-head \{ padding-left:var\(--dsh-sidebar-inline-padding\); \}/u)
   assert.doesNotMatch(source, /ctx\.slots\.inject\('shell\.leading'[\s\S]*?LwbSidebarExpand/u)
   assert.match(source, /systemSettings: 'DSH 系统设置'/u)
   assert.match(source, /function SettingsPage\(\{ renderSlot \}\)/u)
@@ -352,4 +359,17 @@ test('the official right Sidebar follows the pack card in use', async () => {
   assert.ok(source.includes('restoreOpenResource?.();'))
   // No part of the Sidebar or its previews is re-drawn.
   assert.doesNotMatch(source, /renderArtifacts|ArtifactPanel|artifactRequests|allow-scripts/u)
+})
+
+test('the hidden-column reopen control outranks the frame overlay layer', async () => {
+  // The macOS desktop collapses the sidebar column to zero width, and every LWB
+  // page surface then starts at the window's left edge inside the frame's
+  // overlay layer. A reopen control below that layer is painted over and cannot
+  // be clicked, which is the desktop-only regression this ordering prevents.
+  const source = await readFile(clientPath, 'utf8')
+  const frame = await readFile(new URL('../../../vendor/deepseek-harness/packages/client/ui-layout/src/client/AppFrame.module.css', import.meta.url), 'utf8')
+  const control = Number(source.match(/\.lwb-desktop-expand \{[^}]*z-index:(\d+)/u)?.[1])
+  const overlayLayer = Number(frame.match(/\.overlayLayer \{[^}]*z-index: (\d+)/u)?.[1])
+  assert.ok(Number.isFinite(control) && Number.isFinite(overlayLayer), 'both layers must declare a z-index')
+  assert.ok(control > overlayLayer, `the reopen control (${control}) must outrank the shell overlay layer (${overlayLayer})`)
 })
