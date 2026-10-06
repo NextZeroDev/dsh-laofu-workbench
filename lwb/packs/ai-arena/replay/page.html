@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN" data-mode="page">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{TITLE}}</title>
+<style>{{SCENE_CSS}}
+{{SHELL_CSS}}</style>
+</head>
+<body>
+<div class="shell">
+  <header class="bar">
+    <div class="title">AI竞技台 · 离线回放</div>
+    <div class="meta">{{META}}</div>
+  </header>
+  <div class="toolbar" role="group" aria-label="回放控制">
+    <div class="seg">
+      <button data-layout-btn="landscape" data-on="true">{{L_LABEL}}</button>
+      <button data-layout-btn="portrait" data-on="false">{{P_LABEL}}</button>
+    </div>
+    <button id="prev" title="上一手">←</button>
+    <button id="play">▶ 播放</button>
+    <button id="next" title="下一手">→</button>
+    <input id="scrub" type="range" min="0" value="0" aria-label="回放进度">
+    <span class="clock" id="clock">0:00 / 0:00</span>
+    <label class="sw">关键手强调
+      <select id="keyMode">
+        <option value="major">吃大子 / 将军</option>
+        <option value="all">吃子 / 将军</option>
+        <option value="check">仅将军</option>
+        <option value="off">关闭</option>
+      </select>
+    </label>
+    <button id="pure" title="打开无外壳的纯画面模式">纯画面</button>
+  </div>
+  <div class="viewport">
+    <div class="stagebox" id="stagebox">
+      <div class="stage" id="stage" data-layout="landscape" data-phase="move" data-game="" data-fx="">
+        <section class="board-card" id="boardCard"><div class="board" id="board"></div></section>
+        <aside class="side">
+          <header class="top">
+            <div class="brand"><b>AI竞技台</b><span class="game">{{GAME_LABEL}}</span></div>
+          </header>
+          <div class="hero">
+            <em class="hlbl" id="heroLbl">当前手数</em>
+            <b class="n" id="heroNum">0</b>
+            <span class="t" id="heroTot">/ 0 手</span>
+            <div class="heroTag" id="heroTag"></div>
+          </div>
+          <div class="score" id="score"></div>
+          <div class="narrative">
+            <div class="speech" id="speech">
+              <div class="sinner">
+                <div class="shead"><span id="who"></span><em class="coord" id="coord" hidden></em></div>
+                <p id="text"></p>
+              </div>
+            </div>
+            <div class="recent" id="recent">
+              <div class="rtitle">回合记录</div>
+              <div class="rlist" id="rlist"></div>
+            </div>
+            <div class="finale" id="finale" data-kind="win">
+              <small>终局</small>
+              <p id="fmessage"></p>
+            </div>
+          </div>
+          <footer class="progress">
+            <div class="prow">
+              <span class="pcount" id="pcount"></span>
+              <span class="ptime" id="ptime"></span>
+            </div>
+            <div class="track"><div class="fill" id="fill"></div><span id="tickLayer"></span><span class="cur" id="cursorEl"></span></div>
+          </footer>
+          <div class="safe-bottom"></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</div>
+<script>{{BUNDLE}}</script>
+<script>globalThis.__ARENA_DATA__={{DATA_JSON}};</script>
+<script>{{APP_JS}}</script>
+</body>
+</html>

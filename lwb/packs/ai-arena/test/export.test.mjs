@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ArenaStore } from '../store.mjs'
 import { ArenaExport, replayHtml, reportMarkdown } from '../export.mjs'
-import { boardSvg, frameAt, sceneHtml } from '../presentation.mjs'
+import { boardSvg, frameAt } from '../presentation.mjs'
 
 const fixture = { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', title: '</script><img onerror=alert(1)>', game: { description: 'Rules', version: '1' }, players: [{ name: '<b>Black</b>', provider: 'test', model: 'black' }, { name: 'White', provider: 'test', model: 'white' }], calls: 1, tokens: 20, state: { moves: [{ row: 8, col: 8, player: 0 }] }, events: [{ type: 'move', turnId: 'turn', moveNumber: 1, player: 0, action: { row: 8, col: 8 }, speech: '</script><img onerror=alert(1)>', elapsedMs: 100 }], result: { message: 'Done', winner: null }, status: 'finished' }
 test('replay shares game state and safely encodes model text offline', () => {
@@ -18,7 +18,17 @@ test('replay shares game state and safely encodes model text offline', () => {
   assert.equal(html.includes('https://'), false)
   assert.ok(html.includes('AI竞技台 · 离线回放'))
   assert.ok(html.includes('回放控制'))
-  assert.ok(sceneHtml(fixture, 1).includes('&lt;b&gt;Black'))
+  /* 骨架占位符必须全部被替换，且模型文本在标题里也要转义 */
+  assert.equal(html.includes('{{'), false)
+  assert.ok(html.includes('<title>&lt;/script&gt;&lt;img onerror=alert(1)&gt; · AI竞技台 · 离线回放</title>'))
+  /* 内联数据要能原样还原模型文本：< 被转义成 \u003c，JSON.parse 再还原回来 */
+  const embedded = JSON.parse(html.match(/__ARENA_DATA__=(.*?);<\/script>/su)[1])
+  assert.equal(embedded.title, '</script><img onerror=alert(1)>')
+  assert.equal(embedded.moves[0].s, '</script><img onerror=alert(1)>')
+  assert.equal(embedded.players[0].name, '<b>Black</b>')
+  /* 没有 game.id 的历史记录按 gomoku 命名，且投影只保留画面需要的字段 */
+  assert.deepEqual(embedded.game, { id: '', name: '五子棋', version: '1' })
+  assert.deepEqual(Object.keys(embedded).sort(), ['game', 'id', 'keys', 'moves', 'players', 'result', 'title', 'winRun'])
   assert.ok(boardSvg(fixture.state.moves).includes('棋盘，1 手'))
   assert.ok(boardSvg(fixture.state.moves).includes('ar-board-wood'))
   assert.ok(reportMarkdown(fixture).includes('第 1 手'))

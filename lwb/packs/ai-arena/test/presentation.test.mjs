@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { actionLabel, boardSvg, frameAt, playerSide, sceneHtml, xiangqiPosition } from '../presentation.mjs'
+import { actionLabel, boardSvg, frameAt, playerSide, xiangqiPosition } from '../presentation.mjs'
 import { replayHtml, reportMarkdown } from '../export.mjs'
 
 const move = (fromRow, fromCol, toRow, toCol, player) => ({ from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol }, player })
@@ -30,24 +30,24 @@ test('xiangqi replay starts with 32 pieces and reconstructs moves and captures',
   assert.equal(initial[3][4], 'P')
 })
 
-test('xiangqi scenes and offline reports use red/black identities and coordinate actions', () => {
+test('xiangqi reports use red/black identities and coordinate actions', () => {
   assert.equal(playerSide(fixture.game, 0), '红方')
   assert.equal(playerSide(fixture.game, 1), '黑方')
   assert.equal(actionLabel(fixture.events[0].action, fixture.game), '8行2列 → 8行5列')
-  for (const orientation of ['landscape', 'portrait']) {
-    const html = sceneHtml(fixture, 3, { orientation })
-    assert.ok(html.includes(`scene ${orientation} xiangqi`))
-    assert.match(html, /中国象棋棋盘，3 手/u)
-    assert.match(html, /红方 · 先手/u)
-    assert.match(html, /黑方 · 后手/u)
-    assert.match(html, /8行5列 → 4行5列/u)
-    assert.match(html, /楚河/u)
-    assert.match(html, /汉界/u)
-  }
+  /* 画面层的断言在 replay.test.mjs：那里覆盖 stageHtml 的红黑身份、楚河汉界与坐标文案。 */
   const offline = replayHtml(fixture)
-  assert.match(offline, /中国象棋棋盘/u)
-  assert.match(offline, /max="3"/u)
+  /* 离线回放是数据驱动的：棋盘在浏览器里用同一份 boardSvg 现画，
+     所以这里断言内联进去的数据本身，而不是预先渲染好的 SVG 文本。 */
+  assert.match(offline, /globalThis\.ArenaScene/u)
   assert.equal(offline.includes('https://'), false)
+  assert.equal(offline.includes('{{'), false)
+  const embedded = JSON.parse(offline.match(/__ARENA_DATA__=(.*?);<\/script>/su)[1])
+  assert.equal(embedded.game.id, 'xiangqi')
+  assert.equal(embedded.game.name, '中国象棋')
+  assert.equal(embedded.moves.length, 3)
+  assert.deepEqual(embedded.moves.map(move => move.a), opening.map(({ player, ...action }) => action))
+  assert.equal(embedded.players.map(player => player.name).join('/'), '红方模型/黑方模型')
+  assert.deepEqual(embedded.keys, [{ n: 3, kind: 'last' }])
   const report = reportMarkdown(fixture)
   assert.match(report, /红方：test\/red/u)
   assert.match(report, /黑方：test\/black/u)
